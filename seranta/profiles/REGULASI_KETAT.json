@@ -1,0 +1,380 @@
+{
+ "profile_id": "REGULASI_KETAT",
+ "rule_version": "2026.10-r2",
+ "nama": "Regulasi daerah ketat (span 50 m ERROR, lendutan 6 m)",
+ "keterangan": "Untuk kota yang Perwal-nya membatasi jarak tiang 50 m dan lendutan kabel >= 6 m (mis. Pekalongan 21/2024, Yogyakarta 13/2018).",
+ "params": {
+  "span_max_m": {
+   "v": 50,
+   "dasar": "REGULASI",
+   "sumber": "Perwal Yogyakarta 13/2018; Perwal Pekalongan 21/2024; Perwal Tangsel 47/2019",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "m"
+  },
+  "span_reg_m": {
+   "v": 50,
+   "dasar": "REGULASI",
+   "sumber": "Perwal Yogyakarta 13/2018; Perwal Tangsel 3/2019 jo. 47/2019 Ps.5J; Perwal Pekalongan 21/2024; rancangan Permenkominfo 2018 Pedoman Teknis Infrastruktur Bersama; Buku pedoman konstruksi jaringan distribusi TR (2010) span TR <= 50 m",
+   "status": "APPROVED",
+   "severity": "WARNING",
+   "unit": "m"
+  },
+  "hp_pole_max_m": {
+   "v": 50,
+   "dasar": "INTERNAL",
+   "sumber": "Handbook KMZ internal kasus 12 'Pole to homepass 50 m'; sejalan batas bentang 50 m",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "m"
+  },
+  "clear_road_m": {
+   "v": 6.0,
+   "dasar": "REGULASI",
+   "sumber": "Perwal Pekalongan 21/2024: lendutan kabel paling rendah 6 m; pedoman konstruksi jaringan distribusi TR: 6 m jalan raya utama",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "m"
+  },
+  "sag_pct": {
+   "v": 2.0,
+   "dasar": "PRAKTIK",
+   "sumber": "Spesifikasi teknis FTTH operator nasional (PED F-002-2015): kelenturan kabel 2% panjang gawang",
+   "status": "APPROVED",
+   "unit": "%"
+  },
+  "dup_near_m": {
+   "v": 5.0,
+   "dasar": "RISET",
+   "sumber": "GPS.gov: GPS ponsel 4,9 m (langit terbuka); Merry & Bettinger, PLOS ONE 14(7) e0219890 (2019): 7-13 m urban",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "m"
+  },
+  "edge_tol_m": {
+   "v": 15.0,
+   "dasar": "RISET",
+   "sumber": "Merry & Bettinger, PLOS ONE 2019: galat horizontal ponsel 7-13 m di perkotaan (toleransi tepi Funnel)",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "m"
+  },
+  "bend_info_deg": {
+   "v": 15,
+   "dasar": "STANDAR",
+   "sumber": "Pedoman konstruksi jaringan distribusi TR: tiang lurus 0-15 derajat, tiang sudut kecil 15-30 derajat",
+   "status": "NOT_APPROVED",
+   "severity": "INFO",
+   "unit": "derajat"
+  },
+  "bend_warn_deg": {
+   "v": 30,
+   "dasar": "STANDAR",
+   "sumber": "Buku pedoman konstruksi jaringan distribusi TR (2010) Tabel 3.6: sudut > 30 derajat wajib tiang tambat (dead-end); Handbook KMZ internal kasus 10",
+   "status": "NOT_APPROVED",
+   "severity": "WARNING",
+   "unit": "derajat"
+  },
+  "pole_on_line_m": {
+   "v": 3.0,
+   "dasar": "RISET",
+   "sumber": "toleransi digitasi/GPS 3-5 m (Lee dkk., Sensors 2016) - parameter rekayasa",
+   "status": "NOT_APPROVED",
+   "unit": "m"
+  },
+  "fat_hp_warn_m": {
+   "v": 120,
+   "dasar": "INTERNAL",
+   "sumber": "Handbook KMZ internal kasus 15 & config desain otomatis (MAXPPDIST 120 m); praktik operator 100-200 m",
+   "status": "APPROVED",
+   "severity": "WARNING",
+   "unit": "m"
+  },
+  "fat_hp_err_m": {
+   "v": 150,
+   "dasar": "INTERNAL",
+   "sumber": "Handbook KMZ internal kasus 15: maksimal 150 m hanya special case",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "m"
+  },
+  "fat_min_hp": {
+   "v": 8,
+   "dasar": "INTERNAL",
+   "sumber": "Config desain otomatis splitter 1x4 NodeCapacityRule FAT Minimum 8; Handbook KMZ internal grouping 8 (1 splitter)",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "HP"
+  },
+  "fat_max_hp": {
+   "v": 16,
+   "dasar": "INTERNAL",
+   "sumber": "Config desain otomatis splitter 1x4 Maximum 16; ODP-16 = 2x1:8 (pedoman desain FTTH operator nasional)",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "HP"
+  },
+  "fat_target_hp": {
+   "v": 15,
+   "dasar": "INTERNAL",
+   "sumber": "Config desain otomatis splitter 1x4 Target 15",
+   "status": "APPROVED",
+   "unit": "HP"
+  },
+  "fdt_max_premises": {
+   "v": 384,
+   "dasar": "INTERNAL",
+   "sumber": "Config desain otomatis splitter 1x4 FDT Maximum 384 premises (= 24 FAT x 16)",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "HP"
+  },
+  "fdt_spl_ratio": {
+   "v": 4,
+   "dasar": "INTERNAL",
+   "sumber": "Config desain otomatis splitter 1x4 splitter FDT 1x4",
+   "status": "APPROVED",
+   "unit": "1:n"
+  },
+  "fdt_max_spl": {
+   "v": 12,
+   "dasar": "INTERNAL",
+   "sumber": "Handbook KMZ internal 'tidak lebih dari 12 splitter 1x4'",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "splitter"
+  },
+  "fat_per_fdt": {
+   "v": 24,
+   "dasar": "INTERNAL",
+   "sumber": "Kebijakan internal: 24 FAT per FDT (12 x 1:4 = 48 output = 24 FAT x 2 splitter)",
+   "status": "APPROVED",
+   "unit": "FAT"
+  },
+  "colo_radius_m": {
+   "v": 1000,
+   "dasar": "INTERNAL",
+   "sumber": "Handbook KMZ internal 'jarak cluster ke FDT yang di COLO tidak lebih 1 km' (validasi utama tetap link budget)",
+   "status": "APPROVED",
+   "severity": "WARNING",
+   "unit": "m"
+  },
+  "slack_interval_m": {
+   "v": 250,
+   "dasar": "INTERNAL",
+   "sumber": "Handbook KMZ internal kasus 21 'slack pada keterangan kabel setiap 250 m' (bukan standar eksternal)",
+   "status": "APPROVED",
+   "severity": "WARNING",
+   "unit": "m"
+  },
+  "loop_max_m": {
+   "v": 100,
+   "dasar": "INTERNAL",
+   "sumber": "Handbook KMZ internal kasus 34 'kabel loop tidak lebih dari 100 m atau 2 span'",
+   "status": "APPROVED",
+   "severity": "WARNING",
+   "unit": "m"
+  },
+  "loop_max_span": {
+   "v": 2,
+   "dasar": "INTERNAL",
+   "sumber": "Handbook KMZ internal kasus 34",
+   "status": "APPROVED",
+   "severity": "WARNING",
+   "unit": "span"
+  },
+  "fat_pole_tol_m": {
+   "v": 2.0,
+   "dasar": "INTERNAL",
+   "sumber": "Handbook KMZ internal kasus 3 'FAT melayang' - toleransi posisi FAT ke tiang (parameter rekayasa)",
+   "status": "NOT_APPROVED",
+   "severity": "WARNING",
+   "unit": "m"
+  },
+  "cable_end_tol_m": {
+   "v": 3.0,
+   "dasar": "INTERNAL",
+   "sumber": "toleransi jarak ujung kabel ke perangkat (parameter rekayasa, kalibrasi dengan data desain otomatis)",
+   "status": "NOT_APPROVED",
+   "unit": "m"
+  },
+  "snap_m": {
+   "v": 0.5,
+   "dasar": "INTERNAL",
+   "sumber": "toleransi digitasi topologi (bukan aturan rekayasa)",
+   "status": "NOT_APPROVED",
+   "unit": "m"
+  },
+  "fdt_match_tol_m": {
+   "v": 5.0,
+   "dasar": "INTERNAL",
+   "sumber": "toleransi kecocokan posisi FDT antar paket Feeder/Distribusi (parameter rekayasa)",
+   "status": "NOT_APPROVED",
+   "severity": "ERROR",
+   "unit": "m"
+  },
+  "coverage_edge_tol_m": {
+   "v": 0.5,
+   "dasar": "INTERNAL",
+   "sumber": "HP tepat di garis Voronoi dianggap di dalam (parameter rekayasa)",
+   "status": "NOT_APPROVED",
+   "unit": "m"
+  },
+  "fat_center_ratio": {
+   "v": 1.5,
+   "dasar": "RISET",
+   "sumber": "indikator sentralitas FAT terhadap medoid HP (K-Medoids penempatan ODP: Transient Undip 2019/2023) - REVIEW, bukan pelanggaran",
+   "status": "NOT_APPROVED",
+   "severity": "INFO",
+   "unit": "x"
+  },
+  "bom_cable_tol_pct": {
+   "v": 5.0,
+   "dasar": "INTERNAL",
+   "sumber": "toleransi rekonsiliasi panjang kabel BOM vs desain; tidak ada standar eksternal - slack eksplisit dihitung terpisah",
+   "status": "NOT_APPROVED",
+   "severity": "WARNING",
+   "unit": "%"
+  },
+  "slack_per_device_m": {
+   "v": 10.0,
+   "dasar": "PRAKTIK",
+   "sumber": "Dokumen instalasi PPJ FTTH 2013: slack 5 m sebelum + 5 m sesudah closure; praktik instalasi pabrikan kabel",
+   "status": "APPROVED",
+   "unit": "m"
+  },
+  "dup_fat_existing_m": {
+   "v": 2.0,
+   "dasar": "INTERNAL",
+   "sumber": "Handbook KMZ internal kasus 30: FAT/FDT tidak di titik yang sama dengan cluster existing",
+   "status": "NOT_APPROVED",
+   "severity": "WARNING",
+   "unit": "m"
+  },
+  "olt_class_db": {
+   "v": 28.0,
+   "dasar": "STANDAR",
+   "sumber": "ITU-T G.984.2 (08/2019) kelas B+ maks 28 dB (C+ 32 dB; XGS-PON N1 29 / N2 31 / E1 33 dB, ITU-T G.9807.1)",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "dB"
+  },
+  "fiber_db_km": {
+   "v": 0.35,
+   "dasar": "STANDAR",
+   "sumber": "ITU-T G.652.D @1310 nm; config desain otomatis AverageCableAttenuation 0,35 dB/km",
+   "status": "APPROVED",
+   "unit": "dB/km"
+  },
+  "spl4_db": {
+   "v": 7.7,
+   "dasar": "STANDAR",
+   "sumber": "GR-1209: 1x4 tipikal 7,0-7,3, maks 7,7 dB (nilai maks dipakai untuk worst-case)",
+   "status": "APPROVED",
+   "unit": "dB"
+  },
+  "spl8_db": {
+   "v": 11.2,
+   "dasar": "STANDAR",
+   "sumber": "GR-1209: 1x8 tipikal 10,2-10,5, maks 11,2 dB",
+   "status": "APPROVED",
+   "unit": "dB"
+  },
+  "spl16_db": {
+   "v": 14.2,
+   "dasar": "STANDAR",
+   "sumber": "GR-1209: 1x16 tipikal 13,5-13,7, maks 14,2 dB",
+   "status": "APPROVED",
+   "unit": "dB"
+  },
+  "conn_db": {
+   "v": 0.5,
+   "dasar": "PRAKTIK",
+   "sumber": "konektor 0,5 dB (konservatif; terukur 0,2 dB - Farooq dkk. arXiv:1509.05958)",
+   "status": "APPROVED",
+   "unit": "dB"
+  },
+  "splice_db": {
+   "v": 0.1,
+   "dasar": "PRAKTIK",
+   "sumber": "fusion splice 0,1 dB (Farooq dkk. 2015)",
+   "status": "APPROVED",
+   "unit": "dB"
+  },
+  "margin_db": {
+   "v": 3.0,
+   "dasar": "PRAKTIK",
+   "sumber": "margin O&M 3 dB (Farooq dkk. 2015)",
+   "status": "APPROVED",
+   "unit": "dB"
+  },
+  "cable_colors": {
+   "v": {
+    "24": "#ffaa00",
+    "48": "#aa5500",
+    "96": "#ffff00",
+    "144": "#0000ff",
+    "1": "#55ff00"
+   },
+   "dasar": "INTERNAL",
+   "sumber": "Handbook KMZ internal Keterangan Kabel & aturan KMZ",
+   "status": "APPROVED",
+   "severity": "WARNING"
+  },
+  "fdt_same_m": {
+   "v": 30.0,
+   "dasar": "PRAKTIK",
+   "sumber": "Satu FDT logis yang tergambar di paket Feeder dan Distribution (kode sama) dianggap satu perangkat bila jaraknya <= nilai ini; audit pengembangan QC 2026 (parameter rekayasa)",
+   "status": "NOT_APPROVED",
+   "unit": "m"
+  },
+  "coord_tol_m": {
+   "v": 1.0,
+   "dasar": "PRAKTIK",
+   "sumber": "Toleransi beda koordinat antara tabel kode FDT/FAT dan KMZ; < 1 m = pembulatan 5 desimal (parameter rekayasa)",
+   "status": "NOT_APPROVED",
+   "severity": "WARNING",
+   "unit": "m"
+  },
+  "ext_pole_ref_m": {
+   "v": 10.0,
+   "dasar": "INTERNAL",
+   "sumber": "Bahan QC desain (aturan 4): tiang existing > 10 m dari titik tiang referensi kota dianggap salah posisi",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "m"
+  },
+  "pancingan_max_pct": {
+   "v": 15.0,
+   "dasar": "INTERNAL",
+   "sumber": "Bahan QC desain (aturan 5): panjang kabel pancingan <= 15% panjang kabel baru 24C/48C (lingkup Distribution)",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "%"
+  },
+  "closure96_max_pct": {
+   "v": 10.0,
+   "dasar": "INTERNAL",
+   "sumber": "Bahan QC desain (aturan 5): jumlah closure 96 baru <= 10% jumlah FAT AE baru (lingkup Distribution)",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "%"
+  },
+  "device_pole_m": {
+   "v": 2.0,
+   "dasar": "INTERNAL",
+   "sumber": "Bahan QC desain (aturan 6): FDT, FAT AE dan closure 96 baru wajib menempel tiang; toleransi posisi 2 m (parameter rekayasa)",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "m"
+  },
+  "pancingan_pole_m": {
+   "v": 3.0,
+   "dasar": "INTERNAL",
+   "sumber": "Bahan QC desain (aturan 7): kedua ujung kabel pancingan harus bertumpu pada tiang; toleransi 3 m (parameter rekayasa)",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "m"
+  }
+ }
+}

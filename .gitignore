@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+dist/
+*.zip
+# data proyek dan profil organisasi tidak pernah masuk repositori publik
+profil-organisasi/
+data/
+*.kmz
+*.xlsx
+*.sdproj

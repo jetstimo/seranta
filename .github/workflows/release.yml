@@ -1,0 +1,42 @@
+name: Release
+# Rilis baru: naikkan "version" dan "changelog" di seranta/metadata.txt, commit, lalu buat tag yang sama, mis.
+#   git tag v3.4.1 && git push origin v3.4.1
+# Workflow ini menguji, membuat ZIP, melampirkannya ke GitHub Release, lalu mengunggahnya ke plugins.qgis.org.
+on:
+  push:
+    tags: ["v*"]
+permissions:
+  contents: write
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      OSGEO_USER: ${{ secrets.OSGEO_USER }}
+      OSGEO_PASSWORD: ${{ secrets.OSGEO_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Tag must match metadata version
+        run: |
+          V=$(grep -m1 '^version=' seranta/metadata.txt | cut -d= -f2)
+          test "v$V" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} != metadata v$V"; exit 1; }
+      - name: Tests
+        run: |
+          python seranta/tests/test_qc_core.py
+          python seranta/tests/test_uat_paket.py
+      - name: Brand-neutral texts
+        env:
+          BRAND_DENYLIST: ${{ secrets.BRAND_DENYLIST }}
+        run: python scripts/check_neutral.py seranta
+      - name: Build ZIP
+        run: python scripts/release.py seranta dist --strict
+      - name: GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          generate_release_notes: true
+      - name: Upload to plugins.qgis.org
+        if: ${{ env.OSGEO_USER != '' }}
+        run: python scripts/upload_plugin.py dist/seranta.*.zip
