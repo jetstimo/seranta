@@ -52,7 +52,7 @@ No extra Python packages, no internet, no account. The automatic design software
 User interface and reports are in Indonesian.
 
 ## Development
-See [CONTRIBUTING.md](https://github.com/GITHUB_USER/seranta/blob/main/CONTRIBUTING.md) in the repository: tests,
+See [CONTRIBUTING.md](https://github.com/jetstimo/seranta/blob/main/CONTRIBUTING.md) in the repository: tests,
 release by git tag, automatic upload to the QGIS plugin repository.
 
 ## License and trademark

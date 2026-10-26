@@ -23,7 +23,7 @@ desain otomatis input and the Strand review standard:
 __version__ = "3.4.0"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
-HOMEPAGE = "https://github.com/GITHUB_USER/seranta"
+HOMEPAGE = "https://github.com/jetstimo/seranta"
 
 import os
 import re
