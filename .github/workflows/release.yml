@@ -5,6 +5,7 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:      # rilis dari tombol "Run workflow" (tag dibuat dari versi di metadata.txt)
 permissions:
   contents: write
 jobs:
@@ -19,9 +20,13 @@ jobs:
         with:
           python-version: "3.12"
       - name: Tag must match metadata version
+        id: ver
         run: |
           V=$(grep -m1 '^version=' seranta/metadata.txt | cut -d= -f2)
-          test "v$V" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} != metadata v$V"; exit 1; }
+          echo "tag=v$V" >> "$GITHUB_OUTPUT"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            test "v$V" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} != metadata v$V"; exit 1; }
+          fi
       - name: Tests
         run: |
           python seranta/tests/test_qc_core.py
@@ -35,6 +40,9 @@ jobs:
       - name: GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: Seranta ${{ steps.ver.outputs.tag }}
           files: dist/*.zip
           generate_release_notes: true
       - name: Upload to plugins.qgis.org
