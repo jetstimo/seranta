@@ -13,6 +13,10 @@
   rekonsiliasi BOM, jarak FAT-HP, urutan & kode FAT, FAT melayang, tiang nganggur, rentang tiang, FAT center,
   slack, crossing, KMZ (folder, ikon X, warna kabel, Existing Cluster).
 """
+try:
+    from . import _log
+except ImportError:  # dijalankan sebagai modul lepas (uji unit)
+    import _log
 import csv
 import json
 import math
@@ -535,8 +539,8 @@ def _coords_txt(t):
         if len(v) >= 2:
             try:
                 out.append((float(v[0]), float(v[1])))
-            except ValueError:
-                pass
+            except ValueError as _e:
+                _log.note(_e)
     return out
 
 

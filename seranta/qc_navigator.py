@@ -5,6 +5,10 @@
 alat 4 (QC APD). Klik temuan -> peta zoom ke lokasinya, fitur dipilih dan berkedip. Filter tingkat (ERROR / WARNING /
 INFO / UNVERIFIED) dan status review; status review (OPEN, VERIFIED, FALSE_POSITIVE, APPROVED_EXCEPTION, RESOLVED) +
 catatan disimpan langsung di layer temuan dan dipertahankan saat QC dijalankan ulang; ekspor CSV untuk reviewer."""
+try:
+    from . import _log
+except ImportError:  # dijalankan sebagai modul lepas (uji unit)
+    import _log
 import os
 import re
 
@@ -40,8 +44,8 @@ def is_qc_layer(layer):
     try:
         if layer.customProperty("seranta_qc") == "1":
             return True
-    except Exception:
-        pass
+    except Exception as _e:
+        _log.note(_e)
     src = layer.source().split("|")[0].replace("\\", "/")
     return bool(re.search(r"/QC/[^/]+\.shp$|/QC_APD(_\d{8}_\d{6})?/(?!QC_APD_TEMUAN)[^/]+\.(shp|dbf|csv)$|/ALOKASI_FDT(_\d{8}_\d{6})?/(FAT_ESTIMASI|FDT_ALOKASI)\.shp$", src, re.I))
 
@@ -128,11 +132,11 @@ class QcNavigator(QDockWidget):
                           (QgsProject.instance().layersRemoved, self._on_removed)):
             try:
                 sig.disconnect(slot)
-            except Exception:
-                pass
+            except Exception as _e:
+                _log.note(_e)
 
     def _maybe_refresh(self, layers):
-        if any(is_qc_layer(l) for l in layers):
+        if any(is_qc_layer(lyr_) for lyr_ in layers):
             self._timer.start(800)          # tunggu gaya & sub-grup diterapkan
             self.show()
             self.raise_()
@@ -145,7 +149,7 @@ class QcNavigator(QDockWidget):
         only = self.only_cek.isChecked()
         sev_want = self.sev.currentText() if self.sev.currentIndex() > 0 else None
         rev_mode = self.rev_f.currentIndex()
-        layers = [l for l in QgsProject.instance().mapLayers().values() if is_qc_layer(l)]
+        layers = [lyr_ for lyr_ in QgsProject.instance().mapLayers().values() if is_qc_layer(lyr_)]
         n_all = 0
         found = []
         for lyr in layers:
@@ -220,8 +224,8 @@ class QcNavigator(QDockWidget):
             try:
                 self.iface.setActiveLayer(lyr)
                 self.iface.zoomToActiveLayer()
-            except Exception:
-                pass
+            except Exception as _e:
+                _log.note(_e)
             return
         if item in self._leaves:
             self._pos = self._leaves.index(item)
@@ -235,8 +239,8 @@ class QcNavigator(QDockWidget):
                 ir = lyr.fields().indexOf("review")
                 if ir >= 0:
                     self.rev.setCurrentIndex(REVIEW.index(str(f[ir])) if str(f[ir]) in REVIEW else 0)
-            except Exception:
-                pass
+            except Exception as _e:
+                _log.note(_e)
             return
         try:
             ct = QgsCoordinateTransform(lyr.crs(), canvas.mapSettings().destinationCrs(), QgsProject.instance())
@@ -253,12 +257,12 @@ class QcNavigator(QDockWidget):
         canvas.refresh()
         try:
             lyr.selectByIds([fid])
-        except Exception:
-            pass
+        except Exception as _e:
+            _log.note(_e)
         try:
             canvas.flashFeatureIds(lyr, [fid])
-        except Exception:
-            pass
+        except Exception as _e:
+            _log.note(_e)
         self.info.setText("%s\n%s" % (lyr.name(), item.text(0)))
         try:
             idx = lyr.fields().indexOf("review")
@@ -267,8 +271,8 @@ class QcNavigator(QDockWidget):
                 self.rev.setCurrentIndex(REVIEW.index(str(v)) if str(v) in REVIEW else 0)
                 ic = lyr.fields().indexOf("catatan")
                 self.note.setText(str(f[ic] or "") if ic >= 0 and str(f[ic]) != "NULL" else "")
-        except Exception:
-            pass
+        except Exception as _e:
+            _log.note(_e)
 
     def _current(self):
         it = self.tree.currentItem()
@@ -316,7 +320,7 @@ class QcNavigator(QDockWidget):
         with open(path, "w", newline="", encoding="utf-8-sig") as fh:
             w = csv.writer(fh)
             w.writerow(["layer", "severity", "kode", "keterangan", "nilai", "batas", "review", "catatan", "lon", "lat"])
-            for lyr in [l for l in QgsProject.instance().mapLayers().values() if is_qc_layer(l)]:
+            for lyr in [lyr_ for lyr_ in QgsProject.instance().mapLayers().values() if is_qc_layer(lyr_)]:
                 nm = [x.name() for x in lyr.fields()]
 
                 def g(ft, k):

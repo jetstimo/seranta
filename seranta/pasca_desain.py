@@ -11,6 +11,10 @@ Menggantikan langkah manual setelah desain desain otomatis selesai (Handbook KMZ
                     jumlah FAT APD = spliceplan, kapasitas splitter FDT, tube harus penuh dulu, FAT di tiang.
 Masukan: folder output desain otomatis (net_nodes.shp, net_SpliceClosure.shp, file splice plan .xlsx).
 """
+try:
+    from . import _log
+except ImportError:  # dijalankan sebagai modul lepas (uji unit)
+    import _log
 import math
 import os
 import re
@@ -475,6 +479,6 @@ class PascaDesain(QgsProcessingAlgorithm):
                 from qgis.PyQt.QtCore import QUrl
                 from qgis.PyQt.QtGui import QDesktopServices
                 QDesktopServices.openUrl(QUrl.fromLocalFile(self._open))
-            except Exception:
-                pass
+            except Exception as _e:
+                _log.note(_e)
         return {}

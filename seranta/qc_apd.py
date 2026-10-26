@@ -13,6 +13,10 @@ Masukan (semua opsional kecuali salah satu dari 1 atau 2):
 Keluaran di <folder>/QC_APD/: satu shp per aturan (skema temuan tunggal), QC_APD_TEMUAN.csv, QC_APD.json,
 QC_APD.html. Status setiap aturan: PASS / ERROR / WARNING / INFO / UNVERIFIED (data kurang = bukan PASS).
 """
+try:
+    from . import _log
+except ImportError:  # dijalankan sebagai modul lepas (uji unit)
+    import _log
 import datetime as _dt
 import html as _h
 import os
@@ -300,9 +304,9 @@ class QcApd(QgsProcessingAlgorithm):
                 p.setFlags(p.flags() | B.Qgis.ProcessingParameterFlag.Advanced)
             except Exception:
                 try:
-                    p.setFlags(p.flags() | B.QgsProcessingParameterDefinition.FlagAdvanced)
-                except Exception:
-                    pass
+                    p.setFlags(p.flags() | B.ADVANCED_FLAG)
+                except Exception as _e:
+                    _log.note(_e)
             self.addParameter(p)
 
     def prepareAlgorithm(self, parameters, context, feedback):
@@ -449,8 +453,8 @@ class QcApd(QgsProcessingAlgorithm):
                 try:
                     det.groupName = "%s QC APD" % cluster
                     det.layerSortKey = k
-                except Exception:
-                    pass
+                except Exception as _e:
+                    _log.note(_e)
                 pp = QcApdStyle(nm)
                 B._KEEP_ALIVE.append(pp)
                 det.setPostProcessor(pp)
@@ -467,8 +471,8 @@ class QcApd(QgsProcessingAlgorithm):
                 from qgis.PyQt.QtCore import QUrl
                 from qgis.PyQt.QtGui import QDesktopServices
                 QDesktopServices.openUrl(QUrl.fromLocalFile(pth))
-            except Exception:
-                pass
+            except Exception as _e:
+                _log.note(_e)
         return {}
 
     # ------------------------------------------------------------------------------------------------
@@ -548,8 +552,8 @@ class QcApd(QgsProcessingAlgorithm):
                             f = {"rule_id": r.get("rule_id"), "object_id": r.get("object_id"),
                                  "geom": ("point", (float(r["lon"]), float(r["lat"]))) if r.get("lon") else None}
                             old[Q.review_key(f)] = (r["review"], r.get("note", ""))
-            except (OSError, ValueError, KeyError):
-                pass
+            except (OSError, ValueError, KeyError) as _e:
+                _log.note(_e)
         # status yang disimpan langsung di shp oleh Navigator
         for fn in os.listdir(out_dir):
             if fn.lower().endswith(".shp"):
@@ -638,8 +642,8 @@ class QcApd(QgsProcessingAlgorithm):
                         if sl.isValid() and B.style_qc_layer(sl):
                             sl.saveNamedStyle(os.path.splitext(path)[0] + ".qml")
                         del sl
-                    except Exception:
-                        pass
+                    except Exception as _e:
+                        _log.note(_e)
                     loads.append((path, "%s %s (%d)" % (sev, rid, len(lst))))
                 except Exception as e:
                     feedback.reportError("%s tidak ditulis: %s" % (fn, e), fatalError=False)

@@ -13,6 +13,10 @@ No AI, no internet, no account needed. The tool:
     cluster ID in the file name.
 Only the Python standard library, numpy and the Qt bundled with QGIS are used (Pillow as fallback).
 """
+try:
+    from . import _log
+except ImportError:  # dijalankan sebagai modul lepas (uji unit)
+    import _log
 import base64
 import hashlib
 import os
@@ -86,8 +90,8 @@ def find_candidates(folder, cluster_id=""):
                 if re.search(rb"CamScanner|intsig|Scanner", head, re.IGNORECASE):
                     score += 1
                     why.append("dibuat aplikasi pemindai")
-            except OSError:
-                pass
+            except OSError as _e:
+                _log.note(_e)
         if score >= 3:
             out.append((score, p, "; ".join(why)))
     out.sort(key=lambda t: -t[0])

@@ -10,7 +10,7 @@ import os
 
 _E = _h.escape
 _ST = {True: ("OK", "ok"), False: ("CEK", "bad"), None: ("--", "na")}
-_SEV = {"ERROR": "bad", "WARNING": "wrn", "INFO": "inf", "UNVERIFIED": "unv", "PASS": "ok", "CEK": "bad"}
+_SEV = dict(zip(("ERROR", "WARNING", "INFO", "UNVERIFIED", "PASS", "CEK"), ("bad", "wrn", "inf", "unv", "ok", "bad")))
 _SEVT = {"ERROR": "bad-t", "WARNING": "wrn-t", "CEK": "bad-t"}
 
 _CSS = """

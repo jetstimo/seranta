@@ -21,10 +21,9 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FONT_DIR = os.path.join(HERE, "assets", "fonts")
 
 SEV_ORDER = ("ERROR", "WARNING", "UNVERIFIED", "INFO", "PASS")
-SEV_CLS = {"ERROR": "err", "WARNING": "wrn", "UNVERIFIED": "unv", "INFO": "inf", "PASS": "ok",
-           "CEK": "err", "OK": "ok", "--": "unv", None: "unv"}
-SEV_WORD = {"ERROR": "Wajib diperbaiki", "WARNING": "Perlu ditinjau", "UNVERIFIED": "Belum bisa dicek",
-            "INFO": "Catatan", "PASS": "Lolos"}
+SEV_CLS = dict(zip(("ERROR", "WARNING", "UNVERIFIED", "INFO", "PASS", "CEK", "OK", "--", None),
+                   ("err", "wrn", "unv", "inf", "ok", "err", "ok", "unv", "unv")))
+SEV_WORD = dict(zip(SEV_ORDER, ("Wajib diperbaiki", "Perlu ditinjau", "Belum bisa dicek", "Catatan", "Lolos")))
 
 _FONT_CACHE = []
 

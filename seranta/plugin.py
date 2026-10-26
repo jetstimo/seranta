@@ -1,6 +1,10 @@
 # -*- coding: utf-8 -*-
 # Seranta - FTTH Design Assistant - menus, toolbar and Processing registration
 # Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later (see LICENSE).
+try:
+    from . import _log
+except ImportError:  # dijalankan sebagai modul lepas (uji unit)
+    import _log
 import os
 
 from qgis.core import QgsApplication, QgsSettings
@@ -79,8 +83,8 @@ class SerantaPlugin:
             self.iface.messageBar().pushInfo(
                 "Seranta",
                 "Terpasang. Buka menu Vector > Seranta > Handbook untuk mulai, atau klik ikon Seranta di toolbar.")
-        except Exception:
-            pass
+        except Exception as _e:
+            _log.note(_e)
 
     def _tabify(self):
         """Letakkan panel Navigator sebagai tab di samping Processing Toolbox agar cukup tinggi untuk dibaca."""
@@ -90,8 +94,8 @@ class SerantaPlugin:
                 if d.objectName() in ("ProcessingToolbox", "processingToolbox") and d.isVisible():
                     self.iface.mainWindow().tabifyDockWidget(d, self.nav)
                     break
-        except Exception:
-            pass
+        except Exception as _e:
+            _log.note(_e)
 
     def show_nav(self):
         if self.nav is None:
@@ -108,15 +112,15 @@ class SerantaPlugin:
                 self.nav.cleanup()
                 self.iface.removeDockWidget(self.nav)
                 self.nav.deleteLater()
-            except Exception:
-                pass
+            except Exception as _e:
+                _log.note(_e)
             self.nav = None
         for act in self.actions:
             self.iface.removePluginVectorMenu(MENU, act)
             try:
                 self.iface.removeToolBarIcon(act)
-            except Exception:
-                pass
+            except Exception as _e:
+                _log.note(_e)
         self.actions = []
         if self.provider:
             QgsApplication.processingRegistry().removeProvider(self.provider)

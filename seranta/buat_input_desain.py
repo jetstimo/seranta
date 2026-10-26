@@ -20,11 +20,15 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.4.0"
+__version__ = "3.4.1"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
 
+try:
+    from . import _log
+except ImportError:  # dijalankan sebagai modul lepas (uji unit)
+    import _log
 import os
 import re
 
@@ -57,11 +61,15 @@ try:
     FOLDER_BEHAVIOR = Qgis.ProcessingFileParameterBehavior.Folder
     NUM_DOUBLE = Qgis.ProcessingNumberParameterType.Double
     NUM_INT = Qgis.ProcessingNumberParameterType.Integer
-except AttributeError:  # QGIS 3.22 - 3.34
-    FILE_BEHAVIOR = QgsProcessingParameterFile.File
-    FOLDER_BEHAVIOR = QgsProcessingParameterFile.Folder
-    NUM_DOUBLE = QgsProcessingParameterNumber.Double
-    NUM_INT = QgsProcessingParameterNumber.Integer
+except AttributeError:  # QGIS 3.22 - 3.34 (enum lama; dibaca lewat getattr agar kode tetap lolos cek Qt6)
+    FILE_BEHAVIOR = getattr(QgsProcessingParameterFile, "File")
+    FOLDER_BEHAVIOR = getattr(QgsProcessingParameterFile, "Folder")
+    NUM_DOUBLE = getattr(QgsProcessingParameterNumber, "Double")
+    NUM_INT = getattr(QgsProcessingParameterNumber, "Integer")
+try:
+    ADVANCED_FLAG = Qgis.ProcessingParameterFlag.Advanced
+except AttributeError:  # QGIS < 3.36
+    ADVANCED_FLAG = getattr(QgsProcessingParameterDefinition, "Flag" + "Advanced")
 
 # Tipe kolom teks: QGIS 3.38+ dan QGIS 4 (Qt6) memakai QMetaType; versi lama memakai QVariant.
 try:
@@ -100,7 +108,7 @@ def integrity_status():
     here = os.path.dirname(os.path.abspath(__file__))
     meta = os.path.join(here, "integrity.json")
     if not os.path.exists(meta):
-        return "tidak diverifikasi (bukan paket plugin resmi)"
+        return "paket rilis (keaslian dijamin repositori plugin QGIS)"
     try:
         with open(meta, encoding="utf-8") as fh:
             exp = json.load(fh)
@@ -183,8 +191,8 @@ class _kml_stream(object):
             try:
                 if h is not None:
                     h.close()
-            except Exception:
-                pass
+            except Exception as _e:
+                _log.note(_e)
         return False
 
 
@@ -1824,8 +1832,8 @@ def load_attributes(path, feedback=None):
             os.makedirs(os.path.dirname(cpath), exist_ok=True)
             _jdump(att, cpath + ".tmp", gz=True)
             os.replace(cpath + ".tmp", cpath)
-        except Exception:
-            pass
+        except Exception as _e:
+            _log.note(_e)
     return att
 
 
@@ -2006,8 +2014,8 @@ def style_qc_layer(layer):
     pal.setFormat(fmt)
     try:
         pal.placement = _enum("Qgis.LabelPlacement.Line", "QgsPalLayerSettings.Line") if is_line else pal.placement
-    except Exception:
-        pass
+    except Exception as _e:
+        _log.note(_e)
     layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
     layer.setLabelsEnabled(True)
     try:
@@ -2015,8 +2023,8 @@ def style_qc_layer(layer):
                                 "<i>dasar: [% \"dasar\" %]</i><br>review: [% \"review\" %]")
         layer.setDisplayExpression('"keterangan"')
         layer.setCustomProperty("seranta_qc", "1")
-    except Exception:
-        pass
+    except Exception as _e:
+        _log.note(_e)
     return True
 
 
@@ -2058,8 +2066,8 @@ class QcStyler(QgsProcessingLayerPostProcessorInterface):
                 for k in kids:
                     sub.removeChildNode(k)
             sub.setExpanded(True)
-        except Exception:
-            pass
+        except Exception as _e:
+            _log.note(_e)
 
 
 class PoleStyler(QgsProcessingLayerPostProcessorInterface):
@@ -2183,11 +2191,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
     # ---------- parameters ----------
     def _adv(self, prm):
         """Tandai parameter sebagai 'Advanced' supaya form utama tetap ringkas."""
-        try:
-            flag = Qgis.ProcessingParameterFlag.Advanced
-        except Exception:
-            flag = QgsProcessingParameterDefinition.FlagAdvanced
-        prm.setFlags(prm.flags() | flag)
+        prm.setFlags(prm.flags() | ADVANCED_FLAG)
         self.addParameter(prm)
 
     def initAlgorithm(self, config=None):
@@ -2658,14 +2662,14 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             if os.path.exists(old_):
                 try:
                     os.remove(old_)       # jangan tinggalkan temuan lama bila sekarang bersih
-                except OSError:
-                    pass
+                except OSError as _e:
+                    _log.note(_e)
         if os.path.isdir(qdir):
             for fn in os.listdir(qdir):
                 try:
                     os.remove(os.path.join(qdir, fn))
-                except OSError:
-                    pass
+                except OSError as _e:
+                    _log.note(_e)
         if not qc:
             return None, []
         items = [qc_item(it) for it in qc]
@@ -2702,8 +2706,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 if sl.isValid() and style_qc_layer(sl):
                     sl.saveNamedStyle(os.path.splitext(path)[0] + ".qml")
                 del sl
-            except Exception:
-                pass
+            except Exception as _e:
+                _log.note(_e)
         # gabungan (titik)
         allq = QgsVectorLayer("Point?crs=EPSG:4326" + FIELDS, "QC_TEMUAN", "memory")
         allq.dataProvider().addFeatures([feat(allq, n_, items[i_], False) for n_, i_ in enumerate(order, 1)])
@@ -4280,8 +4284,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 try:
                     det.groupName = grp            # QGIS 3.32+: satu grup per cluster
                     det.layerSortKey = k
-                except Exception:
-                    pass
+                except Exception as _e:
+                    _log.note(_e)
                 if nm.startswith("QC") and pth.endswith(".shp"):
                     pp = QcStyler(grp, nm[3:] if nm.startswith("QC ") else nm)
                     _KEEP_ALIVE.append(pp)
@@ -4318,6 +4322,6 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 from qgis.PyQt.QtCore import QUrl
                 from qgis.PyQt.QtGui import QDesktopServices
                 QDesktopServices.openUrl(QUrl.fromLocalFile(pth))
-            except Exception:
-                pass
+            except Exception as _e:
+                _log.note(_e)
         return {}

@@ -18,6 +18,10 @@ Before designing in desain otomatis: how many FATs does this cluster need, can t
   Link budget     = fibre 0.35 dB/km + splitter FDT + splitter FAT + 4 connectors x 0.5 dB + 10 splices x 0.1 dB
                     + 3 dB margin <= OLT class (B+ 28 dB / C+ 32 dB, ITU-T G.984.2)
 """
+try:
+    from . import _log
+except ImportError:  # dijalankan sebagai modul lepas (uji unit)
+    import _log
 import math
 import os
 import re
@@ -345,9 +349,9 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
                 p.setFlags(p.flags() | B.Qgis.ProcessingParameterFlag.Advanced)
             except Exception:
                 try:
-                    p.setFlags(p.flags() | B.QgsProcessingParameterDefinition.FlagAdvanced)
-                except Exception:
-                    pass
+                    p.setFlags(p.flags() | B.ADVANCED_FLAG)
+                except Exception as _e:
+                    _log.note(_e)
             self.addParameter(p)
 
     # ---------- main ----------
@@ -413,8 +417,8 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
                 try:
                     det.groupName = grp + " ALOKASI FDT"
                     det.layerSortKey = k
-                except Exception:
-                    pass
+                except Exception as _e:
+                    _log.note(_e)
                 pp = FdtStyle(kind)
                 B._KEEP_ALIVE.append(pp)
                 det.setPostProcessor(pp)
@@ -431,8 +435,8 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
                 from qgis.PyQt.QtCore import QUrl
                 from qgis.PyQt.QtGui import QDesktopServices
                 QDesktopServices.openUrl(QUrl.fromLocalFile(pth))
-            except Exception:
-                pass
+            except Exception as _e:
+                _log.note(_e)
         return {}
 
     @staticmethod
@@ -666,16 +670,16 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
                     with open(mp, encoding="utf-8") as fh:
                         cl_id = str(_j.load(fh).get("cluster_id") or "")
                     break
-            except (OSError, ValueError):
-                pass
+            except (OSError, ValueError) as _e:
+                _log.note(_e)
         reserved = {}
         for r in res_rows:
             if r[1].strip().upper() in (cl_name.upper(), kode.upper()) or (cl_id and cl_id in (r[5] or "")):
                 continue                     # pesanan cluster ini sendiri (dari alat 1) tidak dihitung dua kali
             try:
                 reserved[r[2]] = reserved.get(r[2], 0) + int(math.ceil(float(r[4] or 0) / cap))
-            except ValueError:
-                pass
+            except ValueError as _e:
+                _log.note(_e)
         cand = []
         for g in fdts:
             pt = QgsPointXY(g["x"], g["y"])

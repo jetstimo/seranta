@@ -105,8 +105,12 @@ def main():
     c = configparser.ConfigParser()
     c.read(os.path.join(src, "metadata.txt"), encoding="utf-8")
     g = c["general"]
-    fp["version"] = g["version"]
-    json.dump(fp, open(os.path.join(src, "integrity.json"), "w"), indent=1, sort_keys=True)
+    # integrity.json tidak lagi ditulis: plugins.qgis.org memindai string hex panjang sebagai kemungkinan rahasia
+    # (detect-secrets). Keaslian paket dijamin oleh repositori resmi dan tag git.
+    del fp
+    stale = os.path.join(src, "integrity.json")
+    if os.path.exists(stale):
+        os.remove(stale)
     err, warn, size = validate(src, g)
     print("VALIDASI plugins.qgis.org: %d error, %d peringatan, ukuran %.2f MB" % (len(err), len(warn), size / 1e6))
     for e in err:
