@@ -209,6 +209,47 @@ def read_points_any(path, feedback=None):
     return pts
 
 
+
+def input_manifest(main, kn, apd, autodesign, lay, feeder_path, dist_path, bom, paket, obst_name, sdproj, prof):
+    """Status kelengkapan setiap masukan (audit 5.1 tahap 1): apa yang dibaca, berapa objek, dan aturan mana yang
+    belum bisa diuji bila masukan itu tidak ada. Baris: (masukan, file, status, jumlah, dampak)."""
+    src = (paket or {}).get("_src", {})
+    pk = paket or {}
+    rows = []
+
+    def add(label, path, n, impact, used=None):
+        ok = bool(path) if used is None else used
+        rows.append({"masukan": label, "file": os.path.basename(str(path)) if path else "",
+                     "status": "DIPAKAI" if ok else "TIDAK ADA", "jumlah": n if ok else 0,
+                     "dampak": "" if ok else impact})
+    for kind, lab in (("nodes", "Ekspor desain: node FDT/FAT"), ("endpoints", "Ekspor desain: homepass"),
+                      ("cables", "Ekspor desain: kabel"), ("closures", "Ekspor desain: closure"),
+                      ("polys", "Ekspor desain: coverage (Voronoi)")):
+        f_ = lay.get(kind, "") or main.sources.get(kind, "")
+        add(lab if lay.get(kind) or not f_ else lab.replace("Ekspor desain", "KMZ APD"), f_,
+            len(getattr(main, kind, [])), "aturan yang membutuhkan data ini memakai data yang ada saja")
+    add("KMZ APD final", apd, (len(kn.nodes) + len(kn.endpoints) + len(kn.cables) + len(kn.poles)) if kn else 0,
+        "QC-01..07 dan aturan KMZ tidak bisa dijalankan")
+    add("Tiang", main.sources.get("poles", ""), len(main.poles), "aturan tiang, bentang, perangkat di tiang belum bisa dicek")
+    add("Paket Feeder", feeder_path or ("folder Feeder di KMZ APD" if any("FEEDER" in (n.get("packages") or ()) for n in main.nodes) else ""),
+        sum(1 for o in list(main.nodes) + list(main.cables) + list(main.closures)
+            if "FEEDER" in (o.get("packages") or {o.get("scope")})) if not feeder_path else "",
+        "FDT di dua paket belum bisa dicek")
+    add("Paket Distribution", dist_path or ("folder Distribution di KMZ APD" if kn is not None else "data utama"),
+        sum(1 for o in list(main.nodes) + list(main.cables) + list(main.closures)
+            if "DISTRIBUTION" in (o.get("packages") or {o.get("scope")})) if not dist_path else "", "", used=True)
+    add("BOM / Daily", bom, 1, "rekonsiliasi BOM belum bisa dicek")
+    add("Tabel kode FDT-FAT", src.get("codes"), len(pk.get("codes") or {}), "QC-02 (sebagian) dan QC-03 belum bisa dicek")
+    add("Splice Plan", src.get("splice"), len(pk.get("splice") or {}), "cek splitter dan fiber/tube Splice Plan belum bisa dicek")
+    add("Rekap kode FDT (BAKP-Attributes)", src.get("master"), len(pk.get("master") or ()),
+        "QC-01: kode FDT baru terdaftar & unik lintas proyek belum bisa dicek")
+    add("Tiang existing referensi kota", src.get("ref"), len(pk.get("ref_pts") or ()), "QC-04 belum bisa dicek")
+    add("Jaringan existing (Design Lite)", src.get("designlite"), len(pk.get("dl_codes") or {}),
+        "QC-01: bentrok kode dengan FDT existing & kandidat grouping belum bisa dicek")
+    add("Layer rel/tol/hambatan", obst_name, 1, "aturan crossing belum bisa dicek")
+    add("Config desain otomatis (.sdproj)", sdproj, 1, "angka dari profil %s dipakai apa adanya" % prof.get("profile_id", ""))
+    return rows
+
 class QcApdStyle(B.QgsProcessingLayerPostProcessorInterface):
     def __init__(self, name):
         super().__init__()
@@ -350,7 +391,7 @@ class QcApd(QgsProcessingAlgorithm):
         kn = None
         lay = Q.find_autodesign_layers(autodesign) if autodesign else {}
         for kind, pth in lay.items():
-            feedback.pushInfo("desain otomatis %-9s: %s" % (kind, os.path.basename(pth)))
+            feedback.pushInfo("Ekspor desain %-9s: %s" % (kind, os.path.basename(pth)))
             Q.read_layer_records(main, kind, layer_records(pth, feedback), pth)
         if apd:
             kn = Q.read_kmz(apd, Q.Net("APD"))
@@ -433,8 +474,19 @@ class QcApd(QgsProcessingAlgorithm):
         Q.write_csv(csvp, Q.findings_of(results))
         meta = {"produk": "%s v%s" % (B.__product__, B.__version__), "dibuat": _dt.datetime.now().isoformat(timespec="seconds"),
                 "cluster": cluster, "autodesign": autodesign, "apd_kmz": apd, "feeder": fp, "distribusi": dp, "bom": bom,
-                "status_fdt": status, "sumber_data": main.sources}
+                "status_fdt": status, "sumber_data": main.sources,
+                "kelengkapan": input_manifest(main, kn, apd, autodesign, lay, fp, dp, bom, paket,
+                                              obst.name() if obst is not None else "", sd, prof),
+                "kandidat_grouping": next((r.stats.get("grouping") for r in results if r.rule_id == "QC01_KODE_FDT"), []) or []}
         Q.write_json(os.path.join(out_dir, "QC_APD.json"), results, prof, meta)
+        xlsx = os.path.join(out_dir, "QC_APD_TEMUAN.xlsx")
+        try:
+            write_xlsx(xlsx, results, prof, meta)
+        except OSError as e:          # mis. masih terbuka di aplikasi spreadsheet
+            alt = os.path.join(out_dir, "QC_APD_TEMUAN_%s.xlsx" % _dt.datetime.now().strftime("%H%M%S"))
+            feedback.reportError("QC_APD_TEMUAN.xlsx sedang dibuka aplikasi lain (%s); daftar kerja ditulis ke %s"
+                                 % (e, os.path.basename(alt)), fatalError=False)
+            write_xlsx(alt, results, prof, meta)
         html = os.path.join(out_dir, "QC_APD.html")
         self._html(html, results, prof, meta, main)
         ov = Q.overall(results)
@@ -497,7 +549,8 @@ class QcApd(QgsProcessingAlgorithm):
         codes_p = par(self.CODES) or find_code_table(base)
         splice_p = par(self.SPLICE) or find_splice_plan(base)
         master_p, ref_p = par(self.MASTER), par(self.POLEREF)
-        pk = {"kmz": kn, "autodesign": autodesign_net}
+        pk = {"kmz": kn, "autodesign": autodesign_net,
+              "_src": {"codes": codes_p, "splice": splice_p, "master": master_p, "ref": ref_p}}
         if codes_p:
             pk["codes"], nts = P.read_code_table(codes_p, B.read_xlsx)
             for t in nts:
@@ -529,11 +582,13 @@ class QcApd(QgsProcessingAlgorithm):
                 ys = [n["y"] for n in kn.nodes]
                 ext = (min(xs) - 0.05, min(ys) - 0.05, max(xs) + 0.05, max(ys) + 0.05)
                 dl = {}
-                for fp in B.ref_files(ref_dir, "designlite"):
+                dl_files = list(B.ref_files(ref_dir, "designlite"))
+                for fp in dl_files:
                     for e in B.cached_read("designlite", fp, ext, B.read_design_lite, feedback):
                         if e.get("kind", "fdt") == "fdt":
-                            dl.setdefault(Q.norm_code(e["code"]), []).append((e["x"], e["y"]))
+                            dl.setdefault(str(e["code"]).strip().upper(), []).append((e["x"], e["y"]))
                 pk["dl_codes"] = dl
+                pk["_src"]["designlite"] = ", ".join(os.path.basename(x) for x in dl_files) or ref_dir
                 feedback.pushInfo("Kode FDT jaringan existing di sekitar: %d" % len(dl))
             except Exception as e:
                 feedback.reportError("Data jaringan existing tidak terbaca: %s" % e, fatalError=False)
@@ -554,6 +609,10 @@ class QcApd(QgsProcessingAlgorithm):
                             old[Q.review_key(f)] = (r["review"], r.get("note", ""))
             except (OSError, ValueError, KeyError) as _e:
                 _log.note(_e)
+        # status review yang diisi reviewer di daftar kerja XLSX (lebih baru dari CSV)
+        xp = os.path.join(out_dir, "QC_APD_TEMUAN.xlsx")
+        if os.path.exists(xp):
+            old.update(read_xlsx_reviews(xp))
         # status yang disimpan langsung di shp oleh Navigator
         for fn in os.listdir(out_dir):
             if fn.lower().endswith(".shp"):
@@ -575,7 +634,8 @@ class QcApd(QgsProcessingAlgorithm):
                   "&field=dasar:string(160)&field=dasar_src:string(20)&field=kode:string(40)&field=finding_id:string(24)"
                   "&field=objek:string(20)&field=objek_id:string(60)&field=saran:string(200)&field=profil:string(24)"
                   "&field=versi:string(14)&field=review:string(20)&field=catatan:string(200)"
-                  "&field=lon:double(12,7)&field=lat:double(12,7)")
+                  "&field=lon:double(12,7)&field=lat:double(12,7)&field=lingkup:string(14)&field=bukti:string(254)"
+                  "&field=sumber:string(80)")
         loads, n = [], 0
         nogeo = [(r, f) for r in results for f in r.findings if not f.get("geom")]
         if nogeo:
@@ -599,7 +659,8 @@ class QcApd(QgsProcessingAlgorithm):
                                      B._short(r.sumber, 160), f.get("dasar", ""), f["rule_id"], f.get("finding_id", ""),
                                      f.get("object_type", ""), str(f.get("object_id", ""))[:60],
                                      B._short(f.get("recommendation", ""), 200), f.get("profile_id", ""),
-                                     f.get("rule_version", ""), f.get("review", "OPEN"), B._short(f.get("note", ""), 200), "", ""])
+                                     f.get("rule_version", ""), f.get("review", "OPEN"), B._short(f.get("note", ""), 200), "", "",
+                                     f.get("scope", ""), B._short(f.get("evidence", ""), 254), B._short(f.get("source_file", ""), 80)])
                 loads.append((path, "Temuan non-spasial (BOM/KMZ/data) (%d)" % len(nogeo)))
             except OSError as e:
                 feedback.reportError("Tabel temuan non-spasial tidak ditulis: %s" % e, fatalError=False)
@@ -626,7 +687,8 @@ class QcApd(QgsProcessingAlgorithm):
                                      B._short(r.sumber, 160), f.get("dasar", ""), rid, f.get("finding_id", ""), f.get("object_type", ""),
                                      str(f.get("object_id", ""))[:60], B._short(f.get("recommendation", ""), 200),
                                      f.get("profile_id", ""), f.get("rule_version", ""), f.get("review", "OPEN"),
-                                     B._short(f.get("note", ""), 200), round(p0[0], 7), round(p0[1], 7)])
+                                     B._short(f.get("note", ""), 200), round(p0[0], 7), round(p0[1], 7),
+                                     f.get("scope", ""), B._short(f.get("evidence", ""), 254), B._short(f.get("source_file", ""), 80)])
                     q.setGeometry(QgsGeometry.fromPolylineXY([QgsPointXY(x, y) for x, y in g[1]]) if gk == "line"
                                   else QgsGeometry.fromPointXY(QgsPointXY(*g[1])))
                     feats.append(q)
@@ -651,6 +713,96 @@ class QcApd(QgsProcessingAlgorithm):
 
     def _html(self, path, results, prof, meta, net):
         write_html(path, results, prof, meta)
+
+
+XLSX_COLS = [("No", 6), ("ID temuan", 20), ("Aturan", 22), ("Tingkat", 13), ("Judul sederhana", 30), ("Objek", 26),
+             ("Jenis objek", 12), ("Lingkup", 13), ("Nilai", 10), ("Batas", 10), ("Satuan", 8), ("Arti temuan", 46),
+             ("Yang perlu dilakukan", 46), ("Bukti", 40), ("File sumber", 28), ("Pesan teknis", 46), ("Lon", 12),
+             ("Lat", 12), ("Peta", 14), ("Status review", 20), ("Catatan reviewer", 36), ("Versi aturan", 12), ("Profil", 16)]
+
+
+def write_xlsx(path, results, prof, meta):
+    """QC_APD_TEMUAN.xlsx: daftar kerja reviewer (audit 5.1 tahap 4). Sheet Ringkasan, Temuan (status review dengan
+    pilihan baku, terbaca kembali saat QC diulang), Kelengkapan input, dan Grouping FDT."""
+    from . import xlsx_writer as XL
+    from . import penjelasan as X
+    from . import report_ui as U
+    sev_word = U.SEV_WORD
+    ring = XL.Sheet("Ringkasan", ["Aturan", "Judul", "Status", "Wajib diperbaiki", "Perlu ditinjau", "Belum bisa dicek", "Catatan",
+                                  "Yang dicek", "Alasan belum bisa dicek", "Dasar aturan"], [24, 40, 16, 10, 10, 10, 10, 50, 44, 50])
+    for r in results:
+        c = r.counts()
+        ex = X.RULES.get(r.rule_id, {})
+        ring.add([r.rule_id, r.title, sev_word.get(r.status, r.status), c.get("ERROR", 0), c.get("WARNING", 0),
+                  c.get("UNVERIFIED", 0) + (1 if r.status == "UNVERIFIED" and not r.findings else 0), c.get("INFO", 0),
+                  ex.get("cek", ""), r.unverified or "", (Q.DASAR_LABEL.get(r.dasar, r.dasar or "") + ": " + (r.sumber or "")).strip(": ")],
+                 [2, 2, XL.SEVERITY_STYLE.get(r.status, 2), 0, 0, 0, 0, 2, 2, 2])
+    tem = XL.Sheet("Temuan", [h for h, _w in XLSX_COLS], [w for _h, w in XLSX_COLS])
+    n = 0
+    for r in results:
+        for f in sorted(r.findings, key=lambda f: Q.SEV_RANK.get(f["severity"], 9)):
+            n += 1
+            j, a, fx = X.finding_text(f)
+            g = f.get("geom")
+            lon = lat = ""
+            if g:
+                lon, lat = g[1] if g[0] == "point" else g[1][0]
+            link = ("=", 'HYPERLINK("https://www.openstreetmap.org/?mlat=%.7f&mlon=%.7f#map=19/%.7f/%.7f","lihat peta")'
+                    % (lat, lon, lat, lon), "lihat peta") if g else ""
+            num = (lambda v: float(v) if isinstance(v, (int, float)) else (v if v is not None else ""))
+            tem.add([n, f.get("finding_id", ""), f["rule_id"], sev_word.get(f["severity"], f["severity"]), j, f.get("object_id", ""),
+                     f.get("object_type", ""), f.get("scope", ""), num(f.get("value")), num(f.get("threshold")), f.get("unit", ""),
+                     a, fx, f.get("evidence", ""), f.get("source_file", ""), f.get("message", ""),
+                     round(lon, 7) if lon != "" else "", round(lat, 7) if lat != "" else "", link,
+                     f.get("review", "OPEN"), f.get("note", ""), f.get("rule_version", ""), f.get("profile_id", "")],
+                    [0, 0, 0, XL.SEVERITY_STYLE.get(f["severity"], 0), 2, 0, 0, 0, None, None, 0, 2, 2, 2, 0, 2, 0, 0, 4, 0, 2, 0, 0])
+    tem.choices(19, list(Q.REVIEW_STATES))
+    kel = XL.Sheet("Kelengkapan input", ["Masukan", "Status", "File", "Jumlah objek", "Bila tidak ada"], [36, 12, 46, 12, 70])
+    for k in meta.get("kelengkapan") or []:
+        kel.add([k["masukan"], k["status"], k["file"], k["jumlah"] or "", k["dampak"]],
+                [2, 9 if k["status"] == "DIPAKAI" else (7 if k["dampak"] else 8), 0, 0, 2])
+    sheets = [ring, tem, kel]
+    gr = meta.get("kandidat_grouping") or []
+    if gr:
+        gs = XL.Sheet("Grouping FDT", ["FDT", "Status", "Kelompok kode", "Kelompok sekitar", "FDT sekitar", "FDT existing terdekat",
+                                       "Kode kandidat", "Hasil"], [22, 8, 16, 16, 10, 30, 18, 30])
+        for x in gr:
+            gs.add([x["fdt"], x["status_fdt"], x["kelompok_kode"], x["kelompok_sekitar"], x["jumlah_fdt_sekitar"], x["fdt_terdekat"],
+                    x["kode_kandidat"], x["hasil"]], [0, 0, 0, 0, 0, 0, 0, 9 if x["hasil"].startswith("SESUAI") else (6 if x["hasil"].startswith("BEDA") else 8)])
+        sheets.append(gs)
+    return XL.write(path, sheets, "QC APD %s" % meta.get("cluster", ""), "Seranta")
+
+
+def read_xlsx_reviews(path):
+    """Status review yang diisi reviewer di QC_APD_TEMUAN.xlsx: {review_key: (status, catatan)}."""
+    out = {}
+    try:
+        sheets = dict(B.read_xlsx(path, want=lambda n: n == "Temuan"))
+    except Exception as e:
+        _log.note(e)
+        return out
+    rows = sheets.get("Temuan") or []
+    if not rows:
+        return out
+    h = rows[0]
+
+    def ix(name):
+        return h.index(name) if name in h else None
+    i_r, i_o, i_lon, i_lat, i_rv, i_nt = ix("Aturan"), ix("Objek"), ix("Lon"), ix("Lat"), ix("Status review"), ix("Catatan reviewer")
+    if None in (i_r, i_rv):
+        return out
+    for row in rows[1:]:
+        g = (lambda k: row[k] if k is not None and k < len(row) else "")
+        rv = g(i_rv).strip().upper()
+        if not rv or rv == "OPEN":
+            continue
+        try:
+            geom = ("point", (float(g(i_lon)), float(g(i_lat)))) if g(i_lon) and g(i_lat) else None
+        except ValueError:
+            geom = None
+        f = {"rule_id": g(i_r), "object_id": g(i_o), "geom": geom}
+        out[Q.review_key(f)] = (rv, g(i_nt))
+    return out
 
 
 def write_html(path, results, prof, meta):
@@ -705,6 +857,19 @@ def write_html(path, results, prof, meta):
                          "</table></div>" % "".join("<tr>%s</tr>" % "".join(
                              "<td%s>%s</td>" % ("" if i in (0, 3) else " class='n'", _E("%g" % x if isinstance(x, float) else str(x)))
                              for i, x in enumerate(t)) for t in r.stats["fdt"] if isinstance(t, (list, tuple))))
+        if r.rule_id == "QC01_KODE_FDT" and r.stats.get("grouping"):
+            inner.append("<p class='lead'><b>Kandidat grouping FDT</b>: kelompok kode area FDT existing dalam radius COLO, "
+                         "FDT existing terdekat, dan kode kandidat berikutnya di kelompok itu (dicek ulang dengan rekap kode).</p>"
+                         "<div class='scroll'><table><tr><th>FDT</th><th>Status</th><th>Kelompok kode</th><th>Kelompok sekitar</th>"
+                         "<th class='n'>FDT sekitar</th><th>FDT existing terdekat</th><th>Kode kandidat</th><th>Hasil</th></tr>%s"
+                         "</table></div>" % "".join(
+                             "<tr><td><b>%s</b></td><td>%s</td><td>%s</td><td>%s</td><td class='n'>%d</td><td>%s</td><td>%s</td>"
+                             "<td>%s</td></tr>" % (_E(g["fdt"]), _E(g["status_fdt"]), _E(g["kelompok_kode"] or "-"),
+                                                   _E(g["kelompok_sekitar"] or "-"), g["jumlah_fdt_sekitar"], _E(g["fdt_terdekat"] or "-"),
+                                                   _E(g["kode_kandidat"] or "-"),
+                                                   U.chip("PASS" if g["hasil"].startswith("SESUAI") else "WARNING" if g["hasil"].startswith("BEDA")
+                                                          else "UNVERIFIED", g["hasil"].capitalize()))
+                             for g in r.stats["grouping"]))
         if r.rule_id == "BOM" and r.stats.get("tabel"):
             inner.append("<div class='scroll'><table><tr><th>Kategori</th><th>Satuan</th><th class='n'>Desain</th>"
                          "<th class='n'>Desain + slack</th><th class='n'>BOM</th><th class='n'>Selisih</th><th class='n'>%%</th>"
@@ -724,6 +889,9 @@ def write_html(path, results, prof, meta):
                     (" | saran sistem: %s" % _E(f["recommendation"])) if f.get("recommendation") else "",
                     (" | lingkup %s" % _E(f["scope"])) if f.get("scope") else "",
                     (" | ID temuan %s" % _E(f.get("finding_id", ""))) if f.get("finding_id") else "")
+                if f.get("evidence") or f.get("source_file"):
+                    tech += "<br>%s%s" % (("Bukti: %s. " % _E(f["evidence"])) if f.get("evidence") else "",
+                                          ("Sumber: <code>%s</code>" % _E(f["source_file"])) if f.get("source_file") else "")
                 lis.append(U.finding_li(f["severity"], j, f.get("object_id") or "", a, fx, tech, ll))
             more = ("<li class='more'>+%d temuan lain. Daftar lengkap ada di QC_APD_TEMUAN.csv dan panel Navigator QC.</li>"
                     % (len(fs) - 80)) if len(fs) > 80 else ""
@@ -732,16 +900,31 @@ def write_html(path, results, prof, meta):
         if dasar or r.sumber:
             inner.append("<p class='src'>Dasar aturan: %s%s</p>" % (_E(dasar), (": " + _E(r.sumber)) if r.sumber else ""))
         cards.append(U.rule_card(anchor, r.status, ex.get("judul") or r.title, sub, c, ex.get("cek", ""), ex.get("alasan", ""),
-                                 ex.get("tindakan", ""), "".join(inner), is_open=r.status in ("ERROR", "WARNING")))
+                                 ex.get("tindakan", ""), "".join(inner),
+                                 is_open=r.status in ("ERROR", "WARNING") or bool(r.stats.get("grouping"))))
     prm = "".join("<tr><td><code>%s</code></td><td class='n'>%s %s</td><td>%s</td><td>%s</td><td>%s</td></tr>" % (
         _E(k), _E(str(e.get("v"))), _E(e.get("unit") or ""), _E(Q.DASAR_LABEL.get(e.get("dasar"), "")), _E(e.get("sumber", "")),
         U.chip("PASS", "disahkan") if e.get("status") == "APPROVED" else U.chip("UNVERIFIED", "parameter rekayasa"))
         for k, e in prof["params"].items() if isinstance(e, dict) and k != "cable_colors")
     src = "".join("<tr><td>%s</td><td><code>%s</code></td></tr>" % (_E(k), _E(v)) for k, v in sorted(meta.get("sumber_data", {}).items()))
-    body = (U.howto() + "".join(cards) +
+    kl = meta.get("kelengkapan") or []
+    n_miss = sum(1 for k in kl if k["status"] != "DIPAKAI" and k["dampak"])
+    kel_html = ("<section class='block' id='kelengkapan'><h2>Kelengkapan data masukan</h2><p class='lead'>%s</p>"
+                "<div class='scroll'><table><tr><th>Masukan</th><th>Status</th><th>File</th><th class='n'>Objek</th>"
+                "<th>Bila tidak ada</th></tr>%s</table></div></section>" % (
+                    ("Semua masukan yang dibutuhkan tersedia." if not n_miss else
+                     "%d masukan belum tersedia. Aturan yang membutuhkannya berstatus <i>Belum bisa dicek</i>; lengkapi lalu "
+                     "jalankan ulang QC." % n_miss),
+                    "".join("<tr><td>%s</td><td>%s</td><td>%s</td><td class='n'>%s</td><td>%s</td></tr>" % (
+                        _E(k["masukan"]), U.chip("PASS", "dipakai") if k["status"] == "DIPAKAI" else
+                        (U.chip("UNVERIFIED", "tidak ada") if k["dampak"] else U.chip("INFO", "opsional")),
+                        ("<code>%s</code>" % _E(k["file"])) if k["file"] else "-", k["jumlah"] or "-", _E(k["dampak"] or "-"))
+                        for k in kl))) if kl else ""
+    body = (U.howto() + kel_html + "".join(cards) +
             "<section class='block'><h2>File hasil QC</h2><p class='lead'>Lokasi setiap temuan ada di folder <code>QC_APD</code> "
             "(satu layer per aturan). Di QGIS, buka panel <b>Navigator QC</b>, klik temuan untuk langsung ke lokasinya, lalu beri "
-            "status review. Tabel lengkap: <code>QC_APD_TEMUAN.csv</code> dan <code>QC_APD.json</code>.</p>"
+            "status review. Tabel lengkap: <code>QC_APD_TEMUAN.xlsx</code> (daftar kerja reviewer: isi kolom <i>Status review</i> dan <i>Catatan reviewer</i>, "
+            "status itu dibaca kembali saat QC diulang), <code>QC_APD_TEMUAN.csv</code> dan <code>QC_APD.json</code>.</p>"
             "<div class='scroll'><table><tr><th>Jenis data</th><th>Dibaca dari</th></tr>%s</table></div></section>"
             "<section class='block'><details class='plain'><summary>Profil standar %s: dasar setiap angka</summary>"
             "<p class='lead'>Setiap batas di laporan ini berasal dari profil di bawah. Status <i>parameter rekayasa</i> berarti "

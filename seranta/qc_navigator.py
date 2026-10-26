@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later (see LICENSE).
 """Panel 'Navigator QC Seranta' (spesifikasi 13): satu panel untuk temuan alat 1 (QC strand), alat 3 (alokasi) dan
 alat 4 (QC APD). Klik temuan -> peta zoom ke lokasinya, fitur dipilih dan berkedip. Filter tingkat (ERROR / WARNING /
-INFO / UNVERIFIED) dan status review; status review (OPEN, VERIFIED, FALSE_POSITIVE, APPROVED_EXCEPTION, RESOLVED) +
+INFO / UNVERIFIED), aturan, lingkup jaringan (Feeder / Distribution) dan status review; status review (OPEN, VERIFIED, FALSE_POSITIVE, APPROVED_EXCEPTION, RESOLVED) +
 catatan disimpan langsung di layer temuan dan dipertahankan saat QC dijalankan ulang; ekspor CSV untuk reviewer."""
 try:
     from . import _log
@@ -71,6 +71,14 @@ class QcNavigator(QDockWidget):
         self.rev_f = QComboBox()
         self.rev_f.addItems(["Semua review", "Belum direview (OPEN)", "Sudah direview"])
         self.rev_f.currentIndexChanged.connect(self.refresh)
+        self.rule_f = QComboBox()
+        self.rule_f.addItem("Semua aturan")
+        self.rule_f.setToolTip("Tampilkan temuan satu aturan saja (mis. QC05_RASIO atau SPAN_OVER_MAX)")
+        self.rule_f.currentIndexChanged.connect(self.refresh)
+        self.scope_f = QComboBox()
+        self.scope_f.addItems(["Semua lingkup", "DISTRIBUTION", "FEEDER", "Tanpa lingkup"])
+        self.scope_f.setToolTip("Lingkup jaringan temuan: paket Distribution, paket Feeder, atau tidak terikat paket")
+        self.scope_f.currentIndexChanged.connect(self.refresh)
         btn = QPushButton("Muat ulang")
         btn.setToolTip("Baca ulang semua layer QC Seranta di proyek")
         btn.clicked.connect(self.refresh)
@@ -82,6 +90,10 @@ class QcNavigator(QDockWidget):
         flt.addWidget(self.sev)
         flt.addWidget(self.rev_f)
         lay.addLayout(flt)
+        flt2 = QHBoxLayout()
+        flt2.addWidget(self.rule_f, 1)
+        flt2.addWidget(self.scope_f)
+        lay.addLayout(flt2)
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["Temuan", "Nilai"])
         self.tree.setColumnWidth(0, 300)
@@ -149,11 +161,18 @@ class QcNavigator(QDockWidget):
         only = self.only_cek.isChecked()
         sev_want = self.sev.currentText() if self.sev.currentIndex() > 0 else None
         rev_mode = self.rev_f.currentIndex()
+        rule_want = self.rule_f.currentText() if self.rule_f.currentIndex() > 0 else None
+        scope_mode = self.scope_f.currentIndex()
+        scope_want = self.scope_f.currentText() if scope_mode in (1, 2) else None
         layers = [lyr_ for lyr_ in QgsProject.instance().mapLayers().values() if is_qc_layer(lyr_)]
         n_all = 0
         found = []
+        rules_seen = set()
         for lyr in layers:
             names = [f.name() for f in lyr.fields()]
+            ikode = names.index("kode") if "kode" in names else None
+            iscope = names.index("lingkup") if "lingkup" in names else None
+            ibukti = names.index("bukti") if "bukti" in names else None
             iket = names.index("keterangan") if "keterangan" in names else None
             ist = names.index("status") if "status" in names else None
             inil = names.index("nilai") if "nilai" in names else None
@@ -171,6 +190,16 @@ class QcNavigator(QDockWidget):
                     continue
                 if (rev_mode == 1 and rvv != "OPEN") or (rev_mode == 2 and rvv == "OPEN"):
                     continue
+                rule = str(at[ikode]) if ikode is not None and at[ikode] not in (None, "") else lyr.name()
+                rule = rule if ikode is not None else re.sub(r"\s*\(\d+\)\s*$", "", rule)
+                rules_seen.add(rule)
+                if rule_want and rule != rule_want:
+                    continue
+                scp = str(at[iscope]) if iscope is not None and at[iscope] not in (None, "") and str(at[iscope]) != "NULL" else ""
+                if scope_want and scp != scope_want:
+                    continue
+                if scope_mode == 3 and scp:
+                    continue
                 if iket is not None:
                     txt = str(at[iket] or "")
                 else:
@@ -178,7 +207,8 @@ class QcNavigator(QDockWidget):
                 if q and q not in txt.lower():
                     continue
                 nil = at[inil] if inil is not None else None
-                rows.append((txt, sv or st, nil, f.id(), rvv))
+                bk = str(at[ibukti]) if ibukti is not None and at[ibukti] not in (None, "") and str(at[ibukti]) != "NULL" else ""
+                rows.append((txt, sv or st, nil, f.id(), rvv, scp, bk))
             if rows:
                 rank = min({"ERROR": 0, "CEK": 0, "WARNING": 1, "UNVERIFIED": 2, "INFO": 3}.get(r[1], 3) for r in rows)
                 found.append((rank, lyr.name(), lyr, rows))
@@ -188,10 +218,11 @@ class QcNavigator(QDockWidget):
             top.setData(0, ROLE, (lyr.id(), None))
             red = _info < 2
             top.setForeground(0, QBrush(QColor(SEV_COL.get(["ERROR", "WARNING", "UNVERIFIED", "INFO"][_info], "#8a6d00"))))
-            for txt, st, nil, fid, rvv in rows:
+            for txt, st, nil, fid, rvv, scp, bk in rows:
                 it = QTreeWidgetItem([("[%s] " % rvv if rvv != "OPEN" else "") + txt,
                                       ("%.1f" % nil) if isinstance(nil, (int, float)) else ""])
-                it.setToolTip(0, "%s | review: %s\n%s" % (st, rvv, txt))
+                it.setToolTip(0, "%s | review: %s%s\n%s%s" % (st, rvv, (" | lingkup: %s" % scp) if scp else "", txt,
+                                                              ("\nbukti: %s" % bk) if bk else ""))
                 it.setData(0, ROLE, (lyr.id(), fid))
                 if st in SEV_COL and st != "INFO":
                     it.setForeground(0, QBrush(QColor(SEV_COL[st])))
@@ -200,6 +231,13 @@ class QcNavigator(QDockWidget):
             self.tree.addTopLevelItem(top)
             top.setExpanded(red and len(rows) <= 30)
             n_all += len(rows)
+        cur = self.rule_f.currentText()
+        self.rule_f.blockSignals(True)
+        self.rule_f.clear()
+        self.rule_f.addItem("Semua aturan")
+        self.rule_f.addItems(sorted(rules_seen))
+        self.rule_f.setCurrentIndex(max(0, self.rule_f.findText(cur)))
+        self.rule_f.blockSignals(False)
         self.info.setText("%d temuan di %d layer. Klik temuan untuk menuju lokasinya." % (n_all, self.tree.topLevelItemCount())
                           if n_all else "Belum ada layer QC Seranta di proyek. Jalankan alat 1 atau 3.")
 
@@ -319,7 +357,8 @@ class QcNavigator(QDockWidget):
         n = 0
         with open(path, "w", newline="", encoding="utf-8-sig") as fh:
             w = csv.writer(fh)
-            w.writerow(["layer", "severity", "kode", "keterangan", "nilai", "batas", "review", "catatan", "lon", "lat"])
+            w.writerow(["layer", "severity", "kode", "lingkup", "keterangan", "nilai", "batas", "bukti", "sumber", "review",
+                        "catatan", "lon", "lat"])
             for lyr in [lyr_ for lyr_ in QgsProject.instance().mapLayers().values() if is_qc_layer(lyr_)]:
                 nm = [x.name() for x in lyr.fields()]
 
@@ -327,8 +366,9 @@ class QcNavigator(QDockWidget):
                     return ft[k] if k in nm and str(ft[k]) != "NULL" else ""
                 for ft in lyr.getFeatures():
                     p = ft.geometry().centroid().asPoint() if ft.geometry() and not ft.geometry().isEmpty() else None
-                    w.writerow([lyr.name(), g(ft, "severity") or g(ft, "status"), g(ft, "kode"), g(ft, "keterangan"),
-                                g(ft, "nilai"), g(ft, "batas"), g(ft, "review") or "OPEN", g(ft, "catatan"),
+                    w.writerow([lyr.name(), g(ft, "severity") or g(ft, "status"), g(ft, "kode"), g(ft, "lingkup"),
+                                g(ft, "keterangan"), g(ft, "nilai"), g(ft, "batas"), g(ft, "bukti"), g(ft, "sumber"),
+                                g(ft, "review") or "OPEN", g(ft, "catatan"),
                                 round(p.x(), 7) if p else "", round(p.y(), 7) if p else ""])
                     n += 1
         self.info.setText("%d temuan diekspor ke %s" % (n, path))

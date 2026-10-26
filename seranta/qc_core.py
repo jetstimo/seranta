@@ -175,11 +175,11 @@ class Finding(dict):
 
 
 def finding(rule_id, severity, message, geom=None, object_type="", object_id="", value=None, threshold=None,
-            recommendation="", case_id="", dasar="", source="", scope="", unit=""):
+            recommendation="", case_id="", dasar="", source="", scope="", unit="", evidence=""):
     return Finding(rule_id=rule_id, severity=severity, message=message, geom=geom, object_type=object_type,
                    object_id=str(object_id or ""), value=value, threshold=threshold, recommendation=recommendation,
                    case_id=str(case_id or ""), dasar=dasar, source=source, scope=scope, unit=unit,
-                   review="OPEN", note="")
+                   evidence=evidence, source_file="", review="OPEN", note="")
 
 
 class RuleResult(object):
@@ -207,7 +207,10 @@ class RuleResult(object):
     @property
     def status(self):
         if self.findings:
-            return min((f["severity"] for f in self.findings), key=lambda s: SEV_RANK.get(s, 9))
+            worst = min((f["severity"] for f in self.findings), key=lambda s: SEV_RANK.get(s, 9))
+            if self.unverified and SEV_RANK.get(worst, 9) > SEV_RANK["UNVERIFIED"]:
+                return "UNVERIFIED"          # hanya catatan INFO + data kurang -> tetap belum bisa dicek, bukan lolos
+            return worst
         return "UNVERIFIED" if self.unverified else "PASS"
 
     def counts(self):
@@ -215,6 +218,80 @@ class RuleResult(object):
         for f in self.findings:
             c[f["severity"]] = c.get(f["severity"], 0) + 1
         return c
+
+
+_EVIDENCE_KEYS = ("NAME", "ELEMENTID", "SUPID", "PREMISES", "SPLITTERS", "MODELNUM", "FIBERS", "LEVEL", "CONNSTATUS", "SERVED",
+                  "MAXPPDIST", "COLO", "STATUS", "HEIGHT", "TINGGI")
+_TYPE_SOURCE = (("SPAN", ("poles", "cables")), ("HP", ("endpoints",)), ("FAT", ("nodes",)), ("FDT", ("nodes",)), ("KABEL", ("cables",)),
+                ("UJUNG_KABEL", ("cables",)), ("POLE", ("poles",)), ("TIANG", ("poles",)), ("CLOSURE", ("closures",)),
+                ("COVERAGE", ("polys",)), ("KMZ", ("polys", "poles")))
+
+
+def _span_ends(sid, idx):
+    """'NP-20-EP-11' -> ['NP-20', 'EP-11'] memakai nama tiang yang memang ada di indeks."""
+    parts = sid.split("-")
+    for k in range(1, len(parts)):
+        a, b = "-".join(parts[:k]), "-".join(parts[k:])
+        if a in idx and b in idx:
+            return [a, b]
+    return []
+
+
+def _evidence_of(o):
+    """Ringkasan bukti dari objek sumber: folder KMZ + atribut asli yang relevan (maks. 8 pasang)."""
+    parts = []
+    fol = [str(x) for x in (o.get("folders") or []) if x]
+    if len(fol) > 1:
+        fol = fol[1:]                 # folder pertama = nama dokumen KMZ
+    if fol:
+        parts.append("folder: " + " / ".join(fol)[:120])
+    a = o.get("attrs") or {}
+    keys = [k for k in a if str(k).upper() in _EVIDENCE_KEYS] or list(a)[:4]
+    for k in keys[:8]:
+        v = a.get(k)
+        if v not in (None, "", "NULL"):
+            parts.append("%s=%s" % (k, str(v)[:40]))
+    if not parts and o.get("name"):
+        parts.append("nama: %s" % o["name"])
+    return "; ".join(parts)
+
+
+def attach_evidence(results, net, extra_sources=None):
+    """Isi source_file, evidence dan scope setiap temuan dari objek jaringan yang dirujuknya (audit 6.1:
+    temuan memuat objek, sumber data, nilai, ambang, lokasi, bukti). extra_sources: {object_type: file}."""
+    idx = {}
+    for kind in ("nodes", "endpoints", "cables", "poles", "closures", "polys"):
+        for o in getattr(net, kind, []) or []:
+            for key in (o.get("name"), o.get("id"), o.get("setics_name"), o.get("object_ref")):
+                if key:
+                    idx.setdefault(str(key), (kind, o))
+    extra = dict(extra_sources or {})
+    for r in results:
+        for f in r.findings:
+            hit = idx.get(str(f.get("object_id") or "")) or idx.get(str(f.get("object_ref") or ""))
+            kind, o = hit if hit else (None, None)
+            if not f.get("source_file"):
+                src = f.get("source") or (o or {}).get("src") or ""
+                if not src:
+                    src = extra.get(f.get("object_type") or "", "")
+                if not src:
+                    for pre, kinds in _TYPE_SOURCE:
+                        if str(f.get("object_type") or "").upper().startswith(pre):
+                            src = next((net.sources.get(k) for k in kinds if net.sources.get(k)), "")
+                            break
+                f["source_file"] = os.path.basename(str(src)) if src else ""
+            if not f.get("evidence") and o is None and str(f.get("object_type", "")).upper() == "SPAN":
+                ends = [idx.get(x) for x in _span_ends(str(f.get("object_id") or ""), idx)]
+                f["evidence"] = "; ".join("%s: %s" % (e[1].get("name"), _evidence_of(e[1])) for e in ends if e)[:300]
+            if not f.get("evidence"):
+                f["evidence"] = _evidence_of(o) if o else ""
+            if not f.get("scope") and o is not None:
+                f["scope"] = o.get("scope") or ""
+            if not f.get("geom") and o is not None and o.get("x") is not None:
+                f["geom"] = ("point", (o["x"], o["y"]))       # lokasi perbaikan untuk temuan tabel (mis. Splice Plan)
+            if not f.get("unit") and f.get("threshold") is not None and re.search(r"\d+(?:\.\d+)?\s*m\b", f.get("message", "")):
+                f["unit"] = "m"
+    return results
 
 
 def stamp(results, prof, cluster):
@@ -1768,6 +1845,7 @@ def run_all(main, prof, feeder=None, dist=None, fdt_status="AUTO", bom_path=None
             if oid in code_of:
                 f["object_ref"] = oid
                 f["object_id"] = code_of[oid]
+    attach_evidence(results, main, extra_sources={"BOM": bom_path or ""})
     stamp(results, prof, cluster or main.label)
     return results
 
@@ -1812,9 +1890,13 @@ def findings_of(results):
     return [f for r in results for f in r.findings]
 
 
+FINDING_COLS = ["finding_id", "rule_id", "rule_version", "profile_id", "case_id", "severity", "object_type", "object_id",
+                "scope", "cluster", "value", "threshold", "unit", "message", "evidence", "source_file", "recommendation", "dasar",
+                "review", "note", "lon", "lat"]
+
+
 def write_csv(path, findings):
-    cols = ["finding_id", "rule_id", "case_id", "severity", "object_type", "object_id", "cluster", "value", "threshold",
-            "message", "recommendation", "dasar", "profile_id", "rule_version", "review", "note", "lon", "lat"]
+    cols = FINDING_COLS
     with open(path, "w", newline="", encoding="utf-8-sig") as fh:
         w = csv.writer(fh)
         w.writerow(cols)

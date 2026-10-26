@@ -99,7 +99,7 @@ RULES = {
         alasan="KMZ adalah dokumen serah terima. Folder salah nama atau ikon hilang (tanda X) membuat pemeriksa kesulitan membaca desain.",
         tindakan="Ganti nama folder sesuai saran, simpan ulang KMZ dengan ikon tertanam, dan lengkapi keterangan kabel."),
     "QC01_KODE_FDT": dict(
-        cek="Kode FDT sesuai format, tidak dipakai dua kali, tidak bentrok dengan FDT existing lain, dan kode FDT baru sudah tercatat di rekap kode.",
+        cek="Kode FDT sesuai format, tidak dipakai dua kali, tidak bentrok dengan FDT existing lain, kode FDT baru sudah tercatat di rekap kode, dan kelompok kodenya sama dengan kelompok FDT existing di sekitarnya (kandidat grouping).",
         alasan="Kode FDT dipakai sebagai kunci di seluruh dokumen. Kode ganda atau belum terdaftar membuat desain tidak bisa diaktivasi.",
         tindakan="Minta kode resmi dari pengelola rekap kode, lalu samakan di KMZ dan tabel kode."),
     "QC02_PREMISES_SPLITTER": dict(
@@ -251,6 +251,10 @@ FINDINGS = {
                                 "Samakan awalan kode FAT dengan FDT induk."),
     "FDT_CODE_EXISTS_ELSEWHERE": ("Kode FDT sudah dipakai di lokasi lain", "Kode {obj} sudah dipakai FDT existing di tempat lain.",
                                   "Minta kode baru atau pastikan FDT ini memang FDT existing yang sama (COLO)."),
+    "FDT_GROUP_MISMATCH": ("Kelompok kode FDT berbeda dengan sekitarnya", "Kode {obj} memakai kelompok area yang sudah dipakai di lokasi lain, padahal FDT existing di sekitarnya berkelompok lain.",
+                           "Periksa kelompok kode area; bila memang salah, pakai kode kandidat yang disarankan di tabel grouping."),
+    "FDT_GROUP_NEW": ("Kelompok kode FDT baru", "Kode {obj} membuka kelompok area baru yang belum dipakai FDT existing di sekitarnya.",
+                      "Pastikan kelompok area baru ini memang disengaja dan sudah didaftarkan di rekap kode."),
     "FDT_NEW_NOT_IN_REKAP": ("Kode FDT baru belum terdaftar", "Kode FDT baru {obj} belum ada di rekap kode.", "Daftarkan kode ke pengelola rekap."),
     "FDT_PREMISES_NE_SUM_FAT": ("Premises FDT ≠ jumlah premises FAT", "Premises FDT {obj} = {v}, jumlah premises FAT di bawahnya = {t}.",
                                 "Samakan premises FDT dengan jumlah premises FAT."),

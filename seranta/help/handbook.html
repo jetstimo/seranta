@@ -123,7 +123,7 @@ html{scroll-behavior:smooth}
     <div>
       <h1>SERANTA</h1>
       <div class="tag">FTTH Design Assistant untuk QGIS · Serat untuk Nusantara</div>
-      <div class="meta">Handbook pengguna · versi plugin 3.4.0 · © 2026 Joseph Edward Timothy Siahaan</div>
+      <div class="meta">Handbook pengguna · versi plugin 3.5.0 · © 2026 Joseph Edward Timothy Siahaan</div>
     </div>
   </div>
 </header>
@@ -146,7 +146,7 @@ html{scroll-behavior:smooth}
 <li><a href="#keandalan">Keandalan &amp; dasar angka</a></li>
 <li><a href="#laporan">Membaca laporan HTML</a></li>
 <li><a href="#profil">Profil standar organisasi</a></li>
-<li><a href="#baru">Yang baru di 3.4.0</a></li>
+<li><a href="#baru">Yang baru di 3.5.0</a></li>
 <li><a href="#masalah">Masalah umum</a></li>
 <li><a href="#istilah">Istilah</a></li>
 </ol></nav>
@@ -467,6 +467,19 @@ html{scroll-behavior:smooth}
     <tr><td>QC-07 Pancingan</td><td>Kedua ujung pancingan bertumpu pada tiang (≤ 3 m)</td><td>-</td></tr>
   </table></div>
   <div class="note">Satu FDT yang tergambar di folder <b>Feeder</b> dan <b>Distribution</b> dengan kode sama dihitung sebagai <b>satu perangkat</b> (bukan duplikat). Kapasitas kabel dibaca dari nama folder (mis. New Cable 24C = 24 core) dan disimpan terpisah dari jumlah serat atribut (FIBERS = 20).</div>
+  <h3>Daftar kerja reviewer (QC_APD_TEMUAN.xlsx)</h3>
+  <p>Setiap QC menghasilkan file spreadsheet berisi empat sheet:</p>
+  <div class="tablebox"><table>
+    <tr><th>Sheet</th><th>Isi</th></tr>
+    <tr><td>Ringkasan</td><td>Satu baris per aturan: status, jumlah temuan per tingkat, apa yang dicek, alasan bila belum bisa dicek, dasar aturan.</td></tr>
+    <tr><td>Temuan</td><td>Satu baris per temuan: judul sederhana, objek, lingkup (Feeder/Distribution), nilai, batas, satuan, arti, yang perlu dilakukan, <b>bukti</b> (folder KMZ dan atribut asli), <b>file sumber</b>, tautan peta, dan kolom <b>Status review</b> (pilihan baku) serta <b>Catatan reviewer</b>.</td></tr>
+    <tr><td>Kelengkapan input</td><td>Masukan yang dipakai, jumlah objeknya, dan aturan yang belum bisa diuji bila masukan itu tidak ada.</td></tr>
+    <tr><td>Grouping FDT</td><td>Kelompok kode area FDT di sekitar, FDT existing terdekat, dan kode kandidat (bila data jaringan existing tersedia).</td></tr>
+  </table></div>
+  <div class="note">Reviewer cukup mengisi kolom <b>Status review</b> dan <b>Catatan reviewer</b> di spreadsheet. Saat QC dijalankan ulang, status itu dibaca kembali dan menempel pada temuan yang sama. Tutup file spreadsheet sebelum menjalankan ulang QC.</div>
+  <h3>Kelengkapan data dan kandidat grouping</h3>
+  <p>Laporan HTML kini dibuka dengan tabel <b>Kelengkapan data masukan</b>: tiap masukan berstatus <span class="pill p-ok">dipakai</span> atau <span class="pill p-na">tidak ada</span>, beserta akibatnya. QC-01 menambahkan tabel <b>Kandidat grouping FDT</b>: kode FDT yang membuka kelompok area baru dicatat sebagai <span class="pill p-inf">Catatan</span> (pastikan terdaftar di rekap), sedangkan kode yang memakai kelompok yang sudah dipakai di lokasi lain padahal FDT sekitarnya berkelompok lain menjadi <span class="pill p-wrn">Perlu ditinjau</span>, lengkap dengan kode kandidat.</p>
+  <p>Di panel <b>Navigator QC</b>, temuan dapat disaring per <b>aturan</b> dan per <b>lingkup</b> (Distribution, Feeder, tanpa lingkup); arahkan kursor ke temuan untuk melihat buktinya.</p>
   <h3>Matriks keputusan FDT COLO/NEW</h3>
   <div class="tablebox"><table>
     <tr><th>Status</th><th>Feeder</th><th>Distribusi</th><th>Hasil</th></tr>
@@ -554,7 +567,17 @@ html{scroll-behavior:smooth}
 
 <section id="baru">
   <div class="kicker">Perbandingan versi</div>
-  <h2>Yang baru di 3.4.0</h2>
+  <h2>Yang baru di 3.5.0</h2>
+  <div class="tablebox"><table>
+    <tr><th>Bidang</th><th>3.4.x</th><th>3.5.0</th></tr>
+    <tr><td>Daftar kerja reviewer</td><td>CSV dan JSON</td><td>+ QC_APD_TEMUAN.xlsx dengan pilihan status review yang dibaca kembali saat QC diulang</td></tr>
+    <tr><td>Kelengkapan input</td><td>Hanya di log</td><td>Tabel di laporan HTML, JSON dan XLSX: dipakai / tidak ada, jumlah objek, aturan yang terdampak</td></tr>
+    <tr><td>Bukti temuan</td><td>Hanya aturan QC-01..07</td><td>Semua temuan: bukti, file sumber, lingkup, lokasi (temuan tabel seperti Splice Plan kini menunjuk perangkatnya di peta)</td></tr>
+    <tr><td>Grouping FDT</td><td>Belum ada</td><td>Kandidat grouping dari jaringan existing di QC-01</td></tr>
+    <tr><td>Navigator QC</td><td>Filter tingkat dan review</td><td>+ filter aturan dan lingkup Feeder/Distribution</td></tr>
+    <tr><td>Pengujian</td><td>42 uji</td><td>47 uji</td></tr>
+  </table></div>
+  <h3>3.4.0 dibanding 3.3.0</h3>
   <div class="tablebox"><table>
     <tr><th>Bidang</th><th>3.3.0</th><th>3.4.0</th></tr>
     <tr><td>Laporan HTML</td><td>Tabel status dan daftar pesan teknis</td><td>Kalimat keputusan, jalur aturan, penjelasan "yang dicek / kenapa penting / yang dilakukan" di setiap aturan, setiap temuan dalam bahasa sederhana, saring dan cari, huruf tertanam, mode gelap, siap cetak PDF (alat 1–4)</td></tr>

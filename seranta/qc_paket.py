@@ -286,9 +286,12 @@ def rule_fdt_code(net, kmz, prof, pr, master=None, master_src="", dl_codes=None)
                           % (f["name"], m.group("fdt")), _pt(f), "FAT", f["name"], recommendation="perbaiki awalan kode FAT",
                           scope=f.get("scope", "")))
     new_fdts = [d for d in fdts if not re.search(r"eksist|exist", _path(d)) and d.get("status") != "EXISTING"]
+    dln = {}
+    for k_, v_ in (dl_codes or {}).items():
+        dln.setdefault(norm_code(k_), []).extend(v_)
     if dl_codes:
         for d in new_fdts:
-            hits = [x for x in dl_codes.get(norm_code(d.get("name")), []) if pr.d((x[0], x[1]), (d["x"], d["y"])) > pv(prof, "fdt_same_m", 30.0) * 5]
+            hits = [x for x in dln.get(norm_code(d.get("name")), []) if pr.d((x[0], x[1]), (d["x"], d["y"])) > pv(prof, "fdt_same_m", 30.0) * 5]
             if hits:
                 r.add(finding("FDT_CODE_EXISTS_ELSEWHERE", "ERROR", "Kode FDT baru %s sudah dipakai FDT lain di data jaringan existing "
                               "(%.0f m dari sini)" % (d["name"], min(pr.d((x[0], x[1]), (d["x"], d["y"])) for x in hits)),
@@ -296,8 +299,7 @@ def rule_fdt_code(net, kmz, prof, pr, master=None, master_src="", dl_codes=None)
                               scope=d.get("scope", "")))
     if master is None:
         r.notes.append("Rekap kode / attributes tidak diberikan: keterdaftaran kode FDT baru UNVERIFIED.")
-        if not r.findings:
-            r.unverify("UNVERIFIED: rekap kode FDT / attributes tidak diberikan - keunikan lintas proyek belum dapat dipastikan")
+        r.unverify("UNVERIFIED: rekap kode FDT / attributes tidak diberikan - keunikan lintas proyek belum dapat dipastikan")
     else:
         for d in new_fdts:
             if norm_code(d.get("name")) not in master:
@@ -307,7 +309,87 @@ def rule_fdt_code(net, kmz, prof, pr, master=None, master_src="", dl_codes=None)
         r.stats["rekap"] = "%d kode di %s" % (len(master), master_src)
     if dl_codes is None:
         r.notes.append("Data jaringan existing tidak dibaca: duplikasi kode dengan proyek lain tidak dicek.")
+    else:
+        r.stats["grouping"] = fdt_grouping(fdts, dl_codes, master, prof, pr, r)
     return r
+
+
+def _code_parts(code):
+    """'BNA1-LEP01-H05' -> ('BNA1-LEP01', 5); None bila bukan pola kode FDT."""
+    c = str(code or "").strip().upper()
+    m = re.match(r"^(?P<area>[A-Z0-9]{2,6}-[A-Z0-9]{2,8})-H(?P<n>\d{1,3})$", c) or \
+        re.match(r"^(?P<area>[A-Z0-9]{4,14}?)H(?P<n>\d{1,3})$", re.sub(r"[^A-Z0-9]", "", c))
+    if not m:
+        return None
+    return (re.sub(r"[^A-Z0-9]", "", m.group("area")), int(m.group("n")), m.group("area"))
+
+
+def fdt_grouping(fdts, dl_codes, master, prof, pr, r=None):
+    """Kandidat grouping FDT (aturan PPT 1: grouping dari jaringan existing): untuk setiap FDT di desain, kelompok area
+    (awalan kode) FDT existing di sekitarnya, FDT existing terdekat, dan kode kandidat berikutnya di area itu.
+    Menambah temuan FDT_GROUP_MISMATCH bila awalan kode FDT baru berbeda dari kelompok mayoritas di sekitarnya."""
+    radius = pv(prof, "colo_radius_m", 1000.0)
+    used, disp = {}, {}
+    for code in list(dl_codes) + list(master or ()):
+        cp = _code_parts(code)
+        if cp:
+            used.setdefault(cp[0], set()).add(cp[1])
+            if "-" in cp[2] or cp[0] not in disp:
+                disp[cp[0]] = cp[2]
+    out = []
+    for d in fdts:
+        near = []
+        for code, pts in dl_codes.items():
+            if not pts:
+                continue
+            dist = min(pr.d((x, y), (d["x"], d["y"])) for x, y in pts)
+            if dist <= radius and norm_code(code) != norm_code(d.get("name")):
+                near.append((dist, code))
+        near.sort()
+        areas = {}
+        for dist, code in near:
+            cp = _code_parts(code)
+            if cp:
+                areas[cp[0]] = areas.get(cp[0], 0) + 1
+        mine = _code_parts(d.get("name"))
+        best = max(areas, key=lambda a: (areas[a], -min(dd for dd, c in near if (_code_parts(c) or ("",))[0] == a))) if areas else ""
+        nums = used.get(best, set())
+        label = disp.get(best, best)
+        nxt = "%s-H%02d" % (label, max(nums) + 1) if best and nums else ""
+        if not mine:
+            status = "KODE TIDAK BERPOLA"
+        elif not best:
+            status = "TIDAK ADA FDT EXISTING DI RADIUS"
+        elif mine[0] == best:
+            status = "SESUAI KELOMPOK SEKITAR"
+        elif mine[0] in used:
+            status = "BEDA KELOMPOK (kelompok %s sudah dipakai di tempat lain)" % mine[2]
+        else:
+            status = "KELOMPOK BARU"
+        own = used.get(mine[0], set()) if mine else set()
+        exist = bool(re.search(r"eksist|exist", _path(d))) or d.get("status") == "EXISTING"
+        cand = ""
+        if mine and not exist:
+            cand = "%s-H%02d" % (mine[2], (max(own) + 1) if own else 1) if mine[1] in own else ""
+        row = {"fdt": d.get("name") or "", "status_fdt": "COLO" if exist else "NEW", "kelompok_kode": mine[2] if mine else "",
+               "kelompok_sekitar": label, "jumlah_fdt_sekitar": len(near),
+               "fdt_terdekat": ("%s (%.0f m)" % (near[0][1], near[0][0])) if near else "",
+               "kode_kandidat": cand or (nxt if status.startswith("BEDA") else ""), "hasil": status}
+        out.append(row)
+        if r is None or exist:
+            continue
+        ev = "FDT terdekat: " + ", ".join("%s %.0f m" % (c, dd) for dd, c in near[:3])
+        if status.startswith("BEDA"):
+            r.add(finding("FDT_GROUP_MISMATCH", "WARNING", "Kode FDT %s berkelompok %s, padahal %d FDT existing dalam %.0f m berkelompok "
+                          "%s dan kelompok %s sudah dipakai di lokasi lain" % (d.get("name"), mine[2], len(near), radius, label, mine[2]),
+                          _pt(d), "FDT", d.get("name"), areas.get(best), None,
+                          "periksa kelompok kode; kandidat di kelompok sekitar: %s" % (nxt or label), scope=d.get("scope", ""),
+                          evidence=ev))
+        elif status == "KELOMPOK BARU":
+            r.add(finding("FDT_GROUP_NEW", "INFO", "Kode FDT %s membuka kelompok area baru %s (FDT existing sekitar berkelompok %s)"
+                          % (d.get("name"), mine[2], label), _pt(d), "FDT", d.get("name"), None, None,
+                          "pastikan kelompok area baru ini sudah didaftarkan di rekap kode", scope=d.get("scope", ""), evidence=ev))
+    return out
 
 
 # =============================================================================================

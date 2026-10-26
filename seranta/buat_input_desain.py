@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.4.1"
+__version__ = "3.5.0"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -1264,11 +1264,11 @@ def line_mid(pts):
         return pts[0]
     ls = [math.hypot(pts[i + 1].x() - pts[i].x(), pts[i + 1].y() - pts[i].y()) for i in range(len(pts) - 1)]
     half, acc = sum(ls) / 2.0, 0.0
-    for i, l in enumerate(ls):
-        if acc + l >= half and l > 0:
-            t = (half - acc) / l
+    for i, seg in enumerate(ls):
+        if acc + seg >= half and seg > 0:
+            t = (half - acc) / seg
             return QgsPointXY(pts[i].x() + t * (pts[i + 1].x() - pts[i].x()), pts[i].y() + t * (pts[i + 1].y() - pts[i].y()))
-        acc += l
+        acc += seg
     return pts[-1]
 
 
