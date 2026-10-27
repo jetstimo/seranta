@@ -162,7 +162,7 @@
   "slack_interval_m": {
    "v": 250,
    "dasar": "INTERNAL",
-   "sumber": "Handbook KMZ internal kasus 21 'slack pada keterangan kabel setiap 250 m' (bukan standar eksternal)",
+   "sumber": "Handbook KMZ internal kasus 21 'slack setiap 250 m' (aturan internal; acuan eksternal berbasis kejadian: slack 5 m tiap sisi tiang closure). Hanya kabel BARU, bukan kabel existing/colo",
    "status": "APPROVED",
    "severity": "WARNING",
    "unit": "m"
@@ -304,7 +304,7 @@
   "margin_db": {
    "v": 3.0,
    "dasar": "PRAKTIK",
-   "sumber": "margin O&M 3 dB (Farooq dkk. 2015)",
+   "sumber": "margin O&M 3 dB (Farooq dkk. 2015; panduan link budget OLT-ONU: 3-5 dB untuk penuaan & suhu). Dipakai bersama nilai desain (typ); nilai maks GR-1209 dilaporkan terpisah sebagai worst-case",
    "status": "APPROVED",
    "unit": "dB"
   },
@@ -375,6 +375,58 @@
    "status": "APPROVED",
    "severity": "ERROR",
    "unit": "m"
+  },
+  "boundary_edge_tol_m": {
+   "v": 5.0,
+   "dasar": "RISET",
+   "sumber": "GPS.gov: GPS ponsel rata-rata 4,9 m langit terbuka; Merry & Bettinger, PLOS ONE 14(7) e0219890 (2019): 7-13 m urban. HP <= nilai ini di luar garis BOUNDARY KMZ = INFO 'di tepi' (pita ragu), lebih jauh = ERROR (profil ketat: 5 m = galat GPS langit terbuka)",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "m"
+  },
+  "dl_dup_hp_review_m": {
+   "v": 5.0,
+   "dasar": "RISET",
+   "sumber": "GPS.gov 4,9 m (rata-rata ponsel); HP cluster ini 2-5 m dari HP Design Lite = INFO kemungkinan double tagging (<= 2 m = temuan)",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "m"
+  },
+  "dl_dup_pole_review_m": {
+   "v": 10.0,
+   "dasar": "RISET",
+   "sumber": "Zhang dkk., Sensors 18(8) 2484 (2018): buffer 10 m untuk pencocokan tiang; OSM Conflation/Nodes: jangan cocokkan titik > 10 m. NP 1,5-10 m dari tiang Design Lite = INFO kemungkinan tiang yang sama",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "m"
+  },
+  "spl4_typ_db": {
+   "v": 7.25,
+   "dasar": "PRAKTIK",
+   "sumber": "Nilai redaman desain operator nasional (splitter 1:4 7,25 dB) seperti dikutip jurnal Indonesia; datasheet PLC 7,1-7,4 dB",
+   "status": "APPROVED",
+   "unit": "dB"
+  },
+  "spl8_typ_db": {
+   "v": 10.38,
+   "dasar": "PRAKTIK",
+   "sumber": "Nilai redaman desain operator nasional (splitter 1:8 10,38 dB); datasheet PLC 10,3-10,7 dB",
+   "status": "APPROVED",
+   "unit": "dB"
+  },
+  "spl16_typ_db": {
+   "v": 14.1,
+   "dasar": "PRAKTIK",
+   "sumber": "Nilai redaman desain operator nasional (splitter 1:16 14,10 dB)",
+   "status": "APPROVED",
+   "unit": "dB"
+  },
+  "conn_typ_db": {
+   "v": 0.25,
+   "dasar": "PRAKTIK",
+   "sumber": "Nilai redaman desain operator nasional konektor SC/UPC 0,25 dB (APC 0,35 dB)",
+   "status": "APPROVED",
+   "unit": "dB"
   }
  }
 }

@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.5.0"
+__version__ = "3.5.1"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -1429,12 +1429,19 @@ QC_LABELS = [
     (r"^LAT_LONG_TERTUKAR", 4, "Latitude/longitude tertukar", "S4_LATLONG_TERTUKAR", "validasi koordinat"),
     (r"^HP_LUAR_FUNNEL", 5, "HP di luar boundary Funnel", "S5_HP_LUAR_FUNNEL",
      "toleransi GPS ponsel 4,9 m terbuka / 7-13 m urban (GPS.gov; PLOS ONE 2019)"),
-    (r"^HP_LUAR_BOUNDARY", 5, "HP di luar BOUNDARY KMZ", "S5_HP_LUAR_BOUNDARY", "Standar Review Strand"),
+    (r"^HP_LUAR_BOUNDARY", 5, "HP di luar BOUNDARY KMZ", "S5_HP_LUAR_BOUNDARY",
+     "Standar Review Strand; lebih dari toleransi GPS ponsel 10 m (GPS.gov 4,9 m; PLOS ONE 2019 7-13 m urban)"),
+    (r"^INFO_HP_TEPI_BOUNDARY", 5, "HP di tepi BOUNDARY KMZ (dalam toleransi GPS)", "I5_HP_TEPI_BOUNDARY",
+     "toleransi GPS ponsel 10 m (GPS.gov 4,9 m langit terbuka; Merry & Bettinger, PLOS ONE 2019: 7-13 m urban)"),
     (r"^FUNNEL_SENDIRI_REJECT", 6, "Funnel cluster ini berstatus reject/drop", "S6_FUNNEL_REJECT", "status Funnel"),
     (r"^HP_SUDAH_ADA_DI_DESIGN_LITE", 6, "HP sudah ada di Design Lite (double tagging)", "S6_HP_DOUBLE_TAGGING",
      "Handbook: cek Design Lite agar tidak double tagging"),
     (r"^TIANG_BARU_SUDAH_ADA", 6, "Tiang baru sudah ada di jaringan existing", "S6_NP_SUDAH_ADA",
      "Handbook: cek Design Lite agar tidak double tagging"),
+    (r"^INFO_HP_MUNGKIN_DI_DESIGN_LITE", 6, "HP dekat HP Design Lite (cek double tagging)", "I6_HP_DEKAT_DESIGN_LITE",
+     "GPS ponsel 4,9 m (GPS.gov): 2-5 m = mungkin rumah yang sama"),
+    (r"^INFO_TIANG_BARU_DEKAT_EXISTING", 6, "Tiang baru dekat tiang Design Lite", "I6_NP_DEKAT_EXISTING",
+     "buffer 10 m pencocokan tiang (Zhang dkk., Sensors 2018; OSM Conflation)"),
     (r"^COLO_", 7, "Colo FDT", "S7_COLO", "Handbook colo <= 1 km (kebijakan internal)"),
     (r"^RENTANG_NP_NP", 9, "Rentang NP-NP > batas", "S9_RENTANG_NP_NP",
      "Handbook internal 60 m; regulasi daerah 50 m (Perwal Yogyakarta/Tangsel/Pekalongan)"),
@@ -1497,8 +1504,14 @@ def qc_source(kind):
 
 QC_DASAR = [  # (pola kode, kategori dasar) untuk kolom dasar_src
     (r"^(RENTANG|WARN_RENTANG|INFO_RENTANG)", "INTERNAL+REGULASI"), (r"^INFO_KABEL_RENDAH", "REGULASI"),
-    (r"^(INFO_HP_MUNGKIN|INFO_HP_TEPI|HP_LUAR_FUNNEL)", "RISET"), (r"BELOKAN", "STANDAR"),
+    (r"^(INFO_HP_MUNGKIN|INFO_HP_TEPI|HP_LUAR_FUNNEL|INFO_TIANG_BARU_DEKAT)", "RISET"),
+    (r"^HP_LUAR_BOUNDARY", "INTERNAL+RISET"), (r"BELOKAN", "STANDAR"),
     (r"^ADMIN_", "DATA RESMI"), (r".", "INTERNAL")]
+
+
+# Temuan yang perlu ditinjau tetapi belum tentu salah desain (bukan "wajib diperbaiki"):
+# tiang survei yang belum dilewati jalur bisa jadi cadangan rute; keputusan ada di desain.
+WARNING_KINDS = {"TIANG_NGANGGUR"}
 
 
 def qc_severity(kind):
@@ -1507,7 +1520,7 @@ def qc_severity(kind):
         return "INFO"
     if kind.startswith("UNV_"):
         return "UNVERIFIED"
-    if kind.startswith(("WARN_", "COLO_")):
+    if kind.startswith(("WARN_", "COLO_")) or kind in WARNING_KINDS:
         return "WARNING"
     return "ERROR"
 
@@ -3345,7 +3358,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 far_list.append((d, hid_, names[qi]))
                 qc.append((p, "HP_JAUH_DARI_TIANG",
                            "%s (baris %d HPDB): %.1f m ke tiang terdekat %s (batas %.0f m)"
-                           % (hid_, meta[k_][0], d, names[qi], hp_max)))
+                           % (hid_, meta[k_][0], d, names[qi], hp_max), None, round(d, 1), hp_max))
 
         # ===== 3a. Efisiensi tiang & ujung jalur (Handbook QC: "minimalisir tiang", "kabel loop <= 100 m / 2 span") =====
         import math
@@ -3632,18 +3645,35 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         rep.append("")
         rep.append("BOUNDARY")
         cname = cluster_label(outdir, hpdb)
+        # Pita ragu (pass / review / fail): titik HP berasal dari GPS ponsel (rata-rata 4,9 m langit terbuka, 7-13 m
+        # urban) dan garis BOUNDARY digambar tangan -> HP yang hanya beberapa meter di luar garis = INFO "di tepi".
+        bnd_tol = float(qcp("boundary_edge_tol_m", 10.0))
+        edge_own = []
         if own_bnd:
-            out_own = [h for h in hp_xy if not any(in_poly(h[0], h[1], g) for g in own_bnd)]
-            for x, y, hid in out_own:
-                qc.append((QgsPointXY(x, y), "HP_LUAR_BOUNDARY", "%s di luar BOUNDARY cluster" % hid))
+            out_own = []
+            for x, y, hid in hp_xy:
+                if any(in_poly(x, y, g) for g in own_bnd):
+                    continue
+                d = min(dist_to_poly_m(x, y, g) for g in own_bnd)
+                if d <= bnd_tol:
+                    edge_own.append((x, y, hid))
+                    qc.append((QgsPointXY(x, y), "INFO_HP_TEPI_BOUNDARY",
+                               "%s %.1f m di luar garis BOUNDARY (dalam toleransi GPS %.0f m)" % (hid, d, bnd_tol),
+                               None, round(d, 1), bnd_tol))
+                else:
+                    out_own.append((x, y, hid))
+                    qc.append((QgsPointXY(x, y), "HP_LUAR_BOUNDARY",
+                               "%s %.1f m di luar BOUNDARY cluster (> %.0f m)" % (hid, d, bnd_tol), None, round(d, 1), bnd_tol))
             rep.append("  BOUNDARY di KMZ cluster      : %d poligon" % len(own_bnd))
-            rep.append("  HP di luar BOUNDARY sendiri  : %d" % len(out_own))
+            rep.append("  HP di luar BOUNDARY sendiri  : %d (> %.0f m dari garis)" % (len(out_own), bnd_tol))
+            rep.append("  HP di tepi BOUNDARY (info)   : %d (<= %.0f m dari garis; galat GPS ponsel)" % (len(edge_own), bnd_tol))
         else:
             out_own = []
             rep.append("  BOUNDARY di KMZ cluster      : tidak ditemukan (cek dilewati)")
         near, mine, out_fun, edge_fun, mine_status = [], None, [], [], ""
         std[2] = (None, "Funnel tidak diisi")
-        std[5] = (len(out_own) == 0 if own_bnd else None, "%d HP di luar BOUNDARY KMZ" % len(out_own))
+        std[5] = (len(out_own) == 0 if own_bnd else None, "%d HP di luar BOUNDARY KMZ (> %.0f m), %d di tepi"
+                  % (len(out_own), bnd_tol, len(edge_own)))
         if funnel_files:
             feedback.setProgressText("4/4 Cek boundary Funnel")
             xs = [h[0] for h in hp_xy]
@@ -3693,11 +3723,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         if d <= fun_tol:
                             edge_fun.append((x, y, hid))
                             qc.append((QgsPointXY(x, y), "INFO_HP_TEPI_FUNNEL",
-                                       "%s %.1f m di luar tepi Funnel %s" % (hid, d, mine[1])))
+                                       "%s %.1f m di luar tepi Funnel %s" % (hid, d, mine[1]), None, round(d, 1), fun_tol))
                         else:
                             out_fun.append((x, y, hid))
                             qc.append((QgsPointXY(x, y), "HP_LUAR_FUNNEL",
-                                       "%s %.1f m di luar boundary Funnel %s" % (hid, d, mine[1])))
+                                       "%s %.1f m di luar boundary Funnel %s" % (hid, d, mine[1]), None, round(d, 1), fun_tol))
                 rep.append("  HP di luar Funnel sendiri    : %d (> %.0f m dari tepi)" % (len(out_fun), fun_tol))
                 rep.append("  HP di tepi luar Funnel (info): %d (<= %.0f m dari tepi)" % (len(edge_fun), fun_tol))
                 if INACTIVE_RX.search(mine_status):
@@ -3708,8 +3738,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 rep.append("  Funnel cluster ini           : tidak ditemukan (tidak ada HP di dalam Boundary Funnel)")
             if mine:
                 std[5] = (not out_own and not out_fun,
-                          "%d HP di luar Funnel, %d di tepi (<= %.0f m), %d di luar BOUNDARY KMZ"
-                          % (len(out_fun), len(edge_fun), fun_tol, len(out_own)))
+                          "%d HP di luar Funnel, %d di tepi (<= %.0f m), %d di luar BOUNDARY KMZ (> %.0f m), %d di tepi BOUNDARY"
+                          % (len(out_fun), len(edge_fun), fun_tol, len(out_own), bnd_tol, len(edge_own)))
             elif not near:
                 std[5] = (False, "File Funnel tidak mencakup lokasi cluster (0 poligon dalam 1 km)%s; "
                                  "tambahkan Funnel kota ini" % ("; file rusak: " + fun_err[0] if fun_err else ""))
@@ -3989,21 +4019,36 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     "%.0f m dari pusat cluster (%s, %s)" % best_f if best_f else "tidak ada dalam radius 3 km"))
             # double tagging terhadap Design Lite (HP & tiang yang sudah dipakai cluster lain)
             dup_hp = dup_pole = 0
+            dl_hp_rev = float(qcp("dl_dup_hp_review_m", 5.0))
+            dl_pole_rev = float(qcp("dl_dup_pole_review_m", 10.0))
             for e in dl_points:
                 ex_ = QgsPointXY(e["x"], e["y"])
                 if e["kind"] == "hp":
                     for r_, p_ in data:
-                        if abs(p_.x() - e["x"]) < 3e-5 and abs(p_.y() - e["y"]) < 3e-5 and da.measureLine(p_, ex_) <= 2.0:
-                            dup_hp += 1
-                            qc.append((p_, "HP_SUDAH_ADA_DI_DESIGN_LITE", "%s sudah tercatat di Design Lite (double tagging)" % (
-                                r_[iid] if iid is not None else "HP")))
-                            break
+                        if abs(p_.x() - e["x"]) < 6e-5 and abs(p_.y() - e["y"]) < 6e-5:
+                            dd = da.measureLine(p_, ex_)
+                            if dd <= 2.0:
+                                dup_hp += 1
+                                qc.append((p_, "HP_SUDAH_ADA_DI_DESIGN_LITE", "%s sudah tercatat di Design Lite (double tagging, %.1f m)"
+                                           % (r_[iid] if iid is not None else "HP", dd), None, round(dd, 1), 2.0))
+                                break
+                            if dd <= dl_hp_rev:
+                                qc.append((p_, "INFO_HP_MUNGKIN_DI_DESIGN_LITE", "%s %.1f m dari HP Design Lite: cek apakah rumah yang sama"
+                                           % (r_[iid] if iid is not None else "HP", dd), None, round(dd, 1), dl_hp_rev))
+                                break
                 elif e["kind"] == "pole":
                     for pi, pp in enumerate(poles):
-                        if abs(pp.x() - e["x"]) < 2e-5 and abs(pp.y() - e["y"]) < 2e-5 and da.measureLine(pp, ex_) <= 1.5:
-                            if kinds[pi] == "new":
-                                dup_pole += 1
-                                qc.append((pp, "TIANG_BARU_SUDAH_ADA", "NP sudah ada di Design Lite (%s): jadikan existing" % e.get("folder", "")))
+                        if kinds[pi] != "new" or abs(pp.x() - e["x"]) > 1e-4 or abs(pp.y() - e["y"]) > 1e-4:
+                            continue
+                        dd = da.measureLine(pp, ex_)
+                        if dd <= 1.5:
+                            dup_pole += 1
+                            qc.append((pp, "TIANG_BARU_SUDAH_ADA", "%s sudah ada di Design Lite (%s, %.1f m): jadikan existing"
+                                       % (names[pi], e.get("folder", ""), dd), None, round(dd, 1), 1.5))
+                            break
+                        if dd <= dl_pole_rev:
+                            qc.append((pp, "INFO_TIANG_BARU_DEKAT_EXISTING", "%s %.1f m dari tiang Design Lite (%s): cek apakah tiang yang sama"
+                                       % (names[pi], dd, e.get("folder", "")), None, round(dd, 1), dl_pole_rev))
                             break
             if dl_points or dup_hp or dup_pole:
                 rep.append("  Double tagging vs Design Lite: HP %d, tiang baru yg sudah ada %d" % (dup_hp, dup_pole))

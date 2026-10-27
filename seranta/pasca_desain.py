@@ -398,12 +398,15 @@ class PascaDesain(QgsProcessingAlgorithm):
                     qc.append(("TUBE_BELUM_PENUH", "%s: tube %d baru terpakai %d/12 core tapi tube berikutnya sudah dipakai" % (cab, tb, used)))
         # FAT harus di titik tiang
         if pole_kmz:
+            from . import qc_core as _qc
+            # sama dengan alat 4 (profil fat_pole_tol_m, Handbook kasus 3 "FAT melayang")
+            fat_pole_tol = float(_qc.pv(_qc.get_profile("APD_1X4")[0], "fat_pole_tol_m", 2.0))
             poles = [g for folders, nm, kind, g in kml_features(pole_kmz) if kind == "point" and classify(folders) == "pole"]
             for t, n in fats.items():
                 dmin = min((math.hypot((p.x() - n["x"]) * 111320 * math.cos(math.radians(n["y"])), (p.y() - n["y"]) * 110574)
                             for p in poles), default=None)
-                if dmin is not None and dmin > 2.0:
-                    qc.append(("FAT_MELAYANG", "%s %.1f m dari tiang terdekat" % (codes.get(t, t), dmin)))
+                if dmin is not None and dmin > fat_pole_tol:
+                    qc.append(("FAT_MELAYANG", "%s %.1f m dari tiang terdekat (batas %.1f m)" % (codes.get(t, t), dmin, fat_pole_tol)))
 
         # ===== KMZ closure table + info FAT/FDT =====
         kmz_p = os.path.join(out_dir, "%s_CLOSURE_TABLE.kmz" % base)

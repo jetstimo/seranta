@@ -15,8 +15,10 @@ Before designing in desain otomatis: how many FATs does this cluster need, can t
   Assignment      = single-source capacitated: every FAT goes to the nearest FDT within the radius that still
                     has a free FAT slot (Kim et al., EJOR 210(2) 2011: capacitated location-allocation)
   Remaining FATs  = new FDT(s), ceil(remaining / FAT per FDT), proposed on a pole near their FAT groups
-  Link budget     = fibre 0.35 dB/km + splitter FDT + splitter FAT + 4 connectors x 0.5 dB + 10 splices x 0.1 dB
-                    + 3 dB margin <= OLT class (B+ 28 dB / C+ 32 dB, ITU-T G.984.2)
+  Link budget     = fibre 0.35 dB/km + splitter FDT + splitter FAT + 4 connectors + 10 splices x 0.1 dB + 3 dB margin
+                    <= OLT class (B+ 28 dB / C+ 32 dB, ITU-T G.984.2). Verdict uses design values (1:4 7.25, 1:8 10.38,
+                    connector 0.25 dB); worst-case component maxima (GR-1209 1:4 7.7, 1:8 11.2, connector 0.5 dB) are
+                    reported as "tipis" (thin) when only the worst case exceeds the class.
 """
 try:
     from . import _log
@@ -37,15 +39,20 @@ from qgis.PyQt.QtCore import QCoreApplication
 from . import buat_input_desain as B
 from . import qc_core as _qc
 
-# Link budget WORST-CASE dari profil standar (profiles/APD_1X4.json): splitter = nilai MAKS GR-1209
-# (1:4 7,7 / 1:8 11,2 / 1:16 14,2 dB); nilai tipikal industri (7,25 / 10,38 dB) hanya ditampilkan sebagai pembanding.
+# Link budget dua tingkat dari profil standar (profiles/APD_1X4.json):
+#  - DESAIN (dasar vonis): nilai redaman desain operator nasional 1:4 7,25 / 1:8 10,38 / 1:16 14,10 dB, konektor 0,25 dB,
+#    splice 0,1 dB, margin 3 dB. Menjumlahkan nilai maksimum SEMUA komponen DAN margin sekaligus menghitung cadangan dua kali.
+#  - WORST-CASE (pembanding): nilai MAKS GR-1209 1:4 7,7 / 1:8 11,2 / 1:16 14,2 dB, konektor 0,5 dB, margin 3 dB
+#    -> bila hanya worst-case yang melewati kelas OLT, FAT ditandai "budget tipis" (bukan kurang).
 _PROF = _qc.get_profile("APD_1X4")[0]
 SPLIT_LOSS = {4: _qc.pv(_PROF, "spl4_db", 7.7), 8: _qc.pv(_PROF, "spl8_db", 11.2), 16: _qc.pv(_PROF, "spl16_db", 14.2),
               32: 17.7}
-SPLIT_TYP = {4: 7.25, 8: 10.38, 16: 14.10, 32: 17.45}     # tipikal (dikutip jurnal perguruan tinggi)
+SPLIT_TYP = {4: _qc.pv(_PROF, "spl4_typ_db", 7.25), 8: _qc.pv(_PROF, "spl8_typ_db", 10.38),
+             16: _qc.pv(_PROF, "spl16_typ_db", 14.10), 32: 17.45}     # nilai desain operator nasional
 FIBER_DB_KM = _qc.pv(_PROF, "fiber_db_km", 0.35)          # G.652.D @1310 nm; config desain otomatis 0,35 dB/km
 CONN_N, SPLICE_N = 4, 10
 CONN_DB, SPLICE_DB, MARGIN_DB = _qc.pv(_PROF, "conn_db", 0.5), _qc.pv(_PROF, "splice_db", 0.1), _qc.pv(_PROF, "margin_db", 3.0)
+CONN_TYP_DB = _qc.pv(_PROF, "conn_typ_db", 0.25)
 REAL_HP_PER_FAT = 14.6   # rata-rata 139 FAT pada Design Lite (21-10-2026), median 16 HP; dipakai sebagai pembanding
 OLT_CLASS = [("B+ (28 dB)", 28.0), ("C+ (32 dB)", 32.0)]
 FDT_SPLIT = [("1:4 ", 4), ("1:8 ", 8)]
@@ -768,10 +775,12 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
         olt_name, olt_db = opt["olt"]
         for f in fats:
             km = opt["feeder_km"] + (f["d_fdt"] or 0) * opt["route_f"] / 1000.0
-            loss = (km * FIBER_DB_KM + SPLIT_LOSS[opt["fdt_spl"]] + SPLIT_LOSS[8] + CONN_N * CONN_DB
-                    + SPLICE_N * SPLICE_DB + MARGIN_DB)
-            f["loss"], f["sisa"] = loss, olt_db - loss
+            base_ = km * FIBER_DB_KM + SPLICE_N * SPLICE_DB + MARGIN_DB
+            loss = base_ + SPLIT_TYP[opt["fdt_spl"]] + SPLIT_TYP[8] + CONN_N * CONN_TYP_DB
+            loss_wc = base_ + SPLIT_LOSS[opt["fdt_spl"]] + SPLIT_LOSS[8] + CONN_N * CONN_DB
+            f["loss"], f["sisa"], f["sisa_wc"] = loss, olt_db - loss, olt_db - loss_wc
         n_bad_budget = sum(1 for f in fats if f["sisa"] < 0)
+        n_thin_budget = sum(1 for f in fats if f["sisa"] >= 0 > f["sisa_wc"])
         # ----- tulis hasil -----
         out_dir = os.path.join(inp, "ALOKASI_FDT")
         os.makedirs(out_dir, exist_ok=True)
@@ -798,7 +807,7 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
             return path
         L = QgsVectorLayer("Point?crs=EPSG:4326&field=fat_id:string(10)&field=hp:integer&field=fdt:string(30)"
                            "&field=fdt_jenis:string(10)&field=jarak_fdt:double(10,1)&field=hp_maks_m:double(10,1)"
-                           "&field=tiang:string(40)&field=loss_db:double(6,2)&field=sisa_db:double(6,2)"
+                           "&field=tiang:string(40)&field=loss_db:double(6,2)&field=sisa_db:double(6,2)&field=sisa_wc_db:double(6,2)"
                            "&field=status:string(80)", "FAT_ESTIMASI", "memory")
         ff = []
         for f in fats:
@@ -807,11 +816,13 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
                 st_.append("HP terjauh %.0f m > %.0f m" % (f["dmax"], opt["fat_dist"]))
             if f["sisa"] < 0:
                 st_.append("link budget kurang %.1f dB" % -f["sisa"])
+            elif f["sisa_wc"] < 0:
+                st_.append("link budget tipis: worst-case kurang %.1f dB (cek datasheet splitter)" % -f["sisa_wc"])
             if f["hp"] < 8:
                 st_.append("FAT kecil %d HP (< 8, Handbook 8-16): HP terpencil, cek tambah tiang/gabung" % f["hp"])
             q = QgsFeature(L.fields())
             q.setAttributes([f["id"], f["hp"], f["fdt"], "BARU" if f["fdt_new"] else "EXISTING", round(f["d_fdt"], 1),
-                             round(f["dmax"], 1), f["pole"], round(f["loss"], 2), round(f["sisa"], 2),
+                             round(f["dmax"], 1), f["pole"], round(f["loss"], 2), round(f["sisa"], 2), round(f["sisa_wc"], 2),
                              "; ".join(st_) or "OK"])
             q.setGeometry(QgsGeometry.fromPointXY(f["pt"]))
             ff.append(q)
@@ -874,7 +885,8 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
             % (fat_fdt, fat_fdt * cap, opt["radius"]),
             "FAT ke FDT existing: %d (%s)" % (n_ex, ", ".join("%s %d FAT" % (g["code"], len(g["assigned"])) for g in used) or "-"),
             "FAT ke FDT baru    : %d -> %d FDT baru" % (len(fats) - n_ex, len(new_fdts)),
-            "FAT dengan HP terjauh (drop + sepanjang jalur) > %.0f m: %d; link budget kurang (%s): %d" % (opt["fat_dist"], n_far, olt_name, n_bad_budget),
+            "FAT dengan HP terjauh (drop + sepanjang jalur) > %.0f m: %d; link budget kurang (%s): %d; budget tipis (hanya worst-case): %d"
+            % (opt["fat_dist"], n_far, olt_name, n_bad_budget, n_thin_budget),
             "",
             "FDT di sekitar (urut jarak ke tiang cluster terdekat):",
         ]
@@ -921,7 +933,9 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
                 f["id"], f["hp"], E(f["pole"]), E(f["fdt"]), " (baru)" if f["fdt_new"] else "", f["d_fdt"],
                 "style='color:var(--err);font-weight:600'" if f["dmax"] > opt["fat_dist"] else "", f["dmax"],
                 "style='color:var(--err);font-weight:600'" if f["sisa"] < 0 else "", f["sisa"],
-                "FAT kecil: HP terpencil" if f["hp"] < 8 else "") for f in fats)
+                "; ".join(x for x in ("FAT kecil: HP terpencil" if f["hp"] < 8 else "",
+                                      "budget tipis (worst-case %.1f dB)" % f["sisa_wc"] if f["sisa"] >= 0 > f["sisa_wc"] else "") if x))
+            for f in fats)
         n_ex = sum(1 for f in fats if not f["fdt_new"])
         from . import report_ui as U
         from . import penjelasan as X
@@ -983,8 +997,10 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
                  "<li>FDT maks %d FAT dan radius colo %.0f m: kebijakan internal (parameter, dapat diubah).</li>"
                  "<li>Penugasan berkapasitas: tiap FAT ke FDT terdekat yang masih punya slot (capacitated location-allocation, "
                  "Kim dkk., EJOR 210(2) 2011).</li>"
-                 "<li>Link budget: serat 0,35 dB/km (G.652.D), splitter 1:4 7,7 dB / 1:8 11,2 dB (nilai maksimum GR-1209, "
-                 "worst-case), 4 konektor &times; 0,5 dB, 10 splice &times; 0,1 dB, margin 3 dB, harus &le; %s (ITU-T G.984.2). "
+                 "<li>Link budget (vonis): serat 0,35 dB/km (G.652.D), splitter 1:4 7,25 dB / 1:8 10,38 dB dan konektor 0,25 dB "
+                 "(nilai desain operator nasional), 4 konektor, 10 splice &times; 0,1 dB, margin 3 dB, harus &le; %s (ITU-T G.984.2). "
+                 "Pembanding worst-case: splitter maksimum GR-1209 (7,7 / 11,2 dB) dan konektor 0,5 dB; bila hanya worst-case "
+                 "yang melewati batas, FAT ditandai <i>budget tipis</i>. "
                  "Feeder diasumsikan %.1f km, jalur FDT-FAT = %.1f &times; garis lurus.</li>"
                  "<li>Hasil adalah <b>estimasi awal</b> untuk keputusan COLO atau FDT baru; desain dan kode FAT final tetap dari "
                  "desain otomatis.</li></ul></div></details></section>" % (terms, fat_fdt, opt["radius"], E(olt_name),

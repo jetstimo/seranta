@@ -16,6 +16,7 @@ jobs:
           python seranta/tests/test_qc_core.py
           python seranta/tests/test_uat_paket.py
           python seranta/tests/test_v35.py
+          python seranta/tests/test_v351.py
       - name: Security scan (Bandit)
         run: |
           pip install bandit

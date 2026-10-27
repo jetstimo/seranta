@@ -123,7 +123,7 @@ html{scroll-behavior:smooth}
     <div>
       <h1>SERANTA</h1>
       <div class="tag">FTTH Design Assistant untuk QGIS · Serat untuk Nusantara</div>
-      <div class="meta">Handbook pengguna · versi plugin 3.5.0 · © 2026 Joseph Edward Timothy Siahaan</div>
+      <div class="meta">Handbook pengguna · versi plugin 3.5.1 · © 2026 Joseph Edward Timothy Siahaan</div>
     </div>
   </div>
 </header>
@@ -146,7 +146,7 @@ html{scroll-behavior:smooth}
 <li><a href="#keandalan">Keandalan &amp; dasar angka</a></li>
 <li><a href="#laporan">Membaca laporan HTML</a></li>
 <li><a href="#profil">Profil standar organisasi</a></li>
-<li><a href="#baru">Yang baru di 3.5.0</a></li>
+<li><a href="#baru">Yang baru di 3.5.1</a></li>
 <li><a href="#masalah">Masalah umum</a></li>
 <li><a href="#istilah">Istilah</a></li>
 </ol></nav>
@@ -567,7 +567,25 @@ html{scroll-behavior:smooth}
 
 <section id="baru">
   <div class="kicker">Perbandingan versi</div>
-  <h2>Yang baru di 3.5.0</h2>
+  <h2>Yang baru di 3.5.1: toleransi berbasis acuan</h2>
+  <p>Setiap pemeriksaan jarak kini memakai tiga tingkat: <b>lolos</b>, <b>tinjau</b> (pita ragu karena galat GPS atau
+  gambar tangan) dan <b>gagal</b>. Angka dan sumbernya ada di profil, sehingga bisa disesuaikan per kota.</p>
+  <div class="tablebox"><table>
+    <tr><th>Pemeriksaan</th><th>3.5.0</th><th>3.5.1</th><th>Acuan</th></tr>
+    <tr><td>HP di luar BOUNDARY KMZ (alat 1)</td><td>Meleset 0,5 m pun "wajib diperbaiki"</td><td>&le; 10 m dari garis = INFO "di tepi"; &gt; 10 m = wajib diperbaiki; jarak tercatat</td><td>GPS.gov: GPS ponsel rata-rata 4,9 m langit terbuka; Merry &amp; Bettinger, PLOS ONE 2019: 7–13 m urban</td></tr>
+    <tr><td>Double tagging Design Lite (alat 1)</td><td>HP &le; 2 m, tiang &le; 1,5 m</td><td>+ pita tinjau: HP 2–5 m, tiang baru 1,5–10 m (INFO)</td><td>GPS.gov 4,9 m; buffer pencocokan tiang 10 m (Zhang dkk., Sensors 2018)</td></tr>
+    <tr><td>Tiang survei tidak dilewati jalur (alat 1)</td><td>Wajib diperbaiki</td><td>WARNING (tinjau)</td><td>Selaras alat 4 (POLE_IDLE = WARNING)</td></tr>
+    <tr><td>Link budget (alat 3)</td><td>Splitter maksimum + konektor 0,5 dB + margin 3 dB</td><td>Vonis: nilai desain 1:4 7,25 / 1:8 10,38 dB, konektor 0,25 dB + margin 3 dB; worst-case = "budget tipis"</td><td>ITU-T G.984.2 (B+ 28 dB / C+ 32 dB); nilai redaman desain operator nasional; GR-1209 (maks)</td></tr>
+    <tr><td>Slack kabel (alat 4)</td><td>Semua kabel, termasuk colo/existing</td><td>Hanya kabel baru</td><td>Handbook kasus 21 (aturan internal)</td></tr>
+    <tr><td>Ekor kabel setelah FAT terakhir (alat 4)</td><td>Selalu ERROR; bentang dihitung sebagai jumlah tiang</td><td>Dalam batas loop 100 m / 2 bentang = WARNING; bentang dihitung benar</td><td>Handbook kasus 1 dan 34</td></tr>
+    <tr><td>Grouping FDT (QC-01)</td><td>FDT sendiri yang sudah tercatat di Design Lite terbaru dianggap "kelompok dipakai di tempat lain"</td><td>FDT yang sama di lokasi yang sama (dan kode sendiri di rekap) tidak dihitung</td><td>Koreksi logika</td></tr>
+    <tr><td>Pengujian</td><td>47 uji</td><td>54 uji</td><td></td></tr>
+  </table></div>
+  <p>Ambang yang <b>tidak</b> diubah karena sudah sesuai atau lebih longgar dari acuan: tiang existing vs referensi 10 m
+  (aturan QC desain; buffer 10 m di literatur), bentang 60 m tegas / 50 m regulasi daerah (Kominfo &amp; Perwal: 50 m;
+  profil REGULASI_KETAT memakai 50 m sebagai batas tegas), ruang bebas jalan 5 m (Permen PU 20/2010), perangkat di tiang
+  2 m, koordinat tabel kode vs KMZ 1 m, jarak HP ke FAT 120/150 m (Handbook internal; acuan eksternal drop &le; 150–250 m).</p>
+  <h3>3.5.0 dibanding 3.4.x</h3>
   <div class="tablebox"><table>
     <tr><th>Bidang</th><th>3.4.x</th><th>3.5.0</th></tr>
     <tr><td>Daftar kerja reviewer</td><td>CSV dan JSON</td><td>+ QC_APD_TEMUAN.xlsx dengan pilihan status review yang dibaca kembali saat QC diulang</td></tr>

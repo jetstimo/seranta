@@ -329,8 +329,17 @@ def fdt_grouping(fdts, dl_codes, master, prof, pr, r=None):
     (awalan kode) FDT existing di sekitarnya, FDT existing terdekat, dan kode kandidat berikutnya di area itu.
     Menambah temuan FDT_GROUP_MISMATCH bila awalan kode FDT baru berbeda dari kelompok mayoritas di sekitarnya."""
     radius = pv(prof, "colo_radius_m", 1000.0)
+    same_m = pv(prof, "fdt_same_m", 30.0) * 5
+    # FDT desain ini yang sudah tercatat di jaringan existing pada lokasi yang sama (mis. Design Lite terbaru sudah memuat
+    # proyek ini) bukan "pemakaian di tempat lain": keluarkan dari daftar kode terpakai.
+    selves = {norm_code(d.get("name")): (d["x"], d["y"]) for d in fdts if d.get("name")}
+
+    def _is_self(code, pts):
+        xy = selves.get(norm_code(code))
+        return bool(xy and pts and min(pr.d(xy, (x, y)) for x, y in pts) <= same_m)
     used, disp = {}, {}
-    for code in list(dl_codes) + list(master or ()):
+    # rekap kode yang sudah memuat kode FDT desain ini juga bukan pemakaian di tempat lain (memang wajib tercatat)
+    for code in [c for c in dl_codes if not _is_self(c, dl_codes[c])] + [c for c in (master or ()) if norm_code(c) not in selves]:
         cp = _code_parts(code)
         if cp:
             used.setdefault(cp[0], set()).add(cp[1])

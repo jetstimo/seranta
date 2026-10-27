@@ -29,7 +29,7 @@ try:  # defusedxml bila terpasang; bila tidak, ElementTree standar (expat >= 2.4
 except ImportError:
     import xml.etree.ElementTree as ET  # nosec B405
 
-RULE_VERSION = "2026.10-r2"
+RULE_VERSION = "2026.10-r3"
 SEVERITIES = ("ERROR", "WARNING", "UNVERIFIED", "INFO", "PASS")
 SEV_RANK = {s: i for i, s in enumerate(SEVERITIES)}
 DASAR_LABEL = {"REGULASI": "Regulasi Indonesia", "STANDAR": "Standar (ITU-T/GR/konstruksi distribusi)",
@@ -484,7 +484,7 @@ def _get(a, *keys):
 CORE_RX = re.compile(r"(?<!\d)(12|24|48|96|144|288)\s*(?:D|F|C|CORE|CORES)?(?![\d])", re.IGNORECASE)
 DROP_RX = re.compile(r"drop|^\s*(75|100|150|200|250)\s*$|dropcore|\b1\s*D\b|\\1D|/1D", re.IGNORECASE)
 FEEDER_RX = re.compile(r"feeder|\b(144|288)\s*F\b|\bF\d{2,3}\b", re.IGNORECASE)
-EXIST_RX = re.compile(r"exist|eksist|existing|colo\b|\bcolo|\bEP\b|\bEXT\b", re.IGNORECASE)
+EXIST_RX = re.compile(r"exist|eksist|existing|colo\b|\bcoll?o|\bEP\b|\bEXT\b", re.IGNORECASE)
 
 
 FEEDER_SCOPE_RX = re.compile(r"^\s*feeder\b", re.I)
@@ -1126,7 +1126,14 @@ def rule_cable_end(net, prof, pr):
         if near and near[0][0] <= tol and near[0][1] in ("FAT", "FDT", "POP"):
             continue
         L, why, pts = g.walk_from_end(e, lambda q: any(pr.d(q, f) <= tol for f in fats))
-        n_sp = sum(1 for q in poles if point_line(q, pts, pr)[0] <= 3.0) if len(pts) > 1 and poles else None
+        n_sp = None
+        if len(pts) > 1 and poles:
+            # jumlah BENTANG (span) di ekor kabel = tiang berbeda di sepanjang ekor - 1 (tiang berimpit <= 1 m dihitung satu)
+            on = []
+            for q in poles:
+                if point_line(q, pts, pr)[0] <= 3.0 and not any(pr.d(q, o) <= 1.0 for o in on):
+                    on.append(q)
+            n_sp = max(0, len(on) - 1)
         if near and near[0][0] <= tol and near[0][1] == "CLOSURE":
             r.add(finding("LOOP_TERMINATION_CHECK", "INFO", "Ujung kabel di closure %s (bukan FAT): pastikan memang "
                           "closure/sambungan yang sah" % near[0][2].get("name"), ("point", p), "UJUNG", "", None, None,
@@ -1135,14 +1142,21 @@ def rule_cable_end(net, prof, pr):
         msg = "Ujung kabel distribusi tanpa FAT (perangkat terdekat %s %.0f m)" % (
             (near[0][2].get("name") or near[0][1]) if near else "-", near[0][0] if near else -1)
         if why == "stop":
-            msg += "; ekor kabel setelah FAT terakhir %.0f m%s" % (L, (" / %d tiang" % n_sp) if n_sp is not None else "")
-        r.add(finding("CABLE_END_WITHOUT_FAT", "ERROR", msg, ("point", p), "UJUNG_KABEL", "",
-                      round(L, 1) if why == "stop" else None, tol, "pasang FAT di ujung kabel loop/akhir distribusi "
-                      "(bukan otomatis menambah tiang)"))
-        if why == "stop" and (L > loop_m or (n_sp is not None and n_sp > loop_sp)):
+            msg += "; ekor kabel setelah FAT terakhir %.0f m%s" % (L, (" / %d bentang" % n_sp) if n_sp is not None else "")
+        # Ekor kabel setelah FAT terakhir yang masih dalam batas loop Handbook (<= 100 m / 2 span) = WARNING untuk
+        # ditinjau (bisa cadangan/loop yang sah); di luar batas loop atau tanpa FAT sama sekali = ERROR.
+        over = why == "stop" and (L > loop_m or (n_sp is not None and n_sp > loop_sp))
+        sev = "WARNING" if why == "stop" and not over else "ERROR"
+        if sev == "WARNING":
+            msg += " - masih dalam batas loop %d m / %d span" % (loop_m, loop_sp)
+        r.add(finding("CABLE_END_WITHOUT_FAT", sev, msg, ("point", p), "UJUNG_KABEL", "",
+                      round(L, 1) if why == "stop" else None, loop_m if why == "stop" else tol,
+                      "pasang FAT di ujung kabel loop/akhir distribusi, atau catat alasannya bila ekor kabel memang "
+                      "disengaja (bukan otomatis menambah tiang)", unit="m"))
+        if over:
             r.add(finding("LOOP_LENGTH_OVER_100M" if L > loop_m else "LOOP_SPAN_OVER_2", "WARNING",
                           "Kabel loop %.0f m%s melewati batas %d m / %d span" % (
-                              L, (" (%d tiang)" % n_sp) if n_sp is not None else "", loop_m, loop_sp),
+                              L, (" (%d bentang)" % n_sp) if n_sp is not None else "", loop_m, loop_sp),
                           ("line", pts), "LOOP", "", round(L, 1), loop_m, case_id="34"))
     r.stats.update(ujung_jaringan=n_end, simpul=len(g.pos))
     return r
@@ -1454,13 +1468,18 @@ def rule_fat_center(net, prof, pr):
 
 
 def rule_slack(net, prof, pr):
-    r = RuleResult("SLACK", "Slack kabel setiap 250 m", "21", "P1-10", "INTERNAL", "Handbook KMZ kasus 21")
+    r = RuleResult("SLACK", "Slack kabel baru setiap 250 m", "21", "P1-10", "INTERNAL",
+                   "Handbook KMZ kasus 21 (aturan internal); hanya kabel baru - kabel existing/colo tidak dinilai")
     marks = [m for m in net.markers if m["kind"] == "slack"]
     labelled = [c for c in _dist_cables(net) if re.search(r"slack", c["name"] + " " + c["desc"], re.I)]
     if not marks and not labelled:
         return r.unverify("UNVERIFIED_SLACK: tidak ada penanda/keterangan slack di data (bukan otomatis pelanggaran)")
     itv = pv(prof, "slack_interval_m", 250)
-    for c in _dist_cables(net):
+    # Kabel existing / colo / rencana milik pihak lain bukan bagian pekerjaan ini: slack-nya tidak dinilai.
+    new_cabs = [c for c in _dist_cables(net) if c.get("status") != "EXISTING"
+                and not re.search(r"colo|collo|eksist|exist", " ".join(c.get("folders") or []) + " " + (c["name"] or ""), re.I)]
+    r.stats["kabel_dinilai"] = "%d kabel baru dari %d kabel" % (len(new_cabs), len(_dist_cables(net)))
+    for c in new_cabs:
         L = line_len(c["pts"], pr)
         if L <= itv:
             continue
