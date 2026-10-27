@@ -124,7 +124,18 @@ class QcNavigator(QDockWidget):
         rv.addWidget(self.note, 1)
         rv.addWidget(save_b)
         lay.addLayout(rv)
-        lay.addWidget(exp_b)
+        out = QHBoxLayout()
+        shot_b = QPushButton("Salin gambar")
+        shot_b.setToolTip("Salin gambar peta temuan terpilih (dengan ID dan keterangan) ke clipboard: tempel langsung di Word (Ctrl+V)")
+        shot_b.clicked.connect(self.copy_image)
+        word_b = QPushButton("Laporan Word")
+        word_b.setToolTip("Buat laporan Word (.docx) untuk semua temuan yang tampil sesuai filter, lengkap dengan gambar peta "
+                          "setiap temuan dari peta QGIS saat ini")
+        word_b.clicked.connect(self.export_word)
+        out.addWidget(shot_b)
+        out.addWidget(word_b)
+        out.addWidget(exp_b)
+        lay.addLayout(out)
         lay.addWidget(self.info)
         self.setWidget(w)
         self._leaves = []
@@ -347,6 +358,146 @@ class QcNavigator(QDockWidget):
         self.refresh()
         if self._leaves:
             self._pos = min(max(pos, 0), len(self._leaves) - 1)
+
+    # ------------------------------------------------------------------ gambar & Word
+    @staticmethod
+    def _attrs(lyr, fid):
+        f = lyr.getFeature(fid)
+        names = lyr.fields().names()
+
+        def g(*keys):
+            for k in keys:
+                if k in names:
+                    v = f[k]
+                    if v is not None and str(v) not in ("NULL", ""):
+                        return v
+            return None
+        sev = str(g("severity", "status") or "INFO")
+        sev = "ERROR" if sev == "CEK" else sev
+        ket = str(g("keterangan", "message") or "")
+        fix, kode = str(g("saran") or ""), str(g("kode") or "")
+        if not fix and kode:
+            try:
+                from . import penjelasan as X
+                fix = X.tool1_kind_text(kode)[1] or X.FINDINGS.get(kode, ("", "", ""))[2]
+            except Exception as _e:
+                _log.note(_e)
+        obj = str(g("objek_id") or "") or (ket.split(":")[0].split(" (")[0].strip() if ":" in ket[:60] else "")
+        return f, {"fid": str(g("finding_id") or "#%s" % fid), "sev": sev, "title": str(g("jenis", "rule_id") or lyr.name()),
+                   "obj": obj, "arti": ket, "fix": fix, "value": g("nilai"), "limit": g("batas"), "unit": "",
+                   "dasar": str(g("dasar") or ""), "source": lyr.source().split("|")[0].replace("\\", "/").split("/")[-1]}
+
+    def _render(self, lyr, fid, size=(1280, 800)):
+        """Gambar peta (dari kanvas QGIS: semua layer yang tampil) di sekitar satu temuan + kepala ID/keterangan."""
+        from qgis.core import QgsMapSettings, QgsMapRendererParallelJob, QgsGeometry
+        from qgis.PyQt.QtCore import QSize, QRectF
+        from qgis.PyQt.QtGui import QPainter, QFont, QPen
+        canvas = self.iface.mapCanvas()
+        f, a = self._attrs(lyr, fid)
+        g = f.geometry()
+        if g is None or g.isEmpty():
+            return None, a
+        ms = QgsMapSettings(canvas.mapSettings())
+        ms.setOutputSize(QSize(*size))
+        try:
+            ct = QgsCoordinateTransform(lyr.crs(), ms.destinationCrs(), QgsProject.instance())
+            g2 = QgsGeometry(g)
+            g2.transform(ct)
+            bb = g2.boundingBox()
+        except Exception:
+            bb = g.boundingBox()
+        pad = max(max(bb.width(), bb.height()) * 0.6, 0.0006 if ms.destinationCrs().isGeographic() else 60.0)
+        ms.setExtent(QgsRectangle(bb.xMinimum() - pad, bb.yMinimum() - pad, bb.xMaximum() + pad, bb.yMaximum() + pad))
+        try:
+            lyr.selectByIds([fid])
+        except Exception as _e:
+            _log.note(_e)
+        job = QgsMapRendererParallelJob(ms)
+        job.start()
+        job.waitForFinished()
+        img = job.renderedImage()
+        p = QPainter(img)
+        p.fillRect(QRectF(0, 0, img.width(), 46), QColor(22, 22, 22, 225))
+        p.fillRect(QRectF(0, 0, 8, 46), QColor(SEV_COL.get(a["sev"], "#c62828")))
+        ft = QFont("Inter")
+        ft.setPixelSize(16)
+        ft.setBold(True)
+        p.setFont(ft)
+        p.setPen(QPen(QColor("#ffffff")))
+        p.drawText(18, 20, "%s  ·  %s" % (a["fid"], a["title"]))
+        ft.setBold(False)
+        ft.setPixelSize(12)
+        p.setFont(ft)
+        p.setPen(QPen(QColor("#e0e0e0")))
+        t = a["arti"]
+        p.drawText(18, 38, t if len(t) < 150 else t[:149] + "…")
+        p.end()
+        return img, a
+
+    def copy_image(self):
+        lyr, fid = self._current()
+        if lyr is None:
+            self.info.setText("Pilih satu temuan dulu.")
+            return
+        img, a = self._render(lyr, fid)
+        if img is None:
+            self.info.setText("Temuan ini tidak punya lokasi di peta.")
+            return
+        from qgis.PyQt.QtWidgets import QApplication
+        QApplication.clipboard().setImage(img)
+        self.info.setText("Gambar %s disalin. Tempel di Word dengan Ctrl+V." % a["fid"])
+
+    def export_word(self):
+        """Laporan Word untuk temuan yang tampil (sesuai filter), maksimum 150 temuan bergambar."""
+        if not self._leaves:
+            self.info.setText("Tidak ada temuan yang tampil.")
+            return
+        path, _f = QFileDialog.getSaveFileName(self, "Simpan laporan Word", "LAPORAN_TEMUAN_QC.docx", "Word (*.docx)")
+        if not path:
+            return
+        if not path.lower().endswith(".docx"):
+            path += ".docx"
+        from . import docx_writer as D
+        from qgis.PyQt.QtCore import QBuffer, QByteArray, QIODevice
+        from qgis.PyQt.QtWidgets import QApplication
+        mode = getattr(QIODevice, "OpenModeFlag", QIODevice).WriteOnly
+        recs, imgs = [], {}
+        for k, it in enumerate(self._leaves[:150]):
+            data = it.data(0, ROLE)
+            if not data or data[1] is None:
+                continue
+            lyr = QgsProject.instance().mapLayer(data[0])
+            if lyr is None:
+                continue
+            self.info.setText("Membuat gambar %d dari %d ..." % (k + 1, min(150, len(self._leaves))))
+            QApplication.processEvents()
+            try:
+                img, a = self._render(lyr, data[1])
+            except Exception as e:
+                _log.note(e)
+                continue
+            if img is not None:
+                ba = QByteArray()
+                buf = QBuffer(ba)
+                buf.open(mode)
+                img.save(buf, "JPG", 85)
+                buf.close()
+                imgs[a["fid"]] = bytes(ba)
+            recs.append(a)
+        sev_rank = {"ERROR": 0, "WARNING": 1, "UNVERIFIED": 2, "INFO": 3}
+        recs.sort(key=lambda r: (sev_rank.get(r["sev"], 9), r["fid"]))
+        by = {}
+        for r in recs:
+            by.setdefault((r["title"], r["sev"]), []).append(r)
+        rows = [(t, sv, len(v), "") for (t, sv), v in sorted(by.items(), key=lambda kv: sev_rank.get(kv[0][1], 9))]
+        try:
+            proj = QgsProject.instance().baseName() or "Proyek QGIS"
+            D.qc_report(path, "Laporan Temuan QC - %s" % proj, "Temuan terpilih dari panel Navigator QC Seranta (gambar dari peta QGIS)",
+                        [("Proyek", proj), ("Jumlah temuan", str(len(recs))), ("Filter", "sesuai filter Navigator saat ekspor")],
+                        rows, recs, imgs, footer="Seranta - Navigator QC")
+            self.info.setText("Laporan Word disimpan: %s (%d temuan)" % (path, len(recs)))
+        except OSError as e:
+            self.info.setText("Gagal menyimpan (file sedang dibuka di Word?): %s" % e)
 
     def export_csv(self):
         path, _ = QFileDialog.getSaveFileName(self, "Ekspor temuan QC", "QC_REVIEW.csv", "CSV (*.csv)")

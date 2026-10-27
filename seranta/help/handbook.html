@@ -123,7 +123,7 @@ html{scroll-behavior:smooth}
     <div>
       <h1>SERANTA</h1>
       <div class="tag">FTTH Design Assistant untuk QGIS · Serat untuk Nusantara</div>
-      <div class="meta">Handbook pengguna · versi plugin 3.5.1 · © 2026 Joseph Edward Timothy Siahaan</div>
+      <div class="meta">Handbook pengguna · versi plugin 3.5.2 · © 2026 Joseph Edward Timothy Siahaan</div>
     </div>
   </div>
 </header>
@@ -146,7 +146,7 @@ html{scroll-behavior:smooth}
 <li><a href="#keandalan">Keandalan &amp; dasar angka</a></li>
 <li><a href="#laporan">Membaca laporan HTML</a></li>
 <li><a href="#profil">Profil standar organisasi</a></li>
-<li><a href="#baru">Yang baru di 3.5.1</a></li>
+<li><a href="#baru">Yang baru di 3.5.2</a></li>
 <li><a href="#masalah">Masalah umum</a></li>
 <li><a href="#istilah">Istilah</a></li>
 </ol></nav>
@@ -567,7 +567,18 @@ html{scroll-behavior:smooth}
 
 <section id="baru">
   <div class="kicker">Perbandingan versi</div>
-  <h2>Yang baru di 3.5.1: toleransi berbasis acuan</h2>
+  <h2>Yang baru di 3.5.2: laporan interaktif dan Word</h2>
+  <div class="tablebox"><table>
+    <tr><th>Fitur</th><th>Cara memakai</th></tr>
+    <tr><td>ID temuan tetap</td><td>Setiap temuan punya ID (F-0001 di alat 1; ID temuan di alat 4) yang sama di laporan HTML, laporan Word, layer temuan dan panel Navigator QC. Sebut ID ini saat berdiskusi dengan tim.</td></tr>
+    <tr><td>Gambar peta per temuan</td><td>Folder <code>QC_GAMBAR</code> berisi satu gambar per temuan (lokasi disorot, label tiang/perangkat, skala, utara). Gambar juga tertanam di HTML (klik untuk memperbesar, tombol <kbd>g</kbd>) dan di Word.</td></tr>
+    <tr><td>Laporan Word</td><td>Alat 1 menulis <code>&lt;KODE&gt;_LAPORAN_QC.docx</code>, alat 4 menulis <code>QC_APD_LAPORAN.docx</code>: ringkasan per aturan lalu satu bagian per temuan dengan kolom catatan reviewer. Tombol <b>Unduh laporan Word</b> ada di laporan HTML.</td></tr>
+    <tr><td>Review di HTML</td><td>Centang <i>Sudah dicek</i> per temuan (tersimpan di browser), saring <i>Belum dicek</i>, unduh <i>Rekap review</i> (CSV). Pintasan: <kbd>j</kbd>/<kbd>k</kbd> pindah temuan, <kbd>x</kbd> tandai, <kbd>/</kbd> cari, <kbd>?</kbd> bantuan.</td></tr>
+    <tr><td>Navigator QC</td><td><b>Salin gambar</b>: gambar peta temuan terpilih ke clipboard, tempel di Word (Ctrl+V). <b>Laporan Word</b>: semua temuan yang tampil sesuai filter, gambar diambil dari peta QGIS Anda saat itu.</td></tr>
+    <tr><td>Tinggi kabel tengah bentang</td><td>Rumus: tinggi tiang &minus; tanam 1/6 tinggi &minus; 0,3 m &minus; lendutan 1,5 % &times; bentang. &ge; 5 m lolos; 4,7&ndash;5 m hanya diringkas (tinjau bila melintang jalan); &lt; 4,7 m dicatat per rentang. Bila melintang jalan pakai tiang 9 m.</td></tr>
+    <tr><td>Label peta</td><td>Panjang bentang ditulis di atas garis (&ldquo;bentang 52,3 m&rdquo;), tinggi kabel di bawah garis putus-putus (&ldquo;kabel &plusmn;4,8 m dari tanah&rdquo;).</td></tr>
+  </table></div>
+  <h3>3.5.1: toleransi berbasis acuan</h3>
   <p>Setiap pemeriksaan jarak kini memakai tiga tingkat: <b>lolos</b>, <b>tinjau</b> (pita ragu karena galat GPS atau
   gambar tangan) dan <b>gagal</b>. Angka dan sumbernya ada di profil, sehingga bisa disesuaikan per kota.</p>
   <div class="tablebox"><table>

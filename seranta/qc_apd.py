@@ -488,6 +488,13 @@ class QcApd(QgsProcessingAlgorithm):
                                  % (e, os.path.basename(alt)), fatalError=False)
             write_xlsx(alt, results, prof, meta)
         html = os.path.join(out_dir, "QC_APD.html")
+        try:
+            feedback.setProgressText("Gambar peta temuan dan laporan Word")
+            meta["word"], meta["snaps"] = write_word(os.path.join(out_dir, "QC_APD_LAPORAN.docx"), results, prof, meta, main,
+                                                     out_dir)
+            feedback.pushInfo("Laporan Word: %s (gambar peta %d)" % (meta["word"], len(meta["snaps"])))
+        except Exception as e:
+            feedback.reportError("Gambar temuan / laporan Word tidak dibuat: %s" % e, fatalError=False)
         self._html(html, results, prof, meta, main)
         ov = Q.overall(results)
         feedback.pushInfo("")
@@ -805,11 +812,95 @@ def read_xlsx_reviews(path):
     return out
 
 
+def scene_of(net):
+    """Objek peta dari jaringan QC (kabel, tiang, perangkat, homepass, batas) untuk gambar temuan."""
+    from . import snapshot as S
+    sc = S.Scene()
+    for c in getattr(net, "cables", []) or []:
+        k = c.get("kind") or "dist"
+        kind = {"drop": "drop", "pancingan": "pancingan", "feeder": "feeder"}.get(k, "cable_new" if c.get("status") != "EXISTING"
+                                                                                  else "cable")
+        sc.add_line(c.get("pts") or [], kind)
+    for pl in getattr(net, "polys", []) or []:
+        try:
+            sc.add_poly(pl["poly"][0], "funnel")
+        except Exception as _e:
+            _log.note(_e)
+    for e in getattr(net, "endpoints", []) or []:
+        sc.add_point(e["x"], e["y"], "hp", "")
+    for p in getattr(net, "poles", []) or []:
+        sc.add_point(p["x"], p["y"], "pole_ext" if p.get("status") == "EXISTING" else "pole_new", p.get("name") or "")
+    for c in getattr(net, "closures", []) or []:
+        sc.add_point(c["x"], c["y"], "closure", c.get("name") or "")
+    for n in getattr(net, "nodes", []) or []:
+        sc.add_point(n["x"], n["y"], "fdt" if n.get("kind") == "FDT" else "fat", n.get("name") or n.get("label") or "")
+    return sc
+
+
+def _midpoint(line):
+    """Titik tengah polyline menurut panjang (derajat cukup untuk jarak pendek)."""
+    if len(line) < 2:
+        return line[0]
+    seg = [((b[0] - a[0]) ** 2 + (b[1] - a[1]) ** 2) ** 0.5 for a, b in zip(line, line[1:])]
+    half, acc = sum(seg) / 2.0, 0.0
+    for (a, b), d in zip(zip(line, line[1:]), seg):
+        if acc + d >= half and d > 0:
+            t = (half - acc) / d
+            return (a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1]))
+        acc += d
+    return line[-1]
+
+
+def write_word(path, results, prof, meta, net, out_dir, max_img=80):
+    """Gambar peta per temuan (QC_GAMBAR) + laporan Word. Kembali (nama file Word, {finding_id: data URI})."""
+    from . import snapshot as S
+    from . import docx_writer as D
+    from . import penjelasan as X
+    sc = scene_of(net)
+    fs = sorted(Q.findings_of(results), key=lambda f: Q.SEV_RANK.get(f["severity"], 9))
+    recs = []
+    for f in fs:
+        g = f.get("geom")
+        if g and g[0] == "point":
+            lon, lat, line = g[1][0], g[1][1], None
+        elif g and g[0] == "line" and g[1]:
+            line = list(g[1])
+            lon, lat = _midpoint(line)
+        else:
+            lon = lat = line = None
+        j, a, fx = X.finding_text(f)
+        recs.append({"fid": f.get("finding_id") or f["rule_id"], "sev": f["severity"], "title": j, "obj": f.get("object_id") or "",
+                     "arti": a, "fix": fx, "value": f.get("value"), "limit": f.get("threshold"), "unit": f.get("unit") or "",
+                     "lat": lat, "lon": lon, "line": line, "dasar": f.get("dasar") or "", "source": f.get("source_file") or "",
+                     "rule": f["rule_id"]})
+    shots = [dict(r, title="%s: %s" % (r["title"], r["obj"] or r["arti"])) for r in recs if r["lat"] is not None
+             and r["sev"] != "PASS"][:max_img]
+    imgs = S.render_many(sc, shots, out_dir=os.path.join(out_dir, "QC_GAMBAR"), max_n=max_img)
+    rows = []
+    for r in results:
+        c = r.counts()
+        rows.append(("%s" % (X.RULES.get(r.rule_id, {}).get("judul") or r.title), r.status, sum(c.values()),
+                     (r.unverified or "")[:160] if r.status == "UNVERIFIED" else ", ".join("%s %d" % kv for kv in sorted(c.items()))))
+    rows.sort(key=lambda t: Q.SEV_RANK.get(t[1], 9))
+    D.qc_report(path, "Laporan QC APD - %s" % str(meta.get("cluster", "")).replace("_", " "),
+                "QC paket desain APD pasca-desain - %s" % meta.get("produk", ""),
+                [("Cluster", meta.get("cluster", "")), ("Status FDT", meta.get("status_fdt", "")),
+                 ("Profil standar", "%s (versi aturan %s)" % (prof.get("profile_id"), prof.get("rule_version"))),
+                 ("Dibuat", str(meta.get("dibuat", "")).replace("T", " ")),
+                 ("Jumlah temuan", "%d (gambar peta: %d)" % (len(recs), len(imgs))),
+                 ("Berkas pendukung", "QC_APD.html, QC_APD_TEMUAN.xlsx, folder QC_GAMBAR")],
+                rows, [r for r in recs if r["sev"] != "PASS"], {k: v[0] for k, v in imgs.items()},
+                footer="%s - hasil QC adalah alat bantu; keputusan tetap pada desainer dan reviewer" % meta.get("produk", ""))
+    return os.path.basename(path), {k: S.data_uri(v[0]) for k, v in imgs.items()}
+
+
 def write_html(path, results, prof, meta):
     """Laporan QC_APD.html: satu kalimat keputusan, jalur aturan, lalu kartu per aturan yang menjelaskan
     apa yang dicek, kenapa penting, hasilnya, dan apa yang harus dilakukan untuk setiap temuan."""
     from . import report_ui as U
     from . import penjelasan as X
+    U.reset_ids()
+    snaps = meta.get("snaps") or {}
     counts = {}
     for r in results:
         for f in r.findings:
@@ -892,7 +983,8 @@ def write_html(path, results, prof, meta):
                 if f.get("evidence") or f.get("source_file"):
                     tech += "<br>%s%s" % (("Bukti: %s. " % _E(f["evidence"])) if f.get("evidence") else "",
                                           ("Sumber: <code>%s</code>" % _E(f["source_file"])) if f.get("source_file") else "")
-                lis.append(U.finding_li(f["severity"], j, f.get("object_id") or "", a, fx, tech, ll))
+                fid = f.get("finding_id") or None
+                lis.append(U.finding_li(f["severity"], j, f.get("object_id") or "", a, fx, tech, ll, fid=fid, snap=snaps.get(fid)))
             more = ("<li class='more'>+%d temuan lain. Daftar lengkap ada di QC_APD_TEMUAN.csv dan panel Navigator QC.</li>"
                     % (len(fs) - 80)) if len(fs) > 80 else ""
             inner.append("<ul class='finds'>%s%s</ul>" % ("".join(lis), more))
@@ -939,6 +1031,7 @@ def write_html(path, results, prof, meta):
                     ("Dibuat", meta["dibuat"].replace("T", " ")), ("Alat", meta["produk"])],
                    counts, items, body,
                    "%s. &copy; 2026 Joseph Edward Timothy Siahaan, GPL-2.0-or-later. Hasil QC adalah alat bantu; keputusan desain "
-                   "dan pengecualian tetap pada desainer dan reviewer." % _E(meta["produk"]))
+                   "dan pengecualian tetap pada desainer dan reviewer." % _E(meta["produk"]),
+                   run_key=str(meta.get("cluster", "")), word_href=meta.get("word"))
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(html_)

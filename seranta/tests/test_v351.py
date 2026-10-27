@@ -86,6 +86,29 @@ def test_grouping_ignores_own_fdt_already_in_design_lite():
     assert r2.stats["grouping"][0]["hasil"] == "KELOMPOK BARU" and "FDT_NEW_NOT_IN_REKAP" not in _ids(r2)
 
 
+def test_read_dbf_without_ogr():
+    """Status review lama dibaca dari .dbf tanpa OGR (agar QC_TEMUAN tidak terkunci saat alat dijalankan ulang)."""
+    try:
+        import buat_input_desain as B
+    except Exception:  # nosec B110
+        return
+    import struct
+    import tempfile
+    flds = [("kode", "C", 20), ("review", "C", 20), ("lon", "N", 13), ("lat", "N", 13)]
+    rows = [("HP_LUAR_BOUNDARY", "VERIFIED", "123.0368000", "0.5600000"), ("X", "", "", "")]
+    rlen = 1 + sum(f[2] for f in flds)
+    hlen = 32 + 32 * len(flds) + 1
+    head = struct.pack("<BBBBIHH20x", 3, 126, 10, 27, len(rows), hlen, rlen)
+    desc = b"".join(struct.pack("<11sc4xB15x", n.encode(), t.encode(), ln) for n, t, ln in flds) + b"\x0d"
+    body = b"".join(b" " + b"".join(v.encode().ljust(f[2])[:f[2]] for v, f in zip(r, flds)) for r in rows)
+    p_ = os.path.join(tempfile.mkdtemp(), "t.dbf")
+    with open(p_, "wb") as fh:
+        fh.write(head + desc + body + b"\x1a")
+    recs = B.read_dbf(p_)
+    assert recs[0]["kode"] == "HP_LUAR_BOUNDARY" and recs[0]["review"] == "VERIFIED" and abs(recs[0]["lon"] - 123.0368) < 1e-9
+    assert recs[1]["review"] is None and recs[1]["lon"] is None
+
+
 def test_tool1_new_kinds():
     try:
         import buat_input_desain as B

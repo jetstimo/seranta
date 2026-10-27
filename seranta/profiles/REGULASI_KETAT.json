@@ -427,6 +427,21 @@
    "sumber": "Nilai redaman desain operator nasional konektor SC/UPC 0,25 dB (APC 0,35 dB)",
    "status": "APPROVED",
    "unit": "dB"
+  },
+  "pole_embed_frac": {
+   "v": 0.1667,
+   "dasar": "STANDAR",
+   "sumber": "Standar konstruksi jaringan distribusi PLN (Keputusan Direksi 473.K/DIR/2010 Buku 3): kedalaman tanam tiang 1/6 panjang tiang (tiang 7 m = 1,17 m; 9 m = 1,5 m)",
+   "status": "APPROVED",
+   "unit": "x tinggi"
+  },
+  "clear_road_fail_m": {
+   "v": 4.7,
+   "dasar": "STANDAR",
+   "sumber": "NESC Table 232-1: kabel komunikasi >= 15,5 ft (4,7 m) di atas jalan pada lendutan akhir (batas aman internasional; regulasi Indonesia 5 m = Permen PU 20/2010). 4,7-5 m = tinjau, < 4,7 m = catatan per rentang",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "m"
   }
  }
 }

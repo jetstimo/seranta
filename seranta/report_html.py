@@ -12,6 +12,7 @@ _E = _h.escape
 _ST = {True: ("OK", "ok"), False: ("CEK", "bad"), None: ("--", "na")}
 _SEV = dict(zip(("ERROR", "WARNING", "INFO", "UNVERIFIED", "PASS", "CEK"), ("bad", "wrn", "inf", "unv", "ok", "bad")))
 _SEVT = {"ERROR": "bad-t", "WARNING": "wrn-t", "CEK": "bad-t"}
+SOFT_STD = {7}          # standar yang "tidak terpenuhi" berarti keputusan perencanaan, bukan kesalahan data
 
 _CSS = """
 :root{--ink:#14213d;--mut:#5b6474;--line:#dfe3ea;--ok:#1a7f37;--okb:#e7f5ea;--bad:#c62828;--badb:#fdecec;
@@ -56,7 +57,10 @@ def build(path, meta, std, judul, extra_lines, bakp, files, full_text):
     except ImportError:
         import report_ui as U
         import penjelasan as X
+    U.reset_ids()
     by_std = meta.get("qc_by_std") or {}
+    fid_map = meta.get("fid_map") or {}          # (kind, lon7, lat7, ket) -> F-0001 (sama dengan QC_TEMUAN & Word)
+    snaps = meta.get("snaps") or {}              # F-0001 -> data URI gambar peta
     counts = {}
     for st, _no, _lab, n, _ex, _src, _slug in (meta.get("qc_counts") or []):
         sv = "ERROR" if st == "CEK" else st
@@ -69,7 +73,9 @@ def build(path, meta, std, judul, extra_lines, bakp, files, full_text):
         if ok is None:
             return "UNVERIFIED"
         sevs = [t[0] for t in by_std.get(k, [])]
-        return min(sevs, key=lambda v: U.SEV_ORDER.index(v) if v in U.SEV_ORDER else 9) if sevs else "ERROR"
+        # standar 7 (colo FDT) adalah keputusan perencanaan (FDT baru / bagi ke beberapa FDT), bukan kesalahan data
+        return min(sevs, key=lambda v: U.SEV_ORDER.index(v) if v in U.SEV_ORDER else 9) if sevs else (
+            "WARNING" if k in SOFT_STD else "ERROR")
 
     def finds(lst, limit=40):
         if not lst:
@@ -79,9 +85,10 @@ def build(path, meta, std, judul, extra_lines, bakp, files, full_text):
             sev, lab, ket, lat, lon = t[:5]
             kind = t[5] if len(t) > 5 else ""
             arti, aksi = X.tool1_kind_text(kind)
+            fid = fid_map.get((kind, lon, lat, ket))
             lis.append(U.finding_li(sev, lab, "", ket, aksi, ("<code>%s</code> %s" % (_E(kind), _E(arti))) if kind else "",
-                                    (lon, lat)))
-        more = ("<li class='more'>+%d titik lain. Semua titik ada di folder QC (QGIS) dan QC_TEMUAN.kmz.</li>"
+                                    (lon, lat), fid=fid, snap=snaps.get(fid)))
+        more = ("<li class='more'>+%d titik lain. Semua titik ada di folder QC (QGIS), QC_TEMUAN.kmz dan panel Navigator QC.</li>"
                 % (len(lst) - limit)) if len(lst) > limit else ""
         return "<ul class='finds'>%s%s</ul>" % ("".join(lis), more)
 
@@ -193,7 +200,8 @@ var s=load();boxes.forEach(function(b){b.checked=!!s[b.dataset.k];b.addEventList
                   ("Profil desain", meta.get("profile", "")), ("Alat", "%s v%s" % (meta.get("product", ""), meta.get("version", "")))],
                  counts, items, U.howto() + "".join(cards) + "".join(sec),
                  "%s v%s. &copy; 2026 %s, GPL-2.0-or-later. Hasil QC adalah alat bantu; keputusan desain tetap pada desainer "
-                 "dan reviewer." % (_E(meta.get("product", "")), _E(meta.get("version", "")), _E(meta.get("author", ""))))
+                 "dan reviewer." % (_E(meta.get("product", "")), _E(meta.get("version", "")), _E(meta.get("author", ""))),
+                 run_key=str(meta.get("kode", "")), word_href=meta.get("word"))
     doc = doc.replace("</body>", js + "</body>")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(doc)

@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.5.1"
+__version__ = "3.5.2"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -1272,9 +1272,12 @@ def line_mid(pts):
     return pts[-1]
 
 
-def attach_height(h):
-    """Tinggi klem kabel di atas tanah: tinggi - tanam(10%+0,6 m) - margin puncak [R3]."""
-    return h - (0.1 * h + 0.6) - POLE_TOP_MARGIN
+def attach_height(h, embed_frac=1.0 / 6.0):
+    """Tinggi klem kabel di atas tanah: tinggi - tanam - margin puncak [R3].
+    Tanam bawaan = 1/6 panjang tiang (standar konstruksi jaringan distribusi PLN, Keputusan Direksi 473.K/DIR/2010
+    Buku 3); embed_frac <= 0 memakai aturan lama 10% + 0,6 m."""
+    tanam = h * embed_frac if embed_frac and embed_frac > 0 else 0.1 * h + 0.6
+    return h - tanam - POLE_TOP_MARGIN
 
 
 def pole_kind(folders, name):
@@ -1565,6 +1568,57 @@ def qc_by_std(qc):
         return -float(m.group(1)) if m else 0.0
     for no, v in out.items():
         v.sort(key=lambda t: (_qc.SEV_RANK.get(t[0], 9), meters(t) if no in (1, 9) else 0))
+    return out
+
+
+def read_dbf(path, encoding="utf-8"):
+    """Baca tabel .dbf (dBASE III) tanpa OGR -> daftar dict. Angka dikembalikan sebagai teks/float; NULL -> None."""
+    import struct
+    out = []
+    with open(path, "rb") as fh:
+        head = fh.read(32)
+        n, hlen, rlen = struct.unpack("<IHH", head[4:12])
+        fields = []
+        while True:
+            d = fh.read(32)
+            if not d or d[0] == 0x0D:
+                break
+            fields.append((d[:11].split(b"\0")[0].decode("ascii", "replace"), chr(d[11]), d[16]))
+        fh.seek(hlen)
+        for _ in range(n):
+            r = fh.read(rlen)
+            if not r or r[:1] == b"*":
+                continue
+            o, rec = 1, {}
+            for name, typ, ln in fields:
+                raw = r[o:o + ln].decode(encoding, "replace").strip()
+                o += ln
+                if typ in "NF":
+                    try:
+                        rec[name] = float(raw) if raw and not raw.startswith("*") else None
+                    except ValueError:
+                        rec[name] = None
+                else:
+                    rec[name] = raw or None
+            out.append(rec)
+    return out
+
+
+def qc_order(qc):
+    """(items ternormalisasi, urutan) - urutan yang sama dipakai untuk ID temuan F-0001.. di QC_TEMUAN, HTML dan Word."""
+    items = [qc_item(it) for it in qc]
+    order = sorted(range(len(items)), key=lambda i_: (_qc.SEV_RANK.get(qc_severity(items[i_][1]), 9),
+                                                     qc_label(items[i_][1])[0] or 99, qc_slug(items[i_][1])))
+    return items, order
+
+
+def qc_fid_map(qc):
+    """{(kode, lon7, lat7, keterangan singkat): 'F-0001'} - kunci sama dengan qc_by_std untuk laporan HTML."""
+    items, order = qc_order(qc)
+    out = {}
+    for n_, i_ in enumerate(order, 1):
+        p, kind, ket = items[i_][0], items[i_][1], items[i_][2]
+        out[(kind, round(p.x(), 7), round(p.y(), 7), _short(ket, 220))] = "F-%04d" % n_
     return out
 
 
@@ -1996,6 +2050,11 @@ def style_qc_layer(layer):
     cats = []
     key = "severity" if layer.fields().indexOf("severity") >= 0 else "status"
     try:
+        kodes = {str(v) for v in layer.uniqueValues(layer.fields().indexOf("kode"))} if layer.fields().indexOf("kode") >= 0 else set()
+    except Exception:
+        kodes = set()
+    low_cable = bool(kodes) and all(k.startswith("INFO_KABEL") for k in kodes)
+    try:
         present = {str(v) for v in layer.uniqueValues(layer.fields().indexOf(key))}
     except Exception:
         present = set()
@@ -2006,8 +2065,10 @@ def style_qc_layer(layer):
         if present and val not in present:
             continue
         if is_line:
-            sym = QgsLineSymbol.createSimple({"color": col, "width": "1.4" if val in ("CEK", "ERROR", "WARNING") else "1.0",
-                                              "capstyle": "round"})
+            props = {"color": col, "width": "1.4" if val in ("CEK", "ERROR", "WARNING") else "1.0", "capstyle": "round"}
+            if low_cable:
+                props.update({"line_style": "dash", "width": "0.8"})     # catatan tinggi kabel: garis putus tipis
+            sym = QgsLineSymbol.createSimple(props)
         else:
             sym = QgsMarkerSymbol.createSimple({"name": "circle", "color": col, "size": str(size),
                                                 "outline_color": "#ffffff"})
@@ -2015,7 +2076,9 @@ def style_qc_layer(layer):
     layer.setRenderer(QgsCategorizedSymbolRenderer(key, cats))
     pal = QgsPalLayerSettings()
     pal.isExpression = True
-    pal.fieldName = ('CASE WHEN "kode" LIKE \'INFO_KABEL%\' THEN \'kabel \' || format_number("nilai", 1) || \' m\' '
+    # label garis dibedakan agar tidak terbaca menyatu: tinggi kabel di BAWAH garis, panjang bentang di ATAS garis
+    pal.fieldName = ('CASE WHEN "kode" LIKE \'INFO_KABEL%\' THEN \'kabel ±\' || format_number("nilai", 1) || \' m dari tanah\' '
+                     'WHEN "kode" LIKE \'%RENTANG%\' THEN \'bentang \' || format_number("nilai", 1) || \' m\' '
                      'WHEN "nilai" IS NOT NULL THEN format_number("nilai", 1) || \' m\' ELSE "jenis" END') \
         if is_line else '"jenis"'
     fmt = QgsTextFormat()
@@ -2029,6 +2092,22 @@ def style_qc_layer(layer):
         pal.placement = _enum("Qgis.LabelPlacement.Line", "QgsPalLayerSettings.Line") if is_line else pal.placement
     except Exception as _e:
         _log.note(_e)
+    if is_line:
+        try:
+            side = _enum("Qgis.LabelLinePlacementFlag.BelowLine", "QgsPalLayerSettings.BelowLine") if low_cable else \
+                _enum("Qgis.LabelLinePlacementFlag.AboveLine", "QgsPalLayerSettings.AboveLine")
+            flags = side | _enum("Qgis.LabelLinePlacementFlag.MapOrientation", "QgsPalLayerSettings.MapOrientation")
+            if hasattr(pal, "lineSettings"):
+                pal.lineSettings().setPlacementFlags(flags)
+            else:
+                pal.placementFlags = int(flags)
+            pal.dist = 1.2
+            if low_cable:
+                from qgis.PyQt.QtGui import QColor
+                fmt.setColor(QColor("#7a5c00"))
+                pal.setFormat(fmt)
+        except Exception as _e:
+            _log.note(_e)
     layer.setLabeling(QgsVectorLayerSimpleLabeling(pal))
     layer.setLabelsEnabled(True)
     try:
@@ -2438,6 +2517,90 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 feedback.pushInfo(f"{n} layer hasil run sebelumnya dilepas dari proyek agar file bisa ditimpa.")
         return True
 
+    @staticmethod
+    def _qc_word(qc, outp, inp, kode, cluster, std, judul, poles, names, kinds, hp_xy, segs, own_bnd, funnel_polys, feedback,
+                 max_img=80):
+        """Gambar peta per temuan (folder QC_GAMBAR) dan laporan Word <KODE>_LAPORAN_QC.docx.
+        Kembali (nama file Word, {F-0001: data URI})."""
+        import math
+        from . import snapshot as _snap
+        from . import docx_writer as _docx
+        from . import penjelasan as X
+        if not qc:
+            return None, {}
+        sc = _snap.Scene()
+        for f in segs:
+            try:
+                g = f.geometry()
+                parts = g.asMultiPolyline() if g.isMultipart() else [g.asPolyline()]
+            except Exception:
+                parts = []
+            for part in parts:
+                sc.add_line([(q.x(), q.y()) for q in part], "route")
+        for ring in own_bnd or []:
+            sc.add_poly(ring[0], "boundary")
+        for poly in funnel_polys or []:
+            sc.add_poly(poly[0], "funnel")
+        for x, y, hid in hp_xy:
+            sc.add_point(x, y, "hp", str(hid))
+        for p, nm, kd in zip(poles, names, kinds):
+            sc.add_point(p.x(), p.y(), "pole_ext" if kd == "existing" else "pole_new", nm or "")
+        items, order = qc_order(qc)
+        noisy = ("INFO_HP_ALAMAT_SAMA",)
+        pxy = [(p.x(), p.y(), nm or "") for p, nm in zip(poles, names)]
+        recs = []
+        for n_, i_ in enumerate(order, 1):
+            p, kind, ket, pts, val, lim = items[i_]
+            if not pts and kind.startswith("HP_JAUH") and pxy:
+                # tampilkan juga tiang terdekat di gambar: garis bantu HP -> tiang
+                kx = math.cos(math.radians(p.y())) * 111320.0
+                q = min(pxy, key=lambda t: ((t[0] - p.x()) * kx) ** 2 + ((t[1] - p.y()) * 110574.0) ** 2)
+                pts = [QgsPointXY(p.x(), p.y()), QgsPointXY(q[0], q[1])]
+            obj = ket.split(":")[0].split(" (")[0].strip() if ":" in ket[:60] else ""
+            sev = qc_severity(kind)
+            lab = qc_label(kind)[1]
+            arti, aksi = X.tool1_kind_text(kind)
+            recs.append({"fid": "F-%04d" % n_, "sev": sev, "kind": kind, "title": lab, "obj": obj, "arti": ket,
+                         "fix": aksi, "value": val, "limit": lim, "unit": ("derajat" if "BELOKAN" in kind else "m") if val is not None else "",
+                         "lat": p.y(), "lon": p.x(), "dasar": qc_source(kind), "source": "",
+                         "line": [(q.x(), q.y()) for q in pts] if pts else None, "label": arti})
+        pick = [r for r in recs if r["sev"] in ("ERROR", "WARNING")]
+        pick += [r for r in recs if r["sev"] not in ("ERROR", "WARNING") and r["kind"] not in noisy]
+        shots = []
+        for r in pick[:max_img]:
+            shots.append(dict(r, title="%s: %s" % (r["title"], r["arti"])))
+        imgs = _snap.render_many(sc, shots, out_dir=os.path.join(inp, "QC_GAMBAR"), max_n=max_img)
+        feedback.pushInfo("Gambar peta temuan: %d (folder QC_GAMBAR)" % len(imgs))
+        # ringkasan per standar
+        sev_rank = dict(zip(("ERROR", "WARNING", "UNVERIFIED", "INFO", "PASS"), range(5)))
+        by_no = {}
+        for r in recs:
+            by_no.setdefault(qc_label(r["kind"])[0] or 0, []).append(r)
+        rows = []
+        for k in sorted(judul):
+            ok = std.get(k, (None, ""))[0]
+            lst = by_no.get(k, [])
+            sev = "PASS" if ok is True else ("UNVERIFIED" if ok is None else
+                                             (min((r["sev"] for r in lst), key=lambda v: sev_rank.get(v, 9)) if lst
+                                              else ("WARNING" if k in _report_html.SOFT_STD else "ERROR")))
+            rows.append(("%d. %s" % (k, judul[k]), sev, len(lst), str(std.get(k, (None, "-"))[1])[:180]))
+        if by_no.get(0):
+            lst = by_no[0]
+            rows.append(("Jalur kabel dan tiang", min((r["sev"] for r in lst), key=lambda v: sev_rank.get(v, 9)), len(lst),
+                         "pemeriksaan tambahan jalur & tiang"))
+        word = [r for r in recs if r["kind"] not in noisy]
+        path = outp("LAPORAN_QC.docx")
+        _docx.qc_report(path, "Laporan QC Survei - %s" % cluster.replace("_", " "),
+                        "QC data survei sebelum desain - %s v%s" % (__product__, __version__),
+                        [("Cluster", cluster), ("Kode", kode), ("Dibuat", _dt.datetime.now().strftime("%d-%m-%Y %H:%M")),
+                         ("Jumlah temuan", "%d (gambar peta: %d)" % (len(recs), len(imgs))),
+                         ("Berkas pendukung", "RINGKASAN_QC.html, QC_TEMUAN.shp/.kmz, folder QC_GAMBAR")],
+                        rows, word, {k: v[0] for k, v in imgs.items()},
+                        footer="%s v%s - hasil QC adalah alat bantu; keputusan tetap pada desainer dan reviewer" % (
+                            __product__, __version__))
+        feedback.pushInfo("Laporan Word: %s" % path)
+        return os.path.basename(path), {k: _snap.data_uri(v[0]) for k, v in imgs.items()}
+
     def processAlgorithm(self, parameters, context, feedback):
         outdir = self.parameterAsFile(parameters, self.OUTDIR, context)
         if not outdir or not os.path.isdir(outdir):
@@ -2657,16 +2820,14 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         # status review (Navigator) dari run sebelumnya dipertahankan: kunci = kode + lokasi (~1 m)
         old_rev = {}
         if os.path.exists(qc_map):
+            # dibaca langsung dari .dbf (bukan lewat layer OGR): kumpulan koneksi OGR QGIS bisa menahan file sehingga
+            # QC_TEMUAN lama tidak bisa dihapus/ditulis ulang saat alat dijalankan dua kali dalam satu sesi
             try:
-                ol = QgsVectorLayer(qc_map, "old", "ogr")
-                nms = [f.name() for f in ol.fields()]
-                if ol.isValid() and "review" in nms:
-                    for f in ol.getFeatures():
-                        rv = f["review"]
-                        if rv and str(rv) not in ("OPEN", "NULL"):
-                            old_rev["%s|%.5f,%.5f" % (f["kode"], f["lon"], f["lat"])] = (
-                                str(rv), str(f["catatan"] or "") if "catatan" in nms else "")
-                del ol
+                for f in read_dbf(os.path.splitext(qc_map)[0] + ".dbf"):
+                    rv = f.get("review")
+                    if rv and str(rv) not in ("OPEN", "NULL"):
+                        old_rev["%s|%.5f,%.5f" % (f.get("kode"), float(f.get("lon") or 0), float(f.get("lat") or 0))] = (
+                            str(rv), str(f.get("catatan") or ""))
             except Exception:
                 old_rev = {}
         for old_ in [outp("QC_TEMUAN.kmz"), outp("QC_TEMUAN_PETA.gpkg")] + [
@@ -2684,9 +2845,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     _log.note(_e)
         if not qc:
             return None, []
-        items = [qc_item(it) for it in qc]
-        order = sorted(range(len(items)), key=lambda i_: (_qc.SEV_RANK.get(qc_severity(items[i_][1]), 9),
-                                                         qc_label(items[i_][1])[0] or 99, qc_slug(items[i_][1])))
+        items, order = qc_order(qc)
         FIELDS = ("&field=no:integer&field=status:string(10)&field=severity:string(10)&field=standar:string(4)"
                   "&field=jenis:string(80)&field=keterangan:string(254)&field=nilai:double(12,2)&field=batas:double(12,2)"
                   "&field=dasar:string(160)&field=dasar_src:string(20)&field=kode:string(60)&field=finding_id:string(24)"
@@ -2705,7 +2864,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             f.setAttributes([n_, qc_status(kind), qc_severity(kind), str(no) if no else "", lab,
                              _short(ket, 254), float(val) if val is not None else None,
                              float(lim) if lim is not None else None, _short(qc_source(kind), 160), qc_dasar(kind), kind,
-                             "%s-%04d" % (re.sub(r"[^A-Z0-9]", "", kode.upper())[:12], n_), pid, _qc.RULE_VERSION,
+                             "F-%04d" % n_, pid, _qc.RULE_VERSION,
                              rv[0] if rv else "OPEN", rv[1][:200] if rv else "",
                              round(p.x(), 7), round(p.y(), 7)])
             f.setGeometry(QgsGeometry.fromPolylineXY(list(pts)) if as_line else QgsGeometry.fromPointXY(p))
@@ -2836,6 +2995,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             span_max = float(qcp("span_max_m"))
         sag_ratio = float(qcp("sag_pct", 2.0)) / 100.0
         clear_road = float(qcp("clear_road_m", CLEAR_ROAD))
+        clear_fail = min(clear_road, float(qcp("clear_road_fail_m", 4.7)))
+        embed_frac = float(qcp("pole_embed_frac", 1.0 / 6.0))
         span_reg = float(qcp("span_reg_m", SPAN_REG))
 
         # Penamaan: per wilayah (default) -> INPUT_<KODE>/<KODE>_HP.shp ; SOP -> INPUT/HP.shp
@@ -3200,7 +3361,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         touched = set()
         edges = []        # (simpul_a, simpul_b, panjang) untuk analisa efisiensi tiang & ujung jalur
         seg_list = []     # (simpul_a, simpul_b, panjang, titik_a, titik_b) untuk rentang tiang ke tiang
-        clear_n = 0
+        clear_n = clear_rev = 0
         for n, f in enumerate(ex.getFeatures(), 1):
             g = f.geometry()
             if g.isEmpty():
@@ -3325,14 +3486,20 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             if all(hs) and max(hs) <= 6.0:
                 n_low6 += 1      # tiang 6 m memang untuk gang (kabel < 5 m): diringkas, tidak ditandai per rentang
             elif all(hs):
-                clr = min(attach_height(h) for h in hs) - sag_ratio * L
-                if clr < clear_road:
+                # pita: >= ruang bebas jalan = lolos; antara batas gagal (NESC 232-1: 4,7 m) dan ruang bebas = tinjau
+                # (hanya diringkas); < batas gagal = INFO per rentang. Data jalan tidak tersedia -> tidak diketahui
+                # apakah bentang melintang jalan, sehingga tingkatnya INFO (catatan), bukan pelanggaran.
+                clr = min(attach_height(h, embed_frac) for h in hs) - sag_ratio * L
+                if clear_fail <= clr < clear_road:
+                    clear_rev += 1
+                elif clr < clear_fail:
                     clear_n += 1
                     qc.append((mid, "INFO_KABEL_RENDAH",
-                               "%s: tengah bentang %.0f m (tiang %s m, lendutan %.0f%%) kabel +-%.2f m < %.1f m (%s): "
-                               "aman untuk gang, bukan melintang jalan raya; pakai tiang 9 m untuk crossing" % (
-                                   pn, L, "/".join("%g" % h for h in hs), sag_ratio * 100, clr, clear_road,
-                                   "Perwal" if clear_road > 5 else "Permen PU 20/2010"), pts, round(clr, 2), clear_road))
+                               "%s: bentang %.0f m (tiang %s m, lendutan %.1f%%): kabel di tengah bentang +-%.1f m dari tanah "
+                               "(< %.1f m). Aman di sepanjang tepi jalan/gang; bila melintang jalan pakai tiang 9 m "
+                               "atau perpendek bentang" % (
+                                   pn, L, "/".join("%g" % h for h in hs), sag_ratio * 100, clr, clear_fail),
+                               pts, round(clr, 2), clear_fail))
         rep.append("")
         rep.append("RENTANG TIANG KE TIANG (sepanjang jalur, termasuk belokan tanpa tiang)")
         rep.append("  Rentang dinilai    : NP-NP%s; EP-EP tidak dinilai (%d rentang, tiang pihak lain)"
@@ -3340,9 +3507,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         rep.append("  > %.0f m (CEK)       : %d" % (span_max, long_n))
         rep.append("  %.0f-%.0f m (WARNING regulasi daerah %.0f m): %d" % (span_reg, span_max, span_reg, n_reg))
         if n_low6:
-            rep.append("  Info: %d rentang antar tiang 6 m -> kabel tengah bentang < %.1f m (tinggi klem +-4,5 m): hanya untuk "
-                       "gang/jalan kecil; crossing jalan raya pakai tiang 7-9 m (Permen PU 20/2010, praktik operator)"
-                       % (n_low6, clear_road))
+            rep.append("  Info: %d rentang antar tiang 6 m -> kabel tengah bentang < %.1f m (tinggi klem +-%.1f m): hanya untuk "
+                       "gang/jalan kecil; crossing jalan raya pakai tiang 9 m (Permen PU 20/2010; Perwal Pekalongan 34/2025). "
+                       "Tiang 6 m di luar daftar tinggi tiang 7/8/9 m pedoman infrastruktur bersama Kominfo: pastikan disetujui pemda"
+                       % (n_low6, clear_road, attach_height(6.0, embed_frac)))
 
         idle = [(p, nm_) for p, nm_ in zip(poles, names) if (round(p.x(), 7), round(p.y(), 7)) not in touched]
         for p, nm_ in idle:
@@ -3431,7 +3599,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                    "tidak dihitung)" % (free_n, n_end_free, b_warn, n_bend, n_junc))
         rep.append("  Tiang nganggur              : %d" % len(idle))
         rep.append("  Info: NP bisa dihapus (lurus): %d   ujung jalur tanpa HP > 100 m/2 span: %d" % (len(removable), loops))
-        rep.append("  Info: kabel tengah bentang < %.1f m (tinggi tiang + lendutan %.0f%%): %d" % (clear_road, sag_ratio * 100, clear_n))
+        rep.append("  Info: kabel tengah bentang < %.1f m (tanam 1/%.0f tinggi tiang, lendutan %.1f%%): %d; %.1f-%.1f m (tinjau bila "
+                   "melintang jalan): %d" % (clear_fail, 1.0 / embed_frac if embed_frac else 0, sag_ratio * 100, clear_n,
+                                             clear_fail, clear_road, clear_rev))
         rep.append("  Dasar aturan: [R1]-[R5] di DASAR_ATURAN.md (folder plugin)")
         rep.append("  HP > %.0f m dari tiang      : %d" % (hp_max, far))
         rep.append("  HP duplikat (koordinat/ID)  : %d / %d" % (dup, dup_id))
@@ -4233,7 +4403,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         for k in range(1, 10):
             ok, txt = std.get(k, (None, "-"))
             summ.append("  %d. %-30s [%s] %s" % (k, judul[k], {True: "OK", False: "CEK", None: "--"}[ok], txt))
-        summ.append("  Kabel rendah tengah bentang (info): %d" % clear_n)
+        summ.append("  Kabel rendah tengah bentang (info): %d < %.1f m; %d antara %.1f-%.1f m (tinjau bila melintang jalan)"
+                    % (clear_n, clear_fail, clear_rev, clear_fail, clear_road))
         summ.append("  Efisiensi (info): NP bisa dihapus %d, ujung jalur tanpa HP %d | Profil %s (%s)" % (
             len(removable), loops, opt["prof"]["key"], opt["prof"]["src"]))
         if ignored:
@@ -4277,6 +4448,15 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         feedback.pushInfo("")
         feedback.pushInfo("Laporan disimpan di: %s" % lap)
         lap_html = outp("RINGKASAN_QC.html")
+        fid_map, snaps_uri, word_name = {}, {}, None
+        try:
+            fid_map = qc_fid_map(qc)
+            feedback.setProgressText("Gambar peta temuan dan laporan Word")
+            word_name, snaps_uri = self._qc_word(qc, outp, inp, kode, cluster_label(outdir, hpdb), std, judul, poles, names,
+                                                 kinds, locals().get("hp_xy") or [], segs, own_bnd,
+                                                 [f["poly"] for f in (locals().get("own_f") or [])], feedback)
+        except Exception as e:
+            feedback.reportError("Gambar temuan / laporan Word tidak dibuat: %s" % e, fatalError=False)
         try:
             _report_html.build(
                 lap_html,
@@ -4286,6 +4466,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                  "profile": "%s (%s)" % (opt["prof"]["name"], opt["prof"]["src"]),
                  "ref_dir": funnel_dir, "refs": refs, "qc_counts": qc_counts(qc), "qc_by_std": qc_by_std(qc),
                  "qc_profile_id": qprof.get("profile_id"), "rule_version": qprof.get("rule_version"),
+                 "fid_map": fid_map, "snaps": snaps_uri, "word": word_name,
                  "qc_params": [(k, e.get("v"), e.get("unit"), _qc.DASAR_LABEL.get(e.get("dasar"), e.get("dasar")),
                                 e.get("sumber"), e.get("status")) for k, e in qprof["params"].items()
                                if k in ("span_max_m", "span_reg_m", "hp_pole_max_m", "clear_road_m", "sag_pct", "dup_near_m",

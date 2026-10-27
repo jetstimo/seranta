@@ -1,5 +1,24 @@
 # Changelog
 
+## 3.5.2 – laporan interaktif, gambar temuan dan laporan Word
+- Setiap temuan punya ID tetap (F-0001 di alat 1, ID temuan di alat 4) yang sama di HTML, Word, layer temuan dan Navigator QC.
+- Gambar peta per temuan (sorotan geometri, label tiang/perangkat, skala, arah utara; tanpa peta dasar/internet) di
+  folder `QC_GAMBAR`, tertanam di HTML dan Word.
+- Laporan Word (`<KODE>_LAPORAN_QC.docx`, `QC_APD_LAPORAN.docx`): ringkasan per aturan/standar, lalu satu bagian per temuan
+  (arti, tindakan, nilai vs batas, lokasi, dasar aturan, kolom catatan reviewer, gambar peta).
+- Laporan HTML bergaya sistem desain perusahaan (netral merek, huruf Inter, warna kontras WCAG AA, mode gelap): ubin KPI,
+  tautan langsung `#F-0001`, pintasan keyboard (j/k/x/g/o/?), status "sudah dicek" per temuan + rekap review CSV, gambar
+  bisa diperbesar, tombol unduh Word.
+- Navigator QC: tombol "Salin gambar" (tempel langsung di Word) dan "Laporan Word" untuk temuan yang tampil (gambar dari
+  peta QGIS saat itu).
+- Tinggi kabel tengah bentang: tanam tiang 1/6 panjang (standar konstruksi jaringan distribusi nasional), lendutan desain
+  1,5 %, pita tinjau 4,7–5 m (NESC 232-1) hanya diringkas, catatan per rentang hanya bila < 4,7 m.
+- Label bentang dan tinggi kabel tidak lagi menyatu (bentang di atas garis, tinggi kabel di bawah garis putus-putus).
+- Alat 1 yang dijalankan dua kali dalam satu sesi QGIS tidak lagi gagal menulis ulang QC_TEMUAN (status review lama
+  dibaca langsung dari .dbf, tanpa mengunci file).
+- Standar 7 (colo FDT) yang tidak terpenuhi kini "perlu ditinjau" (keputusan perencanaan), bukan "wajib diperbaiki".
+- 55 uji otomatis.
+
 ## 3.5.1 – toleransi berbasis acuan (lolos / tinjau / gagal)
 - Alat 1: HP yang hanya beberapa meter di luar garis BOUNDARY KMZ dicatat INFO "di tepi BOUNDARY" (toleransi GPS ponsel,
   bawaan 10 m; GPS.gov 4,9 m langit terbuka, Merry & Bettinger PLOS ONE 2019 7–13 m urban). Lebih jauh dari itu tetap
