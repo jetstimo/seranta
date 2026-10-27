@@ -4455,8 +4455,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         else:
             std[8] = (None, "dilewati (pilihan pengguna) - tetap pastikan BAKP sudah dicek")
         lmax = max([x[0] for x in long_list] or [0])
-        n_np_spans = sum(1 for ka, kb, L, pts in spans if ka[0] == "P" and kb[0] == "P"
-                         and not (kinds[ka[1]] == "existing" and kinds[kb[1]] == "existing"))
+        n_np_spans = len({(frozenset((ka, kb)), int(round(L / 2.0))) for ka, kb, L, pts in spans
+                          if ka[0] == "P" and kb[0] == "P"
+                          and not (kinds[ka[1]] == "existing" and kinds[kb[1]] == "existing")})   # tanpa rentang ganda
         std[9] = (long_n == 0, ("semua %d rentang dengan NP <= %.0f m sepanjang jalur (%d rentang %.0f-%.0f m: WARNING regulasi "
                                 "daerah 50 m; EP-EP tidak dinilai)" % (n_np_spans, span_max, n_reg, SPAN_REG, span_max))
                   if not long_n else
