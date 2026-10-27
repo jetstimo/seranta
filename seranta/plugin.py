@@ -23,10 +23,10 @@ HERE = os.path.dirname(__file__)
 TOOLS = [
     ("seranta:buat_input_desain_apd", "1. Siapkan Input Desain Otomatis + QC Survei",
      "HPDB + KMZ survei -> input desain otomatis (HP, tiang, jalur) dan QC 9 standar, satu klik, bisa banyak cluster"),
-    ("seranta:pasca_desain_fdt_fat_code", "2. Pasca-Desain: Kode FDT-FAT, Tabel Closure + QC",
-     "Ekspor desain otomatis -> tabel kode FDT-FAT, tabel core closure berwarna, dan QC pasca-desain"),
-    ("seranta:alokasi_fdt_fat", "3. Alokasi FDT & FAT (estimasi kebutuhan)",
+    ("seranta:alokasi_fdt_fat", "2. Alokasi FDT & FAT (estimasi kebutuhan)",
      "Jumlah FAT, pemakaian FDT existing (COLO) dalam radius, usulan FDT baru, dan link budget"),
+    ("seranta:pasca_desain_fdt_fat_code", "3. Pasca-Desain: Kode FDT-FAT, Tabel Closure + QC",
+     "Ekspor desain otomatis -> tabel kode FDT-FAT, tabel core closure berwarna, dan QC pasca-desain"),
     ("seranta:qc_apd_pasca_desain", "4. QC APD Pasca-Desain (aturan paket APD + kualitas jaringan)",
      "Ekspor desain / KMZ APD -> 22 aturan QC dengan laporan HTML yang menjelaskan setiap temuan"),
 ]

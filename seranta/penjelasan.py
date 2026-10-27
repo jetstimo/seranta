@@ -403,7 +403,7 @@ def tool1_kind_text(kind):
 
 
 # ---------------------------------------------------------------------------------------------
-# Tool 3 - Alokasi FDT/FAT: istilah
+# Tool 2 - Alokasi FDT/FAT: istilah
 # ---------------------------------------------------------------------------------------------
 TOOL3_TERMS = [
     ("FAT minimum", "Jumlah FAT paling sedikit agar semua rumah kebagian port: jumlah HP dibagi kapasitas satu FAT, dibulatkan ke atas."),

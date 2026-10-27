@@ -18,8 +18,8 @@ New versions appear under **Upgradeable**; no ZIP needed.
 | Tool | When | What you get |
 |---|---|---|
 | 1. Siapkan Input Desain Otomatis + QC Survei | before design | homepass layer, pole KMZ, road layer, nine survey standards, `RINGKASAN_QC.html` |
-| 2. Pasca-Desain: Kode FDT-FAT, Tabel Closure + QC | after design | FDT-FAT code table, colour-coded closure tables (KMZ/HTML) |
-| 3. Alokasi FDT & FAT (estimasi kebutuhan) | planning | FAT groups along the route, COLO vs new FDT, link budget, `ALOKASI_FDT.html` |
+| 2. Alokasi FDT & FAT (estimasi kebutuhan) | planning | FAT groups along the route, COLO vs new FDT, link budget, `ALOKASI_FDT.html` |
+| 3. Pasca-Desain: Kode FDT-FAT, Tabel Closure + QC | after design | FDT-FAT code table, colour-coded closure tables (KMZ/HTML) |
 | 4. QC APD Pasca-Desain | before hand-over | 22 rules incl. seven package rules, one layer per rule, `QC_APD.html`, reviewer worklist `QC_APD_TEMUAN.xlsx`, CSV/JSON |
 
 Every HTML report starts with one sentence telling the reader what to do. Each rule explains **what was checked**,

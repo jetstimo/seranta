@@ -123,7 +123,7 @@ html{scroll-behavior:smooth}
     <div>
       <h1>SERANTA</h1>
       <div class="tag">FTTH Design Assistant untuk QGIS · Serat untuk Nusantara</div>
-      <div class="meta">Handbook pengguna · versi plugin 3.5.4 · © 2026 Joseph Edward Timothy Siahaan</div>
+      <div class="meta">Handbook pengguna · versi plugin 3.5.5 · © 2026 Joseph Edward Timothy Siahaan</div>
     </div>
   </div>
 </header>
@@ -139,14 +139,14 @@ html{scroll-behavior:smooth}
 <li><a href="#hasil">Hasil &amp; ke desain otomatis</a></li>
 <li><a href="#standar">9 standar QC</a></li>
 <li><a href="#navigator">Navigator QC (interaktif)</a></li>
-<li><a href="#alat3">Alat 3: Alokasi FDT &amp; FAT</a></li>
+<li><a href="#alat2">Alat 2: Alokasi FDT &amp; FAT</a></li>
 <li><a href="#bakp">Daftar periksa BAKP</a></li>
-<li><a href="#alat2">Alat 2: Pasca-Desain</a></li>
+<li><a href="#alat3">Alat 3: Pasca-Desain</a></li>
 <li><a href="#alat4">Alat 4: QC APD pasca-desain</a></li>
 <li><a href="#keandalan">Keandalan &amp; dasar angka</a></li>
 <li><a href="#laporan">Membaca laporan HTML</a></li>
 <li><a href="#profil">Profil standar organisasi</a></li>
-<li><a href="#baru">Yang baru di 3.5.4</a></li>
+<li><a href="#baru">Yang baru di 3.5.5</a></li>
 <li><a href="#masalah">Masalah umum</a></li>
 <li><a href="#istilah">Istilah</a></li>
 </ol></nav>
@@ -187,8 +187,8 @@ html{scroll-behavior:smooth}
   <div class="tablebox"><table>
     <tr><th>Menu</th><th>Kegunaan</th></tr>
     <tr><td>1. Siapkan Input Desain Otomatis + QC Survei</td><td>Alat utama sebelum desain: membuat input desain otomatis dan memeriksa 9 standar.</td></tr>
-    <tr><td>2. Pasca-Desain: Kode FDT-FAT, Tabel Closure + QC</td><td>Setelah desain selesai: membuat tabel kode FDT-FAT, tabel core closure berwarna, dan QC pasca-desain.</td></tr>
-    <tr><td>3. Alokasi FDT &amp; FAT (estimasi kebutuhan)</td><td>Perkiraan jumlah FAT, pemakaian FDT existing (COLO), dan usulan FDT baru.</td></tr>
+    <tr><td>3. Pasca-Desain: Kode FDT-FAT, Tabel Closure + QC</td><td>Setelah desain selesai: membuat tabel kode FDT-FAT, tabel core closure berwarna, dan QC pasca-desain.</td></tr>
+    <tr><td>2. Alokasi FDT &amp; FAT (estimasi kebutuhan)</td><td>Perkiraan jumlah FAT, pemakaian FDT existing (COLO), dan usulan FDT baru.</td></tr>
     <tr><td>4. QC APD Pasca-Desain</td><td>Memeriksa paket desain final sebelum dikirim, dengan laporan HTML yang menjelaskan setiap temuan.</td></tr>
     <tr><td>Handbook Seranta</td><td>Membuka handbook ini (tanpa internet).</td></tr>
     <tr><td>Tentang dan lisensi</td><td>Versi, pencipta, status integritas file, lisensi.</td></tr>
@@ -212,7 +212,7 @@ html{scroll-behavior:smooth}
     <text x="60" y="122" text-anchor="middle" font-weight="700">Data vendor</text><text class="sm" x="60" y="140" text-anchor="middle">HPDB · KMZ · BAKP</text>
     <text x="270" y="122" text-anchor="middle" font-weight="700">Seranta alat 1</text><text class="sm" x="270" y="140" text-anchor="middle">input + QC 9 standar</text>
     <text x="480" y="122" text-anchor="middle" font-weight="700">desain otomatis</text><text class="sm" x="480" y="140" text-anchor="middle">desain jaringan</text>
-    <text x="690" y="122" text-anchor="middle" font-weight="700">Seranta alat 2</text><text class="sm" x="690" y="140" text-anchor="middle">FAT CODE · closure · QC</text>
+    <text x="690" y="122" text-anchor="middle" font-weight="700">Seranta alat 3</text><text class="sm" x="690" y="140" text-anchor="middle">FAT CODE · closure · QC</text>
     <text x="890" y="122" text-anchor="end" font-weight="700">APD siap kirim</text><text class="sm" x="890" y="140" text-anchor="end">dikirim ke reviewer</text>
   </svg></div>
   <h3>A. Folder cluster (satu folder per cluster)</h3>
@@ -342,7 +342,7 @@ html{scroll-behavior:smooth}
   <h2>Navigator QC: klik temuan, langsung ke lokasinya</h2>
   <ol>
     <li>Setelah alat 1 selesai, panel <b>Navigator QC Seranta</b> terbuka di kanan (atau buka lewat <b>Vector › Seranta › Navigator QC</b> / ikon pin merah di toolbar).</li>
-    <li>Temuan dikelompokkan per kategori dari alat 1 (folder <code>QC</code>), alat 3 (ALOKASI_FDT) dan alat 4 (folder <code>QC_APD</code>); angka di kurung = jumlah temuan. Warna: merah ERROR, oranye WARNING, abu-abu UNVERIFIED, kuning INFO.</li>
+    <li>Temuan dikelompokkan per kategori dari alat 1 (folder <code>QC</code>), alat 2 (ALOKASI_FDT) dan alat 4 (folder <code>QC_APD</code>); angka di kurung = jumlah temuan. Warna: merah ERROR, oranye WARNING, abu-abu UNVERIFIED, kuning INFO.</li>
     <li><b>Klik satu temuan</b>: peta zoom ke lokasinya, fitur dipilih (kuning) dan berkedip. Untuk rentang tiang, garis jalur antar kedua tiang yang ikut disorot.</li>
     <li><b>Berikutnya / Sebelumnya</b> untuk menelusuri temuan satu per satu; centang <b>Sembunyikan INFO</b>; pilih filter <b>tingkat</b> (ERROR/WARNING/UNVERIFIED/INFO) dan <b>review</b> (belum/sudah direview); ketik di kotak cari (mis. <code>H00172</code> atau <code>NP6-145</code>).</li>
     <li><b>Status review</b>: pilih OPEN, VERIFIED (benar masalah), FALSE_POSITIVE (bukan masalah), APPROVED_EXCEPTION (pengecualian disetujui, wajib diisi alasan/bukti dan pemberi persetujuan) atau RESOLVED, isi catatan, lalu <b>Simpan review</b>. Status tersimpan di layer temuan dan <b>tetap ada saat QC dijalankan ulang</b>.</li>
@@ -352,13 +352,13 @@ html{scroll-behavior:smooth}
   <p>Di ringkasan HTML, setiap titik temuan punya tautan <b>📍 lihat</b> yang membuka lokasinya di OpenStreetMap (berguna di HP saat di lapangan).</p>
 </section>
 
-<section id="alat3">
-  <div class="kicker">Alat 3 · sebelum desain</div>
+<section id="alat2">
+  <div class="kicker">Alat 2 · sebelum desain</div>
   <h2>Alokasi FDT &amp; FAT (estimasi)</h2>
   <p class="lead">Menjawab: berapa FAT yang dibutuhkan cluster ini, FDT existing mana (≤ 1 km) yang masih bisa menampungnya, dan berapa FDT baru yang perlu dibuat.</p>
   <ol>
-    <li>Jalankan alat 1 dulu untuk cluster tersebut (alat 3 memakai <code>HP.shp</code> dan <code>POLE_PETA.gpkg</code> di folder INPUT).</li>
-    <li>Buka <b>Vector › Seranta › 3. Alokasi FDT &amp; FAT</b>, pilih folder cluster (atau folder induk untuk banyak cluster), lalu Run.</li>
+    <li>Jalankan alat 1 dulu untuk cluster tersebut (alat 2 memakai <code>HP.shp</code> dan <code>POLE_PETA.gpkg</code> di folder INPUT).</li>
+    <li>Buka <b>Vector › Seranta › 2. Alokasi FDT &amp; FAT</b>, pilih folder cluster (atau folder induk untuk banyak cluster), lalu Run.</li>
   </ol>
   <div class="tablebox"><table>
     <tr><th>Langkah</th><th>Aturan</th><th>Dasar</th></tr>
@@ -371,8 +371,8 @@ html{scroll-behavior:smooth}
     <tr><td>FDT baru</td><td>Sisa FAT ÷ 24 → usulan FDT baru di tiang dekat pusat FAT-nya</td><td>—</td></tr>
     <tr><td>Link budget</td><td>Serat 0,35 dB/km + splitter FDT + splitter FAT 1:8 + 4 konektor × 0,5 + 10 splice × 0,1 + margin 3 dB ≤ kelas OLT (B+ 28 dB / C+ 32 dB). Splitter dihitung <b>worst-case</b>: 1:4 7,7 dB, 1:8 11,2 dB (nilai maks GR-1209; tipikal industri 7,25 / 10,38 dB).</td><td>ITU-T G.984.2; GR-1209</td></tr>
   </table></div>
-  <p>Hasil di <code>INPUT…/ALOKASI_FDT/</code>: <code>FAT_ESTIMASI.shp</code> (FAT, jumlah HP, FDT tujuan, HP terjauh, sisa budget), <code>HP_PER_FAT.shp</code> (HP berwarna per FDT), <code>GARIS_FAT_FDT.shp</code>, <code>FDT_ALOKASI.shp</code> (FAT existing, dipesan, cluster ini, sisa slot, status) dan <code>ALOKASI_FDT.html</code>. Beda dengan standar 7 alat 1: standar 7 mencari <b>satu</b> FDT untuk seluruh cluster, alat 3 boleh membagi FAT ke beberapa FDT.</p>
-  <div class="note">Hasil alat 3 adalah <b>estimasi awal</b> untuk keputusan colo / FDT baru. Kode FAT dan desain final tetap dari desain otomatis (alat 2).</div>
+  <p>Hasil di <code>INPUT…/ALOKASI_FDT/</code>: <code>FAT_ESTIMASI.shp</code> (FAT, jumlah HP, FDT tujuan, HP terjauh, sisa budget), <code>HP_PER_FAT.shp</code> (HP berwarna per FDT), <code>GARIS_FAT_FDT.shp</code>, <code>FDT_ALOKASI.shp</code> (FAT existing, dipesan, cluster ini, sisa slot, status) dan <code>ALOKASI_FDT.html</code>. Beda dengan standar 7 alat 1: standar 7 mencari <b>satu</b> FDT untuk seluruh cluster, alat 2 boleh membagi FAT ke beberapa FDT.</p>
+  <div class="note">Hasil alat 2 adalah <b>estimasi awal</b> untuk keputusan colo / FDT baru. Kode FAT dan desain final tetap dari desain otomatis (alat 3).</div>
 </section>
 
 <section id="bakp">
@@ -393,12 +393,12 @@ html{scroll-behavior:smooth}
   <div class="note"><b>Deteksi otomatis tanpa internet:</b> gambar stempel/tanda tangan yang sama ditempel berulang di beberapa halaman, atau stempel berwarna di atas scan hitam-putih, ditandai <span class="pill p-bad">CEK</span>. Minta BAKP dengan tanda tangan dan stempel basah.</div>
 </section>
 
-<section id="alat2">
-  <div class="kicker">Alat 2 · setelah desain</div>
+<section id="alat3">
+  <div class="kicker">Alat 3 · setelah desain</div>
   <h2>Pasca-Desain</h2>
-  <p class="lead">Setelah desain di desain otomatis selesai dan di-export, buka <b>Vector → Seranta → 2. Pasca-Desain</b>.</p>
-  <div class="dlg" role="img" aria-label="Tiruan dialog alat 2 dengan nomor isian">
-    <div class="dlg-bar"><img src="logo.png" alt="">Seranta - 2. Pasca-Desain: FDT FAT CODE + Tabel Closure + QC APD</div>
+  <p class="lead">Setelah desain di desain otomatis selesai dan di-export, buka <b>Vector → Seranta → 3. Pasca-Desain</b>.</p>
+  <div class="dlg" role="img" aria-label="Tiruan dialog alat 3 dengan nomor isian">
+    <div class="dlg-bar"><img src="logo.png" alt="">Seranta - 3. Pasca-Desain: FDT FAT CODE + Tabel Closure + QC APD</div>
     <div class="dlg-tabs"><span>Parameters</span><span>Log</span></div>
     <div class="dlg-body"><div class="dlg-form">
       <div class="fld"><span class="badge">1</span><label>Folder output desain otomatis (berisi net_nodes.shp &amp; splice plan .xlsx)</label><div class="inp"><div>D:\desain otomatis\PLG1-KNI01-H05\export</div><b>…</b></div></div>
@@ -407,7 +407,7 @@ html{scroll-behavior:smooth}
       <div class="fld"><span class="badge">4</span><label>Opsional: KMZ tiang / KMZ cluster (cek FAT berada di tiang)</label><div class="inp"><div></div><b>…</b></div></div>
       <div class="fld"><span class="badge">5</span><label>Opsional: keterangan COLO</label><div class="inp"><div></div></div></div>
       <div class="fld"><span class="badge">6</span><div class="chk"><i>✓</i>Buka laporan otomatis</div></div>
-    </div><div class="dlg-help"><strong>2. Pasca-Desain</strong><br>Pilih folder output desain otomatis, isi kode FDT bila perlu, lalu Run. Hasil di HASIL_PASCA_DESAIN.</div></div>
+    </div><div class="dlg-help"><strong>3. Pasca-Desain</strong><br>Pilih folder output desain otomatis, isi kode FDT bila perlu, lalu Run. Hasil di HASIL_PASCA_DESAIN.</div></div>
     <div class="dlg-foot"><span class="run">Run</span><span>Close</span></div>
   </div>
   <div class="tablebox"><table>
@@ -555,19 +555,22 @@ html{scroll-behavior:smooth}
   </ul>
   <h3>Hasil uji langsung di QGIS 3.40 (TES PLUGIN, Oktober 2026)</h3>
   <div class="tablebox"><table>
-    <tr><th>Cluster</th><th>Data</th><th>Temuan alat 1 yang terbukti benar</th><th>Alat 3</th></tr>
+    <tr><th>Cluster</th><th>Data</th><th>Temuan alat 1 yang terbukti benar</th><th>Alat 2</th></tr>
     <tr><td><b>TES 1</b> Banda Aceh, Lambaro Skep Jl. Syiah Kuala</td><td>607 HP (474 di folder HP + 133 titik foto bukti), 142 tiang</td><td>607 HP melebihi kapasitas satu FDT (384 HP), jadi perlu minimal 2 FDT; 2 HP di Funnel aktif cluster lain; 14 rentang 50–60 m (WARNING regulasi daerah)</td><td>47 FAT (minimum teoretis 38, pembanding desain nyata ±42), 4 FDT existing (38 FAT) + 1 FDT baru (9 FAT), semua HP ≤ 120 m sepanjang jalur, sisa link budget ≥ 1 dB (B+)</td></tr>
     <tr><td><b>TES 2</b> Palembang, 3 Ilir RW 004</td><td>190 HP, 27 tiang (KMZ tanpa folder)</td><td>Sheet Pole di HPDB tertulis Majalengka/Jawa Barat (salah salin vendor; sheet HP benar); 18 HP di luar Funnel; colo ke PLG1-TIR05-H01 219 m, sisa 7 splitter</td><td>12 FAT (= minimum 12), semuanya ke satu FDT existing</td></tr>
     <tr><td><b>TES 3</b> Jambi, Perumahan Griya Assalam Extension</td><td>101 HP, 14 tiang</td><td>Kecamatan HPDB "Kota Baru", FINDIM "Alam Barajo" (kecamatan hasil pemekaran); stempel BAKP yang sama ditempel digital 4 kali; rentang EP-01–NP-01 60,2 m (lebih 0,2 m, di bawah akurasi GPS, perlu ukur ulang); FDT JMB1-MAI01-H04 yang dipakai desain ini akan memakai 13 dari 12 splitter 1:4</td><td>7 FAT (= minimum 7)</td></tr>
     <tr><td><b>Alat 4</b>, dataset golden</td><td>APD sintetis di atas geometri strand TES 2</td><td colspan="2">15 dari 15 cacat yang disisipkan ditemukan; status keseluruhan ERROR; slack dan crossing UNVERIFIED (data tidak ada), bukan PASS</td></tr>
   </table></div>
-  <p>Waktu proses di laptop uji: alat 1 1,8–3,3 detik per cluster, alat 3 0,2–0,9 detik, alat 4 1 detik. Zoom to layer berfungsi pada semua layer alokasi, termasuk saat alat 3 dijalankan ulang dengan layer lama masih terbuka.</p>
+  <p>Waktu proses di laptop uji: alat 1 1,8–3,3 detik per cluster, alat 2 0,2–0,9 detik, alat 4 1 detik. Zoom to layer berfungsi pada semua layer alokasi, termasuk saat alat 2 dijalankan ulang dengan layer lama masih terbuka.</p>
   <div class="note">Hasil QC adalah alat bantu. Keputusan desain dan pengecualian tetap berada pada desainer dan reviewer. Parameter berstatus NOT_APPROVED perlu disahkan pemilik standar sebelum dijadikan dasar penolakan desain.</div>
 </section>
 
 <section id="baru">
   <div class="kicker">Perbandingan versi</div>
-  <h2>Yang baru di 3.5.4 dan 3.5.3: hasil QC lebih tepat dan jelas</h2>
+  <h2>Yang baru di 3.5.5, 3.5.4 dan 3.5.3: hasil QC lebih tepat dan jelas</h2>
+  <p><b>3.5.5</b>: nomor menu disamakan dengan urutan kerja. <b>1</b> Siapkan input + QC survei &rarr; <b>2</b> Alokasi FDT &amp; FAT
+  (sebelum desain) &rarr; desain otomatis &rarr; <b>3</b> Pasca-desain (kode FDT-FAT) &rarr; <b>4</b> QC APD. Nama algoritma di
+  Processing (ID) tidak berubah, jadi skrip/model lama tetap jalan.</p>
   <p><b>3.5.4</b>: (1) lencana aplikasi pemindai ("Dipindai dengan CamScanner") yang tertanam di setiap halaman BAKP tidak lagi
   dibaca sebagai "stempel/tanda tangan ditempel digital"; (2) rentang tiang yang tergambar dua kali karena dua garis
   jalur bertumpuk (mis. jalur utama + garis "Penanda") dinilai sekali saja, sehingga temuan bentang 50&ndash;60 m dan kabel
@@ -604,7 +607,7 @@ html{scroll-behavior:smooth}
     <tr><td>HP di luar BOUNDARY KMZ (alat 1)</td><td>Meleset 0,5 m pun "wajib diperbaiki"</td><td>&le; 10 m dari garis = INFO "di tepi"; &gt; 10 m = wajib diperbaiki; jarak tercatat</td><td>GPS.gov: GPS ponsel rata-rata 4,9 m langit terbuka; Merry &amp; Bettinger, PLOS ONE 2019: 7–13 m urban</td></tr>
     <tr><td>Double tagging Design Lite (alat 1)</td><td>HP &le; 2 m, tiang &le; 1,5 m</td><td>+ pita tinjau: HP 2–5 m, tiang baru 1,5–10 m (INFO)</td><td>GPS.gov 4,9 m; buffer pencocokan tiang 10 m (Zhang dkk., Sensors 2018)</td></tr>
     <tr><td>Tiang survei tidak dilewati jalur (alat 1)</td><td>Wajib diperbaiki</td><td>WARNING (tinjau)</td><td>Selaras alat 4 (POLE_IDLE = WARNING)</td></tr>
-    <tr><td>Link budget (alat 3)</td><td>Splitter maksimum + konektor 0,5 dB + margin 3 dB</td><td>Vonis: nilai desain 1:4 7,25 / 1:8 10,38 dB, konektor 0,25 dB + margin 3 dB; worst-case = "budget tipis"</td><td>ITU-T G.984.2 (B+ 28 dB / C+ 32 dB); nilai redaman desain operator nasional; GR-1209 (maks)</td></tr>
+    <tr><td>Link budget (alat 2)</td><td>Splitter maksimum + konektor 0,5 dB + margin 3 dB</td><td>Vonis: nilai desain 1:4 7,25 / 1:8 10,38 dB, konektor 0,25 dB + margin 3 dB; worst-case = "budget tipis"</td><td>ITU-T G.984.2 (B+ 28 dB / C+ 32 dB); nilai redaman desain operator nasional; GR-1209 (maks)</td></tr>
     <tr><td>Slack kabel (alat 4)</td><td>Semua kabel, termasuk colo/existing</td><td>Hanya kabel baru</td><td>Handbook kasus 21 (aturan internal)</td></tr>
     <tr><td>Ekor kabel setelah FAT terakhir (alat 4)</td><td>Selalu ERROR; bentang dihitung sebagai jumlah tiang</td><td>Dalam batas loop 100 m / 2 bentang = WARNING; bentang dihitung benar</td><td>Handbook kasus 1 dan 34</td></tr>
     <tr><td>Grouping FDT (QC-01)</td><td>FDT sendiri yang sudah tercatat di Design Lite terbaru dianggap "kelompok dipakai di tempat lain"</td><td>FDT yang sama di lokasi yang sama (dan kode sendiri di rekap) tidak dihitung</td><td>Koreksi logika</td></tr>
@@ -639,15 +642,15 @@ html{scroll-behavior:smooth}
   <h3>Sebelumnya: 3.3.0 dibanding 3.2.2</h3>
   <div class="tablebox"><table>
     <tr><th>Bidang</th><th>3.2.2</th><th>3.3.0</th></tr>
-    <tr><td>QC setelah desain otomatis</td><td>Alat 2: kode FAT, closure, beberapa cek APD</td><td>Alat 4 baru: 15 aturan untuk 34 kasus Handbook, termasuk Served, Voronoi, ujung kabel, multi-FDT, Feeder–Distribusi, BOM, dan KMZ</td></tr>
+    <tr><td>QC setelah desain otomatis</td><td>Alat 3: kode FAT, closure, beberapa cek APD</td><td>Alat 4 baru: 15 aturan untuk 34 kasus Handbook, termasuk Served, Voronoi, ujung kabel, multi-FDT, Feeder–Distribusi, BOM, dan KMZ</td></tr>
     <tr><td>Hasil QC</td><td>CEK / INFO</td><td>ERROR / WARNING / INFO / UNVERIFIED / PASS; data kurang tidak pernah dihitung lolos</td></tr>
     <tr><td>Dasar angka</td><td>Tertulis di DASAR_ATURAN.md</td><td>Profil JSON: setiap angka punya nilai, dasar, sumber, dan status; dicatat di setiap temuan; bisa ditimpa dari .sdproj</td></tr>
     <tr><td>Rentang 50–60 m</td><td>INFO</td><td>WARNING (regulasi daerah); profil Perwal ketat &gt; 50 m = ERROR</td></tr>
     <tr><td>Lendutan kabel</td><td>1 % (vendor)</td><td>2 % (spesifikasi teknis operator)</td></tr>
     <tr><td>Duplikat / tepi Funnel</td><td>3 m / 10 m</td><td>5 m / 15 m (studi GPS ponsel)</td></tr>
     <tr><td>Titik jalur tanpa tiang</td><td>Setiap ujung ruas ditandai (banyak temuan palsu di titik sudut garis lurus)</td><td>Dinilai per simpul: ujung, belokan ≥ 30°, percabangan; sambungan lurus tidak ditandai</td></tr>
-    <tr><td>Link budget alat 3</td><td>Splitter tipikal 7,25 / 10,38 dB</td><td>Worst-case 7,7 / 11,2 dB (GR-1209)</td></tr>
-    <tr><td>FAT per tiang (alat 3)</td><td>Dua FAT bisa jatuh di satu tiang</td><td>Satu tiang satu FAT</td></tr>
+    <tr><td>Link budget alat 2</td><td>Splitter tipikal 7,25 / 10,38 dB</td><td>Worst-case 7,7 / 11,2 dB (GR-1209)</td></tr>
+    <tr><td>FAT per tiang (alat 2)</td><td>Dua FAT bisa jatuh di satu tiang</td><td>Satu tiang satu FAT</td></tr>
     <tr><td>Zoom to layer alokasi</td><td>Layer lama tidak dilepas, sehingga file setengah tertimpa dan extent salah</td><td>Layer lama dilepas sebelum ditulis ulang</td></tr>
     <tr><td>Input desain otomatis</td><td>HP.shp, POLE.kmz, ROADS.shp</td><td>+ HP.csv dan manifest_input.json (SHA-256, cek siap impor, petunjuk desain otomatis)</td></tr>
     <tr><td>BAKP</td><td>Hanya file bernama BAKP</td><td>Dikenali dari isi/ID cluster (BAKP_UNRECOGNIZED) atau dipilih manual (BAKP_MAPPED); tanpa BAKP = UNVERIFIED</td></tr>
@@ -664,7 +667,7 @@ html{scroll-behavior:smooth}
 <section id="masalah">
   <div class="kicker">Bantuan</div>
   <h2>Masalah umum</h2>
-  <details><summary>Zoom to Layer pada hasil Alokasi FDT tidak menampilkan apa-apa</summary><p>Penyebabnya: layer ALOKASI_FDT dari run sebelumnya masih terbuka saat alat 3 dijalankan ulang, sehingga Windows mengunci file dan shapefile hanya tertimpa sebagian (extent di header tidak cocok dengan isinya). Sejak 3.3.0 alat 3 melepas layer lama sebelum menulis ulang. Untuk proyek lama, hapus grup "… ALOKASI FDT" dari panel Layers lalu jalankan ulang alat 3.</p></details>
+  <details><summary>Zoom to Layer pada hasil Alokasi FDT tidak menampilkan apa-apa</summary><p>Penyebabnya: layer ALOKASI_FDT dari run sebelumnya masih terbuka saat alat 2 dijalankan ulang, sehingga Windows mengunci file dan shapefile hanya tertimpa sebagian (extent di header tidak cocok dengan isinya). Sejak 3.3.0 alat 2 melepas layer lama sebelum menulis ulang. Untuk proyek lama, hapus grup "… ALOKASI FDT" dari panel Layers lalu jalankan ulang alat 2.</p></details>
   <details><summary>BAKP dilaporkan tidak ada padahal file-nya ada</summary><p>Nama file BAKP sering hanya berupa nama jalan (mis. <code>2356732370_Jl. Syiah Kuala.pdf</code>). Seranta 3.3.0 mengenalinya dari ID cluster di nama file dan PDF hasil scan, lalu menandainya <b>UNVERIFIED (kandidat)</b>. Pastikan dokumennya memang BAKP, atau pilih file di isian Advanced <b>File BAKP</b>.</p></details>
   <details><summary>Banyak aturan alat 4 berstatus UNVERIFIED</summary><p>Artinya data pendukung tidak diberikan: BOM, paket Feeder/Distribusi, layer Voronoi, atau atribut SUPID/MAXPPDIST (KMZ hasil copy-paste kadang kehilangan atribut). Pakai export shp desain otomatis langsung dan isi BOM serta paket Feeder agar aturan tersebut bisa diputuskan.</p></details>
   <details><summary>"Tidak ada file HPDB di folder ini maupun di subfoldernya"</summary><p>Nama file harus mengandung kata <b>HPDB</b> dan berformat .xlsx, .xls, atau .csv. Tutup file di aplikasi spreadsheet bila sedang terbuka.</p></details>

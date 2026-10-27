@@ -70,7 +70,7 @@ mis. sudut belok, toleransi snap, dan toleransi FAT ke tiang.
 
 \*Tinggi klem = H − (10 % H + 0,6 m) − 0,3 m. Rumus tanam 10 % + 0,6 m (RUS 1724E-200) memberi hasil yang mirip dengan aturan tanam 1/6 panjang tiang.
 
-## Alat 3 — Alokasi FDT & FAT (estimasi)
+## Alat 2 — Alokasi FDT & FAT (estimasi)
 | Langkah | Nilai | Dasar |
 |---|---|---|
 | FAT minimum | ceil(HP/16); 16 = 2 × 1:8 (ODP-16) | PRAKTIK operator; INTERNAL config 8–16 |
@@ -109,7 +109,7 @@ Dengan feeder 5 km, konfigurasi 1:4 × 1:8 (1:32) menghasilkan ±26,7 dB. Hasil 
 
 Kasus 16 (COLO ke cluster DROP), 24 (jenis tiang vs strand), 26 (alokasi tube), 27 (tiang 9 m di jalan lebar) dan 30
 (tumpang tindih dengan existing) membutuhkan data Macro, splice plan, atau kelas jalan. Tanpa data tersebut kasus
-ini dilaporkan **UNVERIFIED**, bukan lolos. Kasus 23/26 dicek oleh alat 2 dari splice plan.
+ini dilaporkan **UNVERIFIED**, bukan lolos. Kasus 23/26 dicek oleh alat 3 dari splice plan.
 
 ## Batasan
 - Dokumen operator asli tidak tersedia daring. Angka operator diambil dari salinan dan kutipan jurnal, dan nilainya bervariasi (drop 100–200 m).

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Seranta - FTTH Design Assistant - tool 3: FDT & FAT allocation estimate
+Seranta - FTTH Design Assistant - tool 2: FDT & FAT allocation estimate
 =======================================================================
 Copyright (C) 2026 Joseph Edward Timothy Siahaan <edwardtimoo@gmail.com>
 GPL-2.0-or-later (see LICENSE).
@@ -285,7 +285,7 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
         return "alokasi_fdt_fat"
 
     def displayName(self):
-        return self.tr("3. Alokasi FDT & FAT (estimasi kebutuhan)")
+        return self.tr("2. Alokasi FDT & FAT (estimasi kebutuhan)")
 
     def group(self):
         return "Seranta"

@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.5.5 – nomor menu sesuai urutan kerja
+- Menu: 1 Siapkan Input + QC Survei → 2 Alokasi FDT & FAT (sebelum desain) → (desain otomatis) → 3 Pasca-Desain → 4 QC APD.
+- ID algoritma Processing tidak berubah (skrip/model lama tetap jalan); teks bantuan, handbook dan README disesuaikan.
+
 ## 3.5.4 – koreksi hasil tinjauan ulang data nyata
 - BAKP: lencana aplikasi pemindai ("Dipindai dengan CamScanner") yang tertanam kecil di setiap halaman tidak lagi dilaporkan
   sebagai stempel/tanda tangan ditempel digital (sebelumnya positif palsu ERROR pada BAKP Minahasa Roong).

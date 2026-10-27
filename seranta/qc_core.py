@@ -1312,7 +1312,7 @@ def rule_fat_order(net, prof, pr):
     coded = [(f, FAT_CODE_RX.match((f["name"] or "").strip())) for f in fats]
     coded = [(f, m) for f, m in coded if m]
     if not coded:
-        return r.unverify("FAT belum berkode FDT FAT CODE (jalankan alat 2 / isi kode di net_nodes)")
+        return r.unverify("FAT belum berkode FDT FAT CODE (jalankan alat 3 / isi kode di net_nodes)")
     groups, seen = {}, {}
     for f, m in coded:
         key = (norm_code(m.group("fdt")), int(m.group("d")))

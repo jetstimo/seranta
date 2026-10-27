@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.5.4"
+__version__ = "3.5.5"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -2273,7 +2273,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             "&le; 60 m <b>sepanjang jalur</b> (NP-NP &amp; NP-EP; EP-EP tidak dinilai; 50-60 m = info regulasi daerah).</p>"
             "<p><b>Temuan per kategori</b>: folder <code>QC</code> berisi satu shp per jenis temuan (rentang tiang berupa "
             "garis mengikuti jalur). Buka <b>Vector &rsaquo; Seranta &rsaquo; Navigator QC</b> lalu klik temuan untuk langsung "
-            "menuju lokasinya. Setelah itu jalankan <b>3. Alokasi FDT &amp; FAT</b> untuk estimasi FAT (HP/16) dan FDT.</p>"
+            "menuju lokasinya. Setelah itu jalankan <b>2. Alokasi FDT &amp; FAT</b> untuk estimasi FAT (HP/16) dan FDT.</p>"
             "<p>Juga: tinggi kabel tengah bentang, tiang yang bisa dihapus, ujung jalur tanpa HP. Dasar teknis tiap "
             "aturan ada di DASAR_ATURAN.md.</p>"
             "<p>Pengaturan lain (penamaan, batas jarak, colo) ada di bagian <b>Advanced</b>; nilai bawaan sudah "
@@ -4390,7 +4390,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                            % (rec["code"], ", ".join(sorted(findim_ids))))
         elif dl_files:
             std[7] = (False, "tidak ada SATU FDT existing <= %.0f m (%s) dengan sisa splitter & kapasitas HP cukup -> FDT baru, "
-                             "atau bagi ke beberapa FDT (menu 3. Alokasi FDT & FAT)%s"
+                             "atau bagi ke beberapa FDT (menu 2. Alokasi FDT & FAT)%s"
                       % (colo_max, "ke tiang cluster terdekat" if opt.get("colo_basis", 0) == 0 else "estimasi kabel",
                          ("; terdekat: " + "; ".join("%s %.0f m (%s)" % (g["code"], g["d_hp"], g["status"])
                                                     for g in colo_rows[:3])) if colo_rows else

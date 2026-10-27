@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Seranta - FTTH Design Assistant - tool 2: post-design FDT FAT CODE + closure table + APD QC
+Seranta - FTTH Design Assistant - tool 3: post-design FDT FAT CODE + closure table + APD QC
 =================================================================
 Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later (see LICENSE).
 
@@ -224,7 +224,7 @@ class PascaDesain(QgsProcessingAlgorithm):
         return "pasca_desain_fdt_fat_code"
 
     def displayName(self):
-        return "2. Pasca-Desain: Kode FDT-FAT, Tabel Closure + QC"
+        return "3. Pasca-Desain: Kode FDT-FAT, Tabel Closure + QC"
 
     def group(self):
         return "FTTH Design"

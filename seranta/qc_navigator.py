@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # Seranta - FTTH Design Assistant - interactive QC navigator (dock panel)
 # Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later (see LICENSE).
-"""Panel 'Navigator QC Seranta' (spesifikasi 13): satu panel untuk temuan alat 1 (QC strand), alat 3 (alokasi) dan
+"""Panel 'Navigator QC Seranta' (spesifikasi 13): satu panel untuk temuan alat 1 (QC strand), alat 2 (alokasi) dan
 alat 4 (QC APD). Klik temuan -> peta zoom ke lokasinya, fitur dipilih dan berkedip. Filter tingkat (ERROR / WARNING /
 INFO / UNVERIFIED), aturan, lingkup jaringan (Feeder / Distribution) dan status review; status review (OPEN, VERIFIED, FALSE_POSITIVE, APPROVED_EXCEPTION, RESOLVED) +
 catatan disimpan langsung di layer temuan dan dipertahankan saat QC dijalankan ulang; ekspor CSV untuk reviewer."""
