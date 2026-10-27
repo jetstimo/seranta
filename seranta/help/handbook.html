@@ -115,6 +115,84 @@ footer{text-align:center;color:var(--muted);font-size:.9rem;padding:8px 16px 40p
   .dlg-body{grid-template-columns:minmax(0,1fr)}section{padding:20px 18px}}
 @media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
 html{scroll-behavior:smooth}
+/* ===== 3.5.5: lapisan interaktif ===== */
+.dlg{max-width:100%}.dlg-body,.dlg-form,.fld,.inp{min-width:0}.fld label{overflow-wrap:anywhere}
+code{overflow-wrap:anywhere;word-break:break-word}
+.progress{position:fixed;top:0;left:0;height:3px;width:0;background:linear-gradient(90deg,var(--glow),var(--dawn));z-index:50}
+.tocbar{display:grid;gap:8px;margin:10px 0 12px}
+.tocbar input{width:100%;font:inherit;font-size:.92rem;padding:7px 10px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink)}
+.tocbar .row{display:flex;gap:6px}
+.btn{font:600 .85rem var(--f-display);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:9px;padding:6px 11px;cursor:pointer}
+.btn:hover,.btn:focus-visible{border-color:var(--teal);outline:none}
+.btn.on{background:var(--sea);color:#fff;border-color:var(--sea)}
+nav.toc a.active{background:var(--surface);box-shadow:inset 3px 0 0 var(--dawn);font-weight:600}
+section.hide{display:none}
+mark.hl{background:var(--dawn-soft);color:inherit;border-radius:3px;outline:1px solid var(--dawn)}
+/* peta alur: kabel serat dengan 5 stasiun */
+.route{position:relative;margin-top:16px;overflow-x:auto}
+.route svg{min-width:760px;width:100%;height:auto;display:block}
+.route .fib{fill:none;stroke:var(--line);stroke-width:10;stroke-linecap:round}
+.route .lit{fill:none;stroke:var(--glow);stroke-width:4;stroke-linecap:round;stroke-dasharray:14 26;animation:flow 2.4s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-80}}
+@media (prefers-reduced-motion:reduce){.route .lit{animation:none}}
+.st{cursor:pointer}
+.st circle{fill:var(--surface);stroke:var(--teal);stroke-width:4;transition:all .2s}
+.st.ext circle{stroke:var(--muted);stroke-dasharray:5 4}
+.st:hover circle,.st:focus circle{stroke:var(--dawn)}
+.st.sel circle{fill:var(--dawn);stroke:var(--dawn)}
+.st text{font-family:var(--f-display);fill:var(--ink);text-anchor:middle}
+.st .no{font-weight:700;font-size:20px}
+.st.sel .no{fill:#1B1206}
+.st .nm{font-size:13px;font-weight:600}
+.st .sb{font-size:11.5px;fill:var(--muted);font-family:var(--f-body)}
+.st:focus{outline:none}
+.panel{border:1px solid var(--line);border-radius:14px;background:var(--bg);padding:16px 18px;margin-top:12px;display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px 22px}
+.panel h3{margin:0;grid-column:1/-1;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.panel h4{font-family:var(--f-display);font-size:.78rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin:0 0 4px}
+.panel ul{margin:0;padding-left:18px}
+.panel .acts{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+.chk2{list-style:none;padding:0!important;display:grid;gap:5px}
+.chk2 label{display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+.chk2 input{margin-top:5px;accent-color:var(--teal)}
+.chk2 input:checked+span{color:var(--muted);text-decoration:line-through}
+.meter{height:8px;border-radius:99px;background:var(--line);overflow:hidden;grid-column:1/-1}
+.meter i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--teal),var(--glow));transition:width .3s}
+/* pemandu */
+.ask{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.ask .btn{font-weight:500}
+.answer{margin-top:12px;border-radius:12px;padding:14px 16px;background:var(--dawn-soft);border-left:4px solid var(--dawn);display:none}
+.answer.show{display:block}
+.answer b.big{font-family:var(--f-display);font-size:1.15rem}
+/* kamus */
+.kbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;align-items:center}
+.kbar input{flex:1;min-width:200px;font:inherit;padding:8px 12px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink)}
+.kcount{color:var(--muted);font-size:.9rem}
+.klist{display:grid;gap:8px;margin-top:12px;max-height:560px;overflow:auto;padding-right:4px}
+.kitem{border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.kitem summary{list-style:none;display:flex;gap:10px;align-items:center;padding:10px 14px;cursor:pointer}
+.kitem summary::-webkit-details-marker{display:none}
+.kitem code{font-size:.78rem}
+.kitem .kt{font-weight:600}
+.kitem .kb{padding:0 14px 12px;display:grid;gap:6px}
+.kitem .kb p{margin:0}
+.kitem .tag{margin-left:auto;font:700 .72rem var(--f-display);color:var(--teal);white-space:nowrap}
+/* kuis */
+.quiz{display:grid;gap:12px;margin-top:12px}
+.q{border:1px solid var(--line);border-radius:12px;padding:12px 14px;background:var(--bg)}
+.q p{margin:0 0 8px;font-weight:600}
+.q .opts{display:grid;gap:6px}
+.q button{text-align:left;font:inherit;padding:8px 12px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink);cursor:pointer}
+.q button.ok{border-color:var(--ok);background:var(--ok-bg)}
+.q button.no{border-color:var(--bad);background:var(--bad-bg)}
+.q .why{display:none;margin-top:8px;color:var(--muted);font-size:.95rem}
+.q.done .why{display:block}
+.score{font-family:var(--f-display);font-weight:700}
+.totop{position:fixed;right:18px;bottom:18px;width:44px;height:44px;border-radius:50%;border:0;background:var(--sea);color:#fff;font-size:20px;
+  cursor:pointer;box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:opacity .2s}
+.totop.show{opacity:1;pointer-events:auto}
+@media (max-width:860px){.panel{grid-template-columns:minmax(0,1fr)}}
+@media print{.progress,.tocbar,.totop,nav.toc{display:none}.wrap{grid-template-columns:1fr}section.hide{display:block}}
 </style>
 
 <header class="cover">
@@ -131,6 +209,8 @@ html{scroll-behavior:smooth}
 <div class="wrap">
 <nav class="toc" aria-label="Daftar isi"><b>Isi handbook</b>
 <ol>
+<li><a href="#alur">Peta perjalanan (mulai di sini)</a></li>
+<li><a href="#pemandu">Pemandu langkah</a></li>
 <li><a href="#tentang">Tentang Seranta</a></li>
 <li><a href="#pasang">Pasang &amp; update</a></li>
 <li><a href="#data">Siapkan data</a></li>
@@ -148,10 +228,47 @@ html{scroll-behavior:smooth}
 <li><a href="#profil">Profil standar organisasi</a></li>
 <li><a href="#baru">Yang baru di 3.5.5</a></li>
 <li><a href="#masalah">Masalah umum</a></li>
+<li><a href="#kamus">Kamus temuan</a></li>
+<li><a href="#kuis">Uji pemahaman</a></li>
 <li><a href="#istilah">Istilah</a></li>
 </ol></nav>
 
 <main>
+<section id="alur">
+  <div class="kicker">Mulai di sini</div>
+  <h2>Peta perjalanan satu cluster</h2>
+  <p class="lead">Seranta dipakai berurutan seperti cahaya berjalan di serat: <b>Alat 1 → Alat 2 → desain otomatis → Alat 3 → Alat 4</b>.
+  Klik setiap titik untuk melihat kapan dipakai, data yang dibutuhkan, hasilnya, dan daftar periksa yang bisa Anda centang.</p>
+  <div class="route" role="tablist" aria-label="Urutan alat Seranta">
+    <svg viewBox="0 0 940 190" aria-hidden="false">
+      <path class="fib" d="M70 80 C 160 20, 200 140, 280 80 S 420 20, 470 80 S 600 140, 660 80 S 800 20, 870 80"/>
+      <path class="lit" d="M70 80 C 160 20, 200 140, 280 80 S 420 20, 470 80 S 600 140, 660 80 S 800 20, 870 80"/>
+      <g class="st" data-st="0" tabindex="0" role="tab" aria-label="Alat 1"><circle cx="70" cy="80" r="26"/><text class="no" x="70" y="87">1</text><text class="nm" x="70" y="135">Input + QC survei</text><text class="sb" x="70" y="153">sebelum desain</text></g>
+      <g class="st" data-st="1" tabindex="0" role="tab" aria-label="Alat 2"><circle cx="280" cy="80" r="26"/><text class="no" x="280" y="87">2</text><text class="nm" x="280" y="135">Alokasi FDT &amp; FAT</text><text class="sb" x="280" y="153">sebelum desain</text></g>
+      <g class="st ext" data-st="2" tabindex="0" role="tab" aria-label="Desain otomatis"><circle cx="470" cy="80" r="26"/><text class="no" x="470" y="87">⚙</text><text class="nm" x="470" y="135">Desain otomatis</text><text class="sb" x="470" y="153">software terpisah</text></g>
+      <g class="st" data-st="3" tabindex="0" role="tab" aria-label="Alat 3"><circle cx="660" cy="80" r="26"/><text class="no" x="660" y="87">3</text><text class="nm" x="660" y="135">Pasca-desain</text><text class="sb" x="660" y="153">kode FDT-FAT · closure</text></g>
+      <g class="st" data-st="4" tabindex="0" role="tab" aria-label="Alat 4"><circle cx="870" cy="80" r="26"/><text class="no" x="870" y="87">4</text><text class="nm" x="870" y="135">QC APD final</text><text class="sb" x="870" y="153">sebelum dikirim</text></g>
+    </svg>
+  </div>
+  <div class="panel" id="stpanel" aria-live="polite"></div>
+  <p class="note">Tidak menemukan menu? Semua alat ada di menu <b>Plugins → Seranta</b> dan di <b>Processing Toolbox → Seranta</b>, sudah bernomor 1–4 sesuai urutan ini. <b>Navigator QC</b> bisa dibuka kapan saja setelah Alat 1 atau Alat 4.</p>
+</section>
+
+<section id="pemandu">
+  <div class="kicker">Bingung mulai dari mana?</div>
+  <h2>Pemandu: data apa yang Anda pegang sekarang?</h2>
+  <p class="lead">Pilih kondisi yang paling cocok. Seranta akan menyarankan alat berikutnya.</p>
+  <div class="ask" id="ask">
+    <button class="btn" type="button" data-a="0">Baru terima HPDB + KMZ survei</button>
+    <button class="btn" type="button" data-a="1">Alat 1 selesai, standar 7 (colo) berstatus CEK</button>
+    <button class="btn" type="button" data-a="2">Input siap, belum didesain</button>
+    <button class="btn" type="button" data-a="3">Desain otomatis selesai (folder OUTPUT ada)</button>
+    <button class="btn" type="button" data-a="4">Sudah ada KMZ APD + FAT FDT CODE + Splice Plan</button>
+    <button class="btn" type="button" data-a="5">Hasil QC banyak temuan, mau dicek satu per satu</button>
+  </div>
+  <div class="answer" id="answer" role="status"></div>
+</section>
+
 <section id="tentang">
   <div class="kicker">Mengenal</div>
   <h2>Tentang Seranta</h2>
@@ -210,9 +327,9 @@ html{scroll-behavior:smooth}
     <circle cx="690" cy="70" r="14" style="fill:var(--surface);stroke:var(--sea)" stroke-width="4"/>
     <circle cx="860" cy="70" r="16" fill="#5CF2E8" style="stroke:var(--sea)" stroke-width="4"/>
     <text x="60" y="122" text-anchor="middle" font-weight="700">Data vendor</text><text class="sm" x="60" y="140" text-anchor="middle">HPDB · KMZ · BAKP</text>
-    <text x="270" y="122" text-anchor="middle" font-weight="700">Seranta alat 1</text><text class="sm" x="270" y="140" text-anchor="middle">input + QC 9 standar</text>
+    <text x="270" y="122" text-anchor="middle" font-weight="700">Seranta alat 1 → 2</text><text class="sm" x="270" y="140" text-anchor="middle">QC survei · alokasi FDT</text>
     <text x="480" y="122" text-anchor="middle" font-weight="700">desain otomatis</text><text class="sm" x="480" y="140" text-anchor="middle">desain jaringan</text>
-    <text x="690" y="122" text-anchor="middle" font-weight="700">Seranta alat 3</text><text class="sm" x="690" y="140" text-anchor="middle">FAT CODE · closure · QC</text>
+    <text x="690" y="122" text-anchor="middle" font-weight="700">Seranta alat 3 → 4</text><text class="sm" x="690" y="140" text-anchor="middle">kode FDT-FAT · QC APD</text>
     <text x="890" y="122" text-anchor="end" font-weight="700">APD siap kirim</text><text class="sm" x="890" y="140" text-anchor="end">dikirim ke reviewer</text>
   </svg></div>
   <h3>A. Folder cluster (satu folder per cluster)</h3>
@@ -570,7 +687,10 @@ html{scroll-behavior:smooth}
   <h2>Yang baru di 3.5.5, 3.5.4 dan 3.5.3: hasil QC lebih tepat dan jelas</h2>
   <p><b>3.5.5</b>: nomor menu disamakan dengan urutan kerja. <b>1</b> Siapkan input + QC survei &rarr; <b>2</b> Alokasi FDT &amp; FAT
   (sebelum desain) &rarr; desain otomatis &rarr; <b>3</b> Pasca-desain (kode FDT-FAT) &rarr; <b>4</b> QC APD. Nama algoritma di
-  Processing (ID) tidak berubah, jadi skrip/model lama tetap jalan.</p>
+  Processing (ID) tidak berubah, jadi skrip/model lama tetap jalan. Handbook ini juga dibuat ulang menjadi interaktif:
+  <a href="#alur">peta perjalanan</a> yang bisa diklik dengan daftar periksa tersimpan, <a href="#pemandu">pemandu langkah</a>,
+  <a href="#kamus">kamus temuan</a> (cari arti setiap kode), <a href="#kuis">uji pemahaman</a>, pencarian di daftar isi, tombol tema
+  terang/gelap, dan cetak ke PDF.</p>
   <p><b>3.5.4</b>: (1) lencana aplikasi pemindai ("Dipindai dengan CamScanner") yang tertanam di setiap halaman BAKP tidak lagi
   dibaca sebagai "stempel/tanda tangan ditempel digital"; (2) rentang tiang yang tergambar dua kali karena dua garis
   jalur bertumpuk (mis. jalur utama + garis "Penanda") dinilai sekali saja, sehingga temuan bentang 50&ndash;60 m dan kabel
@@ -686,6 +806,28 @@ html{scroll-behavior:smooth}
   <details><summary>Ringkasan QC tidak terbuka</summary><p>Buka manual file <code>&lt;KODE&gt;_RINGKASAN_QC.html</code> di folder <code>INPUT_&lt;KODE&gt;</code>, atau pastikan isian 5 dicentang.</p></details>
 </section>
 
+<section id="kamus">
+  <div class="kicker">Kamus</div>
+  <h2>Kamus temuan: arti setiap kode</h2>
+  <p class="lead">Ketik kode dari laporan (mis. <code>HP_BERGESER</code>) atau kata biasa (mis. <i>tiang</i>, <i>splitter</i>). Klik untuk melihat arti dan tindakannya.</p>
+  <div class="kbar">
+    <input id="kq" type="search" placeholder="Cari kode atau kata…" aria-label="Cari di kamus temuan">
+    <button class="btn on" type="button" data-kf="">Semua</button>
+    <button class="btn" type="button" data-kf="Alat 1">Alat 1</button>
+    <button class="btn" type="button" data-kf="Alat 4">Alat 4</button>
+    <span class="kcount" id="kc"></span>
+  </div>
+  <div class="klist" id="klist"></div>
+</section>
+
+<section id="kuis">
+  <div class="kicker">Uji pemahaman</div>
+  <h2>Lima pertanyaan, dua menit</h2>
+  <p class="lead">Cocok untuk anggota tim baru. Jawaban langsung dijelaskan.</p>
+  <div class="quiz" id="quiz"></div>
+  <p class="score" id="score"></p>
+</section>
+
 <section id="istilah">
   <div class="kicker">Glosarium</div>
   <h2>Istilah</h2>
@@ -706,3 +848,118 @@ html{scroll-behavior:smooth}
 </main>
 </div>
 <footer>Seranta™ – FTTH Design Assistant · © 2026 Joseph Edward Timothy Siahaan · Kode: GNU GPL v2 atau lebih baru · Seranta dan logonya adalah merek milik Joseph Edward Timothy Siahaan.</footer>
+<button class="totop" id="totop" type="button" aria-label="Kembali ke atas">↑</button>
+<div class="progress" id="progress"></div>
+<script>
+(function(){
+"use strict";
+var KAMUS=[{"kode": "HP_JAUH_DARI_TIANG", "alat": "Alat 1", "judul": "Rumah terlalu jauh dari tiang terdekat", "arti": "Rumah terlalu jauh dari tiang terdekat.", "tindakan": "Tambahkan tiang di dekat rumah atau periksa koordinat rumah."}, {"kode": "HP_DI_RFS_DONE", "alat": "Alat 1", "judul": "Rumah berada di cluster yang sudah terbangun", "arti": "Rumah berada di cluster yang sudah terbangun.", "tindakan": "Keluarkan dari HPDB/KMZ cluster ini."}, {"kode": "HP_DI_RFS_EXT", "alat": "Alat 1", "judul": "Rumah berada di wilayah perluasan cluster lain", "arti": "Rumah berada di wilayah perluasan cluster lain.", "tindakan": "Koordinasikan dengan pemilik cluster; biasanya dikeluarkan."}, {"kode": "HP_DI_FUNNEL_LAIN", "alat": "Alat 1", "judul": "Rumah masuk funnel cluster lain", "arti": "Rumah masuk funnel cluster lain.", "tindakan": "Keluarkan dari cluster ini atau koordinasikan batas funnel."}, {"kode": "ADMIN*", "alat": "Alat 1", "judul": "Nama wilayah di HPDB berbeda dengan data wilayah resmi", "arti": "Nama wilayah di HPDB berbeda dengan data wilayah resmi.", "tindakan": "Perbaiki kolom wilayah di HPDB."}, {"kode": "HP_DUPLIKAT_KOORDINAT", "alat": "Alat 1", "judul": "Dua atau lebih HP di koordinat yang sama", "arti": "Dua atau lebih HP di koordinat yang sama.", "tindakan": "Sisakan satu HP per rumah."}, {"kode": "HP_DUPLIKAT_ID", "alat": "Alat 1", "judul": "Dua atau lebih HP memakai ID operator yang sama", "arti": "Dua atau lebih HP memakai ID operator yang sama.", "tindakan": "Beri ID unik atau hapus duplikat."}, {"kode": "HP_HPDB_TIDAK_ADA_DI_KMZ", "alat": "Alat 1", "judul": "HP ada di HPDB tetapi tidak tergambar di KMZ", "arti": "HP ada di HPDB tetapi tidak tergambar di KMZ.", "tindakan": "Tambahkan titik di KMZ atau hapus dari HPDB."}, {"kode": "HP_BERGESER", "alat": "Alat 1", "judul": "Rumah yang sama (nomor rumah HPDB = nama titik KMZ) tetapi koordinatnya berbeda lebih dari toleransi", "arti": "Rumah yang sama (nomor rumah HPDB = nama titik KMZ) tetapi koordinatnya berbeda lebih dari toleransi.", "tindakan": "Samakan koordinat HPDB dengan titik survei KMZ (atau sebaliknya bila survei yang salah)."}, {"kode": "HP_KMZ_TIDAK_ADA_DI_HPDB", "alat": "Alat 1", "judul": "HP tergambar di KMZ tetapi tidak ada di HPDB", "arti": "HP tergambar di KMZ tetapi tidak ada di HPDB.", "tindakan": "Tambahkan baris di HPDB atau hapus titik di KMZ."}, {"kode": "LAT_LONG_TERTUKAR", "alat": "Alat 1", "judul": "Kolom latitude dan longitude tampaknya tertukar", "arti": "Kolom latitude dan longitude tampaknya tertukar.", "tindakan": "Tukar nilai kedua kolom pada baris tersebut."}, {"kode": "HP_LUAR_FUNNEL", "alat": "Alat 1", "judul": "Rumah di luar batas Funnel", "arti": "Rumah di luar batas Funnel.", "tindakan": "Keluarkan HP atau ajukan perubahan batas."}, {"kode": "HP_LUAR_BOUNDARY", "alat": "Alat 1", "judul": "Rumah jelas di luar BOUNDARY KMZ (lebih jauh dari toleransi GPS)", "arti": "Rumah jelas di luar BOUNDARY KMZ (lebih jauh dari toleransi GPS).", "tindakan": "Pastikan rumah memang masuk cluster: bila ya, lebarkan BOUNDARY; bila tidak, keluarkan HP."}, {"kode": "FUNNEL_SENDIRI_REJECT", "alat": "Alat 1", "judul": "Cluster ini berstatus reject/drop di Funnel", "arti": "Cluster ini berstatus reject/drop di Funnel.", "tindakan": "Konfirmasi status sebelum desain dilanjutkan."}, {"kode": "INFO_HP_MUNGKIN_DI_DESIGN_LITE", "alat": "Alat 1", "judul": "Rumah 2-5 m dari HP jaringan existing, mungkin rumah yang sama", "arti": "Rumah 2-5 m dari HP jaringan existing, mungkin rumah yang sama.", "tindakan": "Cek nomor rumah/alamat; bila sama, keluarkan HP (double tagging)."}, {"kode": "INFO_TIANG_BARU_DEKAT_EXISTING", "alat": "Alat 1", "judul": "Tiang baru beberapa meter dari tiang jaringan existing", "arti": "Tiang baru beberapa meter dari tiang jaringan existing.", "tindakan": "Cek di lapangan: bila tiangnya sama, jadikan tiang existing."}, {"kode": "HP_SUDAH_ADA_DI_DESIGN_LITE", "alat": "Alat 1", "judul": "Rumah sudah tercatat di jaringan existing (double tagging)", "arti": "Rumah sudah tercatat di jaringan existing (double tagging).", "tindakan": "Keluarkan HP dari cluster ini."}, {"kode": "TIANG_BARU_SUDAH_ADA", "alat": "Alat 1", "judul": "Tiang baru ternyata sudah ada di jaringan existing", "arti": "Tiang baru ternyata sudah ada di jaringan existing.", "tindakan": "Ubah menjadi tiang existing."}, {"kode": "COLO*", "alat": "Alat 1", "judul": "Catatan kemungkinan COLO FDT existing", "arti": "Catatan kemungkinan COLO FDT existing.", "tindakan": "Bandingkan pilihan FDT di tabel colo."}, {"kode": "RENTANG_NP_NP", "alat": "Alat 1", "judul": "Jarak antar tiang baru melebihi batas", "arti": "Jarak antar tiang baru melebihi batas.", "tindakan": "Sisipkan tiang baru di tengah."}, {"kode": "RENTANG_NP_EP", "alat": "Alat 1", "judul": "Jarak tiang baru ke tiang existing melebihi batas", "arti": "Jarak tiang baru ke tiang existing melebihi batas.", "tindakan": "Geser tiang baru atau sisipkan tiang."}, {"kode": "BAKP*", "alat": "Alat 1", "judul": "Isian BAKP perlu dicek", "arti": "Isian BAKP perlu dicek.", "tindakan": "Bandingkan dengan nilai seharusnya di daftar periksa BAKP."}, {"kode": "INFO_BAKP*", "alat": "Alat 1", "judul": "Catatan BAKP", "arti": "Catatan BAKP.", "tindakan": "Tidak wajib diubah."}, {"kode": "UNV_BAKP", "alat": "Alat 1", "judul": "BAKP belum dapat diverifikasi otomatis", "arti": "BAKP belum dapat diverifikasi otomatis.", "tindakan": "Periksa BAKP secara manual."}, {"kode": "TIANG_NGANGGUR", "alat": "Alat 1", "judul": "Tiang survei tidak dilewati jalur kabel", "arti": "Tiang survei tidak dilewati jalur kabel.", "tindakan": "Tinjau: hapus bila tidak dipakai, atau lewatkan jalur bila memang dibutuhkan."}, {"kode": "UJUNG_JALUR_TANPA_TIANG", "alat": "Alat 1", "judul": "Jalur berakhir tanpa tiang untuk menambat kabel", "arti": "Jalur berakhir tanpa tiang untuk menambat kabel.", "tindakan": "Tambahkan tiang di ujung jalur."}, {"kode": "WARN_BELOKAN_TANPA_TIANG", "alat": "Alat 1", "judul": "Belokan tajam tanpa tiang (kabel butuh tiang tambat di belokan)", "arti": "Belokan tajam tanpa tiang (kabel butuh tiang tambat di belokan).", "tindakan": "Tambahkan tiang di titik belokan."}, {"kode": "WARN_SIMPANG_TANPA_TIANG", "alat": "Alat 1", "judul": "Percabangan jalur tanpa tiang", "arti": "Percabangan jalur tanpa tiang.", "tindakan": "Tambahkan tiang di percabangan."}, {"kode": "INFO_BELOKAN_KECIL_TANPA_TIANG", "alat": "Alat 1", "judul": "Belokan kecil tanpa tiang", "arti": "Belokan kecil tanpa tiang.", "tindakan": "Opsional: pertimbangkan tiang sudut."}, {"kode": "WARN_RENTANG_REGULASI", "alat": "Alat 1", "judul": "Bentang di atas batas regulasi daerah", "arti": "Bentang di atas batas regulasi daerah.", "tindakan": "Sisipkan tiang bila daerah menegakkan batas ini."}, {"kode": "INFO_RENTANG_REGULASI", "alat": "Alat 1", "judul": "Bentang di atas batas regulasi daerah (catatan)", "arti": "Bentang di atas batas regulasi daerah (catatan).", "tindakan": "Cukup dicatat."}, {"kode": "INFO_HP_TEPI_BOUNDARY", "alat": "Alat 1", "judul": "Rumah beberapa meter di luar garis BOUNDARY, masih dalam toleransi GPS ponsel", "arti": "Rumah beberapa meter di luar garis BOUNDARY, masih dalam toleransi GPS ponsel.", "tindakan": "Tidak perlu dikeluarkan; bila mau rapi, lebarkan sedikit poligon BOUNDARY."}, {"kode": "INFO_HP_TEPI_FUNNEL", "alat": "Alat 1", "judul": "Rumah tepat di tepi luar Funnel (masih dalam toleransi GPS)", "arti": "Rumah tepat di tepi luar Funnel (masih dalam toleransi GPS).", "tindakan": "Cukup dicatat."}, {"kode": "INFO_HP_ALAMAT_SAMA", "alat": "Alat 1", "judul": "Beberapa HP memakai alamat lengkap yang sama", "arti": "Beberapa HP memakai alamat lengkap yang sama.", "tindakan": "Periksa apakah memang rumah berbeda (mis. kos/ruko)."}, {"kode": "INFO_HP_MUNGKIN_DUPLIKAT", "alat": "Alat 1", "judul": "Dua HP sangat berdekatan, mungkin rumah yang sama", "arti": "Dua HP sangat berdekatan, mungkin rumah yang sama.", "tindakan": "Periksa di lapangan atau citra satelit."}, {"kode": "INFO_KABEL_RENDAH", "alat": "Alat 1", "judul": "Kabel di tengah bentang mungkin terlalu rendah di atas jalan", "arti": "Kabel di tengah bentang mungkin terlalu rendah di atas jalan.", "tindakan": "Pakai tiang lebih tinggi atau perpendek bentang."}, {"kode": "INFO_TIANG_BISA_DIHAPUS", "alat": "Alat 1", "judul": "Tiang baru di jalan lurus yang bisa dihapus tanpa melanggar batas bentang", "arti": "Tiang baru di jalan lurus yang bisa dihapus tanpa melanggar batas bentang.", "tindakan": "Opsional: hapus untuk hemat biaya."}, {"kode": "INFO_UJUNG_JALUR_TANPA_HP", "alat": "Alat 1", "judul": "Ujung jalur tidak melayani rumah mana pun", "arti": "Ujung jalur tidak melayani rumah mana pun.", "tindakan": "Opsional: pendekkan jalur."}, {"kode": "HP_ID_DUPLICATE", "alat": "Alat 4", "judul": "ID homepass dipakai dua kali", "arti": "Satu ID homepass muncul lebih dari sekali, sehingga jumlah HP bisa terhitung ganda.", "tindakan": "Hapus salah satu titik atau beri ID baru yang unik."}, {"kode": "SERVED_HP_NOT_SERVED", "alat": "Alat 4", "judul": "Rumah tidak terlayani", "arti": "HP … tidak mendapat port FAT di hasil desain otomatis.", "tindakan": "Hubungkan HP ke FAT terdekat yang masih punya port, lalu jalankan ulang penugasan."}, {"kode": "SERVED_HP_PARENT_UNKNOWN", "alat": "Alat 4", "judul": "Induk HP tidak ditemukan", "arti": "HP … menunjuk ke perangkat yang tidak ada di data node.", "tindakan": "Periksa apakah FAT induknya terhapus; tugaskan ulang HP."}, {"kode": "SERVED_FAT_NOT_SERVED", "alat": "Alat 4", "judul": "FAT tidak tersambung ke FDT", "arti": "FAT … tidak punya FDT induk, jadi seluruh rumah di bawahnya tidak dapat sinyal.", "tindakan": "Sambungkan FAT ke FDT lewat kabel distribusi dan jalankan ulang desain."}, {"kode": "SERVED_CONNSTATUS_DIFFERENT", "alat": "Alat 4", "judul": "Status sambungan berbeda", "arti": "Status sambungan … berbeda dari mayoritas perangkat.", "tindakan": "Cek tab hasil di aplikasi desain otomatis untuk objek ini."}, {"kode": "HP_OUTSIDE_FAT_COVERAGE", "alat": "Alat 4", "judul": "Rumah di luar wilayah FAT", "arti": "HP … berada di luar semua poligon FAT Coverage ({v} m dari tepi terdekat).", "tindakan": "Perluas poligon coverage FAT terdekat atau periksa koordinat rumah."}, {"kode": "FAT_COVERAGE_OVERLAP", "alat": "Alat 4", "judul": "Wilayah FAT tumpang tindih", "arti": "HP … berada di lebih dari satu poligon coverage.", "tindakan": "Rapikan batas poligon agar setiap rumah hanya masuk satu wilayah FAT."}, {"kode": "HP_WRONG_FAT_AREA", "alat": "Alat 4", "judul": "Rumah dilayani FAT tetangga", "arti": "HP … dilayani satu FAT tetapi letaknya di wilayah FAT lain.", "tindakan": "Pindahkan HP ke FAT pemilik wilayah, atau sesuaikan poligon coverage."}, {"kode": "LOOP_TERMINATION_CHECK", "alat": "Alat 4", "judul": "Ujung kabel di closure", "arti": "Kabel berakhir di closure, bukan di FAT.", "tindakan": "Pastikan memang sengaja (titik sambung ke depan). Bila tidak, potong sampai FAT terakhir."}, {"kode": "CABLE_END_WITHOUT_FAT", "alat": "Alat 4", "judul": "Kabel berakhir tanpa FAT", "arti": "Ujung kabel … tidak menempel ke FAT mana pun.", "tindakan": "Potong kabel sampai FAT terakhir atau tambahkan FAT di ujungnya. Ekor kabel yang masih dalam batas loop (100 m / 2 bentang) hanya perlu ditinjau dan dicatat alasannya."}, {"kode": "LOOP_LENGTH_OVER_100M", "alat": "Alat 4", "judul": "Kabel loop terlalu panjang", "arti": "Kabel loop {v} m, melebihi batas {t} m.", "tindakan": "Pendekkan loop atau ubah rute agar tidak memutar."}, {"kode": "LOOP_SPAN_OVER_2", "alat": "Alat 4", "judul": "Kabel loop melewati terlalu banyak tiang", "arti": "Kabel loop melewati {v} bentang, batas {t}.", "tindakan": "Pendekkan loop sampai batas bentang yang diizinkan."}, {"kode": "FAT_PARENT_FDT_MISSING", "alat": "Alat 4", "judul": "FAT tanpa FDT induk", "arti": "Tidak ditemukan FDT induk untuk ….", "tindakan": "Pastikan FDT tergambar dan FAT tersambung kepadanya."}, {"kode": "FAT_MULTI_PARENT", "alat": "Alat 4", "judul": "FAT diklaim dua FDT", "arti": "FAT … terhubung ke lebih dari satu FDT.", "tindakan": "Pilih satu FDT induk dan putuskan sambungan yang lain."}, {"kode": "FAT_OVER_CAPACITY", "alat": "Alat 4", "judul": "FAT kelebihan rumah", "arti": "FAT … melayani {v} HP, melebihi kapasitas {t} HP.", "tindakan": "Pindahkan sebagian HP ke FAT tetangga atau tambah FAT baru."}, {"kode": "FAT_UNDER_MIN", "alat": "Alat 4", "judul": "FAT sepi pelanggan", "arti": "FAT … hanya melayani {v} HP, di bawah minimum {t} HP.", "tindakan": "Pertimbangkan menggabungkan dengan FAT tetangga. Boleh dipertahankan bila jaraknya tidak memungkinkan."}, {"kode": "FAT_PREMISES_MISMATCH", "alat": "Alat 4", "judul": "Premises FAT tidak cocok", "arti": "Angka premises pada FAT … berbeda dari jumlah HP yang benar-benar dilayani.", "tindakan": "Perbarui angka premises pada ikon FAT sesuai jumlah HP."}, {"kode": "FDT_CAPACITY_CHECK", "alat": "Alat 4", "judul": "FDT kelebihan rumah", "arti": "FDT … melayani {v} HP, melebihi kapasitas {t} HP.", "tindakan": "Pindahkan sebagian FAT ke FDT lain atau rencanakan FDT baru."}, {"kode": "FDT_SPLITTER_OVER", "alat": "Alat 4", "judul": "Splitter FDT berlebih", "arti": "FDT … butuh {v} splitter, melebihi batas {t}.", "tindakan": "Kurangi FAT di bawah FDT ini atau tambah FDT."}, {"kode": "FDT_PREMISES_MISMATCH", "alat": "Alat 4", "judul": "Premises FDT tidak cocok", "arti": "Premises pada ikon FDT … ({v}) berbeda dari jumlah HP di bawahnya ({t}).", "tindakan": "Perbarui premises ikon FDT."}, {"kode": "FDT_WITHOUT_FAT", "alat": "Alat 4", "judul": "FDT tanpa FAT", "arti": "FDT … tidak punya FAT di bawahnya.", "tindakan": "Periksa apakah FDT ini memang belum dipakai; hapus atau sambungkan FAT."}, {"kode": "FAT_HP_OVER_150", "alat": "Alat 4", "judul": "Rumah terlalu jauh dari FAT", "arti": "HP terjauh dari FAT … berjarak {v} m, melebihi batas {t} m.", "tindakan": "Geser FAT mendekati rumah terjauh atau pecah kelompok HP."}, {"kode": "FAT_HP_120_150", "alat": "Alat 4", "judul": "Rumah agak jauh dari FAT", "arti": "HP terjauh dari FAT … berjarak {v} m (zona khusus).", "tindakan": "Boleh dipertahankan hanya dengan justifikasi khusus; lebih baik geser FAT."}, {"kode": "FAT_CODE_DUPLICATE", "alat": "Alat 4", "judul": "Kode FAT ganda", "arti": "Kode … dipakai lebih dari satu FAT.", "tindakan": "Beri nomor ulang sehingga setiap FAT punya kode unik."}, {"kode": "FAT_LABEL_ORDER_INVALID", "alat": "Alat 4", "judul": "Nomor FAT melompat", "arti": "Ada nomor FAT yang hilang di urutan (…).", "tindakan": "Beri nomor ulang FAT secara berurutan."}, {"kode": "FAT_ORDER_NOT_BY_DISTANCE", "alat": "Alat 4", "judul": "Urutan nomor FAT tidak mengikuti jarak", "arti": "FAT … bernomor lebih kecil padahal lebih jauh dari FDT.", "tindakan": "Opsional: urutkan nomor FAT dari yang terdekat ke FDT."}, {"kode": "FDT_CODE_MISMATCH", "alat": "Alat 4", "judul": "Awalan kode FAT tidak sesuai FDT", "arti": "Awalan kode … tidak sama dengan kode FDT mana pun.", "tindakan": "Samakan awalan kode FAT dengan kode FDT induknya."}, {"kode": "FAT_LABEL_LENGTH", "alat": "Alat 4", "judul": "Panjang kode tidak seragam", "arti": "Panjang kode … berbeda dari mayoritas.", "tindakan": "Periksa salah ketik pada kode."}, {"kode": "FAT_NOT_ON_POLE", "alat": "Alat 4", "judul": "FAT melayang", "arti": "FAT … berjarak {v} m dari tiang terdekat (batas {t} m).", "tindakan": "Seret FAT ke titik tiang."}, {"kode": "FDT_NOT_ON_POLE", "alat": "Alat 4", "judul": "FDT melayang", "arti": "FDT … berjarak {v} m dari tiang terdekat (batas {t} m).", "tindakan": "Seret FDT ke titik tiang."}, {"kode": "POLE_IDLE", "alat": "Alat 4", "judul": "Tiang tidak dilewati kabel", "arti": "Tiang … berjarak {v} m dari kabel terdekat.", "tindakan": "Hapus tiang baru yang tidak perlu, atau rutekan kabel melewatinya. Tiang existing cukup dicatat."}, {"kode": "SPAN_OVER_MAX", "alat": "Alat 4", "judul": "Bentang tiang terlalu panjang", "arti": "Jarak tiang … = {v} m, melebihi batas tegas {t} m.", "tindakan": "Sisipkan tiang di tengah bentang."}, {"kode": "SPAN_OVER_REGULATION", "alat": "Alat 4", "judul": "Bentang di atas batas regulasi daerah", "arti": "Jarak tiang … = {v} m, di atas batas regulasi {t} m.", "tindakan": "Sisipkan tiang bila daerah tersebut menegakkan batas ini; bila tidak, cukup dicatat."}, {"kode": "SPAN_END_WITHOUT_POLE", "alat": "Alat 4", "judul": "Ujung kabel jauh dari tiang", "arti": "Ujung kabel berjarak {v} m dari tiang terakhir.", "tindakan": "Tambahkan tiang di ujung kabel atau pendekkan kabel."}, {"kode": "FAT_NOT_CENTRAL", "alat": "Alat 4", "judul": "FAT kurang di tengah", "arti": "Rata-rata jarak HP ke FAT … lebih jauh dibanding titik paling tengah.", "tindakan": "Opsional: geser FAT ke tiang yang lebih di tengah kelompok."}, {"kode": "HP_GROUPING_REVIEW", "alat": "Alat 4", "judul": "Pengelompokan HP bisa lebih baik", "arti": "HP … dilayani FAT yang lebih jauh padahal ada FAT yang lebih dekat.", "tindakan": "Opsional: pindahkan HP ke FAT terdekat bila port masih tersedia."}, {"kode": "SLACK_GAP_OVER_PROFILE", "alat": "Alat 4", "judul": "Slack kabel baru terlalu jarang", "arti": "Kabel baru …: jarak antar slack terpanjang {v} m, batas {t} m.", "tindakan": "Tambahkan keterangan slack di tengah bentang kabel yang panjang."}, {"kode": "ROUTE_CROSSING_REVIEW", "alat": "Alat 4", "judul": "Kabel menyeberang rel/tol", "arti": "Kabel … memotong hambatan besar.", "tindakan": "Siapkan izin penyeberangan atau ubah rute."}, {"kode": "FDT_DATA_UNVERIFIED", "alat": "Alat 4", "judul": "Data FDT belum lengkap", "arti": "Data yang dibutuhkan untuk menguji FDT belum tersedia.", "tindakan": "Lengkapi paket Feeder/Distribution lalu jalankan ulang."}, {"kode": "FDT_MISSING_IN_FEEDER", "alat": "Alat 4", "judul": "FDT tidak ada di paket Feeder", "arti": "FDT … ada di Distribution tetapi tidak ada di Feeder.", "tindakan": "Tambahkan FDT di paket Feeder dengan kode dan lokasi yang sama."}, {"kode": "FDT_MISSING_IN_DISTRIBUTION", "alat": "Alat 4", "judul": "FDT tidak ada di paket Distribution", "arti": "FDT … ada di Feeder tetapi tidak ada di Distribution.", "tindakan": "Tambahkan FDT di paket Distribution."}, {"kode": "FDT_ID_MISMATCH", "alat": "Alat 4", "judul": "Kode FDT berbeda antar paket", "arti": "Lokasi FDT sama tetapi kodenya berbeda (…).", "tindakan": "Samakan kode di kedua paket."}, {"kode": "FDT_LOCATION_MISMATCH", "alat": "Alat 4", "judul": "Lokasi FDT bergeser antar paket", "arti": "FDT … bergeser {v} m antara dua paket (batas {t} m).", "tindakan": "Samakan koordinat FDT di kedua paket."}, {"kode": "FDT_STATUS_UNKNOWN", "alat": "Alat 4", "judul": "Status COLO/NEW belum jelas", "arti": "Status FDT … tidak bisa dipastikan dari data.", "tindakan": "Isi status FDT (COLO/NEW) di parameter atau beri keterangan pada ikon."}, {"kode": "FDT_NEW_ROUTE_DISCONNECTED", "alat": "Alat 4", "judul": "FDT baru tidak tersambung jalur", "arti": "FDT/FAT … tidak terhubung ke jalur kabel distribusi.", "tindakan": "Sambungkan perangkat ke kabel distribusi."}, {"kode": "BOM_CABLE_VARIANCE", "alat": "Alat 4", "judul": "Panjang kabel BOM berbeda", "arti": "Panjang kabel di BOM berbeda dari desain lebih dari toleransi.", "tindakan": "Hitung ulang kabel (termasuk slack) dan perbarui BOM."}, {"kode": "BOM_HP_MISMATCH", "alat": "Alat 4", "judul": "Jumlah HP di BOM berbeda", "arti": "Jumlah HP di BOM tidak sama dengan desain.", "tindakan": "Samakan BOM dengan desain."}, {"kode": "BOM_FAT_MISMATCH", "alat": "Alat 4", "judul": "Jumlah FAT di BOM berbeda", "arti": "Jumlah FAT di BOM tidak sama dengan desain.", "tindakan": "Samakan BOM dengan desain."}, {"kode": "BOM_FDT_MISMATCH", "alat": "Alat 4", "judul": "Jumlah FDT di BOM berbeda", "arti": "Jumlah FDT di BOM tidak sama dengan desain.", "tindakan": "Samakan BOM dengan desain."}, {"kode": "BOM_POLE_MISMATCH", "alat": "Alat 4", "judul": "Jumlah tiang di BOM berbeda", "arti": "Jumlah tiang di BOM tidak sama dengan desain.", "tindakan": "Samakan BOM dengan desain."}, {"kode": "BOM_CLOSURE_MISMATCH", "alat": "Alat 4", "judul": "Jumlah closure di BOM berbeda", "arti": "Jumlah closure di BOM tidak sama dengan desain.", "tindakan": "Samakan BOM dengan desain."}, {"kode": "KMZ_REQUIRED_LAYER_MISSING", "alat": "Alat 4", "judul": "Folder wajib tidak ada", "arti": "Folder … tidak ditemukan di KMZ.", "tindakan": "Tambahkan folder tersebut sesuai struktur KMZ."}, {"kode": "KMZ_FOLDER_INVALID", "alat": "Alat 4", "judul": "Nama folder tidak baku", "arti": "Folder … perlu diganti nama.", "tindakan": "Ganti nama folder sesuai saran di detail."}, {"kode": "KMZ_VISIBILITY", "alat": "Alat 4", "judul": "Folder sebaiknya disembunyikan", "arti": "Folder … sebaiknya tidak dicentang saat KMZ final disimpan.", "tindakan": "Hilangkan centang lalu simpan ulang."}, {"kode": "KMZ_ICON_INVALID", "alat": "Alat 4", "judul": "Ikon hilang (tanda X)", "arti": "Ikon tidak ikut tersimpan di dalam KMZ sehingga tampil sebagai tanda X.", "tindakan": "Simpan ulang KMZ dengan ikon tertanam (pilih format KMZ, bukan KML)."}, {"kode": "CABLE_COLOR_MISMATCH", "alat": "Alat 4", "judul": "Warna kabel salah", "arti": "Warna kabel … tidak sesuai jumlah core-nya.", "tindakan": "Ganti warna garis sesuai tabel warna kabel."}, {"kode": "CABLE_LABEL_MISSING", "alat": "Alat 4", "judul": "Kabel tanpa keterangan", "arti": "Kabel tidak punya nama atau deskripsi.", "tindakan": "Isi keterangan kabel (core, panjang, status)."}, {"kode": "CABLE_LABEL_NO_STATUS", "alat": "Alat 4", "judul": "Keterangan kabel tanpa status", "arti": "Keterangan kabel … tidak menyebut COLO atau NEW INFRA.", "tindakan": "Tambahkan status pada keterangan kabel."}, {"kode": "KMZ_COLO_MISSING_EXISTING", "alat": "Alat 4", "judul": "Folder Existing Cluster tidak ada", "arti": "Desain COLO tetapi KMZ tidak punya folder Existing Cluster.", "tindakan": "Tambahkan folder Existing Cluster berisi perangkat existing yang dipakai."}, {"kode": "FDT_COLO_LABEL_MISSING", "alat": "Alat 4", "judul": "FDT existing tanpa keterangan COLO", "arti": "FDT existing … tidak diberi keterangan COLO.", "tindakan": "Tambahkan keterangan COLO pada ikon/label."}, {"kode": "FDT_CODE_DUPLICATE", "alat": "Alat 4", "judul": "Kode FDT ganda", "arti": "Kode … dipakai lebih dari satu FDT.", "tindakan": "Pastikan setiap FDT memakai kode unik."}, {"kode": "FDT_CODE_FORMAT", "alat": "Alat 4", "judul": "Format kode FDT tidak baku", "arti": "Kode … tidak mengikuti pola kode FDT.", "tindakan": "Perbaiki penulisan kode."}, {"kode": "FAT_CODE_PARENT_UNKNOWN", "alat": "Alat 4", "judul": "FAT tidak mengikuti kode FDT", "arti": "Awalan kode FAT … tidak sama dengan FDT mana pun di desain.", "tindakan": "Samakan awalan kode FAT dengan FDT induk."}, {"kode": "FDT_CODE_EXISTS_ELSEWHERE", "alat": "Alat 4", "judul": "Kode FDT sudah dipakai di lokasi lain", "arti": "Kode … sudah dipakai FDT existing di tempat lain.", "tindakan": "Minta kode baru atau pastikan FDT ini memang FDT existing yang sama (COLO)."}, {"kode": "FDT_GROUP_MISMATCH", "alat": "Alat 4", "judul": "Kelompok kode FDT berbeda dengan sekitarnya", "arti": "Kode … memakai kelompok area yang sudah dipakai di lokasi lain, padahal FDT existing di sekitarnya berkelompok lain.", "tindakan": "Periksa kelompok kode area; bila memang salah, pakai kode kandidat yang disarankan di tabel grouping."}, {"kode": "FDT_GROUP_NEW", "alat": "Alat 4", "judul": "Kelompok kode FDT baru", "arti": "Kode … membuka kelompok area baru yang belum dipakai FDT existing di sekitarnya.", "tindakan": "Pastikan kelompok area baru ini memang disengaja dan sudah didaftarkan di rekap kode."}, {"kode": "FDT_NEW_NOT_IN_REKAP", "alat": "Alat 4", "judul": "Kode FDT baru belum terdaftar", "arti": "Kode FDT baru … belum ada di rekap kode.", "tindakan": "Daftarkan kode ke pengelola rekap."}, {"kode": "FDT_PREMISES_NE_SUM_FAT", "alat": "Alat 4", "judul": "Premises FDT ≠ jumlah premises FAT", "arti": "Premises FDT … = {v}, jumlah premises FAT di bawahnya = {t}.", "tindakan": "Samakan premises FDT dengan jumlah premises FAT."}, {"kode": "FDT_SPLITTER_MISSING", "alat": "Alat 4", "judul": "Splitter FDT kosong", "arti": "Jumlah splitter FDT … tidak terisi di tabel kode.", "tindakan": "Isi kolom splitter FDT."}, {"kode": "FDT_SPLITTER_OVER_MAX", "alat": "Alat 4", "judul": "Splitter FDT melebihi batas", "arti": "FDT … memakai {v} splitter, batas {t}.", "tindakan": "Kurangi splitter atau pecah FDT."}, {"kode": "FDT_OUTPUT_SHORT", "alat": "Alat 4", "judul": "Output FDT kurang", "arti": "Output splitter FDT … ({v}) lebih sedikit dari kebutuhan input FAT ({t}).", "tindakan": "Tambah splitter FDT atau kurangi FAT di bawahnya."}, {"kode": "FAT_SPLITTER_TIER", "alat": "Alat 4", "judul": "Jumlah splitter FAT tidak sesuai HP", "arti": "FAT … punya {v} HP, tetapi jumlah splitternya tidak sesuai aturan (1-8 HP = 1 splitter, 9-16 HP = 2 splitter).", "tindakan": "Sesuaikan jumlah splitter FAT dengan jumlah HP."}, {"kode": "FAT_PREMISES_OVER_16", "alat": "Alat 4", "judul": "FAT lebih dari 16 HP", "arti": "FAT … memiliki {v} premises.", "tindakan": "Pecah FAT menjadi dua."}, {"kode": "SPLICE_SHEET_MISSING", "alat": "Alat 4", "judul": "Splice Plan tidak memuat FAT ini", "arti": "Tidak ada sheet Splice Plan untuk FAT ….", "tindakan": "Tambahkan FAT ke Splice Plan."}, {"kode": "SPLICE_SPLITTER_COUNT", "alat": "Alat 4", "judul": "Jumlah splitter beda dengan Splice Plan", "arti": "Tabel kode menyebut {t} splitter untuk …, Splice Plan berisi {v}.", "tindakan": "Samakan jumlah splitter di tabel kode dan Splice Plan (lihat juga jumlah HP FAT)."}, {"kode": "FIBER_TUBE_MISMATCH", "alat": "Alat 4", "judul": "Fiber/tube beda dengan Splice Plan", "arti": "Nomor fiber/tube … di tabel kode berbeda dengan Splice Plan.", "tindakan": "Ambil nomor fiber/tube dari sheet Route optique Splice Plan."}, {"kode": "FDT_COLO_INFO_MISSING", "alat": "Alat 4", "judul": "Info cluster COLO tidak ada", "arti": "FDT COLO … tidak menyebut cluster asal FDT.", "tindakan": "Isi kolom COLO dengan cluster asal."}, {"kode": "FDT_NEW_HAS_COLO", "alat": "Alat 4", "judul": "FDT baru berisi kolom COLO", "arti": "FDT NEW … mengisi kolom COLO, padahal FDT baru tidak memakai cluster lain.", "tindakan": "Kosongkan kolom COLO untuk FDT baru."}, {"kode": "PROP_CODE_NOT_IN_TABLE", "alat": "Alat 4", "judul": "Perangkat tidak ada di tabel kode", "arti": "… ada di KMZ tetapi tidak ada di tabel kode FDT-FAT.", "tindakan": "Tambahkan ke tabel kode."}, {"kode": "PROP_CODE_NOT_IN_KMZ", "alat": "Alat 4", "judul": "Kode di tabel tidak ada di KMZ", "arti": "… ada di tabel kode tetapi tidak ditemukan di KMZ.", "tindakan": "Tambahkan perangkat ke KMZ atau hapus dari tabel."}, {"kode": "PROP_MISMATCH", "alat": "Alat 4", "judul": "Properties KMZ ≠ tabel kode", "arti": "Nilai properties … di KMZ berbeda dengan tabel kode.", "tindakan": "Samakan nilai di KMZ dan tabel."}, {"kode": "AUTODESIGN_VS_TABLE", "alat": "Alat 4", "judul": "Hasil desain otomatis ≠ tabel kode", "arti": "Jumlah splitter/premises … di hasil desain otomatis berbeda dengan tabel kode.", "tindakan": "Periksa mana yang benar, lalu samakan."}, {"kode": "EXT_POLE_FAR_FROM_REF", "alat": "Alat 4", "judul": "Tiang existing tidak cocok dengan referensi", "arti": "Tiang existing … berjarak {v} m dari tiang referensi terdekat (batas {t} m).", "tindakan": "Pindahkan ke titik referensi, atau ubah statusnya menjadi tiang baru."}, {"kode": "PANCINGAN_RATIO_OVER", "alat": "Alat 4", "judul": "Kabel pancingan terlalu banyak", "arti": "Pancingan = {v}% dari panjang kabel baru (batas {t}%).", "tindakan": "Sederhanakan rute pancingan."}, {"kode": "CLOSURE_RATIO_OVER", "alat": "Alat 4", "judul": "Closure 96 terlalu banyak", "arti": "Closure 96 = {v}% dari jumlah FAT AE (batas {t}%).", "tindakan": "Kurangi closure atau gabungkan titik sambung."}, {"kode": "DEVICE_WITHOUT_POLE", "alat": "Alat 4", "judul": "Perangkat tidak di tiang", "arti": "… berjarak {v} m dari tiang terdekat (batas {t} m).", "tindakan": "Letakkan perangkat tepat di tiang."}, {"kode": "PANCINGAN_END_NO_POLE", "alat": "Alat 4", "judul": "Ujung pancingan tanpa tiang", "arti": "Ujung pancingan … berjarak {v} m dari tiang (batas {t} m).", "tindakan": "Tambahkan atau geser ke tiang."}];
+function $(s,r){return (r||document).querySelector(s)}
+function $$(s,r){return Array.prototype.slice.call((r||document).querySelectorAll(s))}
+function esc(t){return String(t).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+var store={get:function(k,d){try{var v=localStorage.getItem("seranta-hb-"+k);return v===null?d:JSON.parse(v)}catch(e){return d}},
+           set:function(k,v){try{localStorage.setItem("seranta-hb-"+k,JSON.stringify(v))}catch(e){}}};
+/* ---- tema ---- */
+var root=document.documentElement,th=store.get("theme","");if(th)root.setAttribute("data-theme",th);
+/* ---- stasiun ---- */
+var ST=[
+ {n:"Alat 1",t:"Siapkan Input Desain Otomatis + QC Survei (Review Strand)",kap:"Paling awal: begitu HPDB dan KMZ survei vendor diterima.",
+  in:["Folder cluster berisi HPDB (.xlsx) dan KMZ survei (HP, tiang, jalur, BOUNDARY)","BAKP (PDF izin warga)","Folder data referensi: Funnel, Design Lite, HPDB attributes (FINDIM)"],
+  out:["HP.shp/HP.csv, POLE.kmz, ROADS.shp untuk desain otomatis","Ringkasan QC 9 standar (HTML) + laporan Word + gambar temuan","Layer QC_TEMUAN untuk Navigator QC"],
+  cek:["9 standar review strand bertanda OK atau temuannya sudah dijelaskan","HPDB = KMZ (tidak ada HP bergeser / tanpa pasangan)","BAKP sudah dicek manual (isian, ttd, stempel)","Bentang tiang ≤ 60 m, tidak ada tiang nganggur tanpa alasan"],to:"#alat1"},
+ {n:"Alat 2",t:"Alokasi FDT & FAT (estimasi kebutuhan)",kap:"Setelah Alat 1, sebelum desain. Wajib bila standar 7 (bisa colo FDT) berstatus CEK.",
+  in:["Folder cluster yang sudah diproses Alat 1","Data referensi Design Lite (FDT existing sekitar)"],
+  out:["Perkiraan jumlah FAT dan pengelompokannya di jalur","FDT existing yang masih punya sisa splitter, atau usulan FDT baru","Link budget worst-case per FAT"],
+  cek:["Keputusan COLO atau FDT baru sudah disepakati","Link budget tidak berstatus 'budget tipis' tanpa alasan","Kapasitas FDT cukup untuk semua HP cluster"],to:"#alat2"},
+ {n:"Desain otomatis",t:"Software desain jaringan (di luar Seranta)",kap:"Setelah input dari Alat 1 siap dan keputusan FDT dari Alat 2 jelas.",
+  in:["HP.shp, POLE.kmz, ROADS.shp dari Alat 1","Config proyek (.sdproj) sesuai operator"],
+  out:["Folder OUTPUT (net_*.shp, Lightpaths, LinkBudget)","Splice Plan (.xlsx)","KMZ APD (Feeder & Distribution)"],
+  cek:["Semua HP berstatus served","Tidak ada FAT tanpa FDT induk"],to:"#hasil"},
+ {n:"Alat 3",t:"Pasca-Desain: Kode FDT-FAT, Tabel Closure + QC",kap:"Begitu desain otomatis selesai.",
+  in:["Folder OUTPUT desain otomatis","Splice Plan"],
+  out:["FAT FDT CODE (.csv/.xlsx) dengan premises, splitter, koordinat, F/T","Tabel core closure berwarna (standar warna TIA-598)","Cek awal pasca-desain (FAT melayang, urutan kode)"],
+  cek:["Kode FDT/FAT sesuai format dan urutan","Premises & splitter tiap FAT sesuai Splice Plan"],to:"#alat3"},
+ {n:"Alat 4",t:"QC APD Pasca-Desain (paket final)",kap:"Paling akhir, sebelum paket APD dikirim atau di-approve.",
+  in:["KMZ APD final dan/atau folder OUTPUT","FAT FDT CODE + Splice Plan","Opsional tapi disarankan: rekap kode FDT, tiang existing per kota, BOM"],
+  out:["22 aturan + 7 aturan paket (QC-01…QC-07) berstatus PASS/ERROR/WARNING/INFO/UNVERIFIED","QC_APD.html interaktif + QC_APD_LAPORAN.docx + gambar temuan","Layer temuan untuk Navigator QC"],
+  cek:["Tidak ada ERROR tersisa","Aturan UNVERIFIED sudah dilengkapi datanya","Pancingan ≤ 15%, closure ≤ 10% FAT","Semua FDT/FAT/closure berdiri di tiang"],to:"#alat4"}];
+var sel=store.get("st",0),done=store.get("cek",{}),panel=$("#stpanel");
+function li(a){return "<ul>"+a.map(function(x){return "<li>"+esc(x)+"</li>"}).join("")+"</ul>"}
+function show(i){
+  sel=i;store.set("st",i);var s=ST[i];
+  $$(".st").forEach(function(g){g.classList.toggle("sel",+g.getAttribute("data-st")===i);g.setAttribute("aria-selected",+g.getAttribute("data-st")===i)});
+  var ck=s.cek.map(function(c,k){var id="c"+i+"_"+k;return "<li><label><input type='checkbox' data-k='"+id+"'"+(done[id]?" checked":"")+"><span>"+esc(c)+"</span></label></li>"}).join("");
+  panel.innerHTML="<h3><span class='badge'>"+esc(i===2?"⚙":s.n.replace("Alat ",""))+"</span>"+esc(s.t)+"</h3>"+
+   "<div><h4>Kapan</h4><p style='margin:0'>"+esc(s.kap)+"</p></div><div><h4>Data masuk</h4>"+li(s.in)+"</div>"+
+   "<div><h4>Hasil</h4>"+li(s.out)+"</div><div><h4>Daftar periksa (tersimpan di perangkat ini)</h4><ul class='chk2'>"+ck+"</ul></div>"+
+   "<div class='meter'><i></i></div><div class='acts'>"+(i>0?"<button class='btn' type='button' data-go='"+(i-1)+"'>← Sebelumnya</button>":"")+
+   (i<4?"<button class='btn' type='button' data-go='"+(i+1)+"'>Berikutnya →</button>":"")+
+   "<a class='btn' href='"+s.to+"' style='text-decoration:none'>Baca panduan lengkap</a></div>";
+  meter();}
+function meter(){var b=$$("input[type=checkbox]",panel),n=b.filter(function(x){return x.checked}).length;var m=$(".meter i",panel);if(m)m.style.width=(b.length?100*n/b.length:0)+"%"}
+panel.addEventListener("change",function(e){var k=e.target.getAttribute("data-k");if(k){done[k]=e.target.checked;store.set("cek",done);meter()}});
+panel.addEventListener("click",function(e){var g=e.target.getAttribute("data-go");if(g!==null)show(+g)});
+$$(".st").forEach(function(g){var i=+g.getAttribute("data-st");g.addEventListener("click",function(){show(i)});
+  g.addEventListener("keydown",function(e){if(e.key==="Enter"||e.key===" "){e.preventDefault();show(i)}
+   if(e.key==="ArrowRight"&&i<4){$$(".st")[i+1].focus();show(i+1)} if(e.key==="ArrowLeft"&&i>0){$$(".st")[i-1].focus();show(i-1)}})});
+show(Math.min(4,Math.max(0,sel|0)));
+/* ---- pemandu ---- */
+var ANS=[["Jalankan Alat 1","Isi folder cluster dan folder data referensi, lalu jalankan. Perbaiki temuan survei dulu sebelum desain.",0],
+ ["Jalankan Alat 2","Alat 2 mencari FDT existing yang bisa dipakai (COLO) atau mengusulkan FDT baru, lengkap dengan link budget.",1],
+ ["Lanjut ke desain otomatis","Impor HP.shp, POLE.kmz, ROADS.shp dari folder INPUT hasil Alat 1 ke software desain otomatis.",2],
+ ["Jalankan Alat 3","Buat FAT FDT CODE dan tabel closure dari folder OUTPUT + Splice Plan.",3],
+ ["Jalankan Alat 4","QC paket final. Sertakan rekap kode, tiang existing per kota, dan BOM bila ada agar tidak ada aturan 'belum bisa dicek'.",4],
+ ["Buka Navigator QC","Panel di kanan QGIS: saring temuan, lompat ke lokasinya, beri status review, salin gambar, dan buat laporan Word.",-1]];
+$("#ask").addEventListener("click",function(e){var a=e.target.getAttribute("data-a");if(a===null)return;var r=ANS[+a];
+  $$("#ask .btn").forEach(function(b){b.classList.toggle("on",b===e.target)});
+  var box=$("#answer");box.innerHTML="<b class='big'>→ "+esc(r[0])+"</b><p style='margin:.3rem 0 .5rem'>"+esc(r[1])+"</p>"+
+   (r[2]>=0?"<button class='btn' type='button' data-st2='"+r[2]+"'>Lihat di peta perjalanan</button>":"<a class='btn' href='#navigator' style='text-decoration:none'>Baca panduan Navigator</a>");
+  box.classList.add("show")});
+$("#answer").addEventListener("click",function(e){var s=e.target.getAttribute("data-st2");if(s!==null){show(+s);$("#alur").scrollIntoView()}});
+/* ---- kamus ---- */
+var kf="",kq=$("#kq"),kl=$("#klist");
+function renderK(){var q=(kq.value||"").toLowerCase().trim(),n=0,h=[];
+  KAMUS.forEach(function(k){if(kf&&k.alat!==kf)return;var hay=(k.kode+" "+k.judul+" "+k.arti+" "+k.tindakan).toLowerCase();if(q&&hay.indexOf(q)<0)return;n++;
+   h.push("<details class='kitem'><summary><code>"+esc(k.kode)+"</code><span class='kt'>"+esc(k.judul)+"</span><span class='tag'>"+esc(k.alat)+"</span></summary>"+
+   "<div class='kb'><p><b>Artinya:</b> "+esc(k.arti)+"</p><p><b>Yang dilakukan:</b> "+esc(k.tindakan)+"</p></div></details>")});
+  kl.innerHTML=h.join("")||"<p class='lead'>Tidak ada yang cocok. Coba kata lain.</p>";$("#kc").textContent=n+" dari "+KAMUS.length+" kode";}
+kq.addEventListener("input",renderK);
+$$(".kbar .btn").forEach(function(b){b.addEventListener("click",function(){kf=b.getAttribute("data-kf");$$(".kbar .btn").forEach(function(x){x.classList.toggle("on",x===b)});renderK()})});
+renderK();
+/* ---- kuis ---- */
+var QZ=[["Urutan pemakaian Seranta yang benar adalah…",["1 → 3 → 2 → 4","1 → 2 → desain otomatis → 3 → 4","4 → 1 → 2 → 3"],1,"Alat 1 dan 2 sebelum desain; Alat 3 dan 4 sesudah desain otomatis."],
+ ["Aturan berstatus UNVERIFIED (belum bisa dicek) artinya…",["Lolos","Datanya belum ada, jadi BUKAN lolos","Pasti salah"],1,"Lengkapi data pendukung lalu jalankan ulang. Data kurang tidak pernah dihitung lolos."],
+ ["HP_BERGESER muncul bila…",["Nomor rumah HPDB sama dengan nama titik KMZ tapi koordinatnya beda > toleransi","HP di luar Funnel","HP tidak punya tiang"],0,"Rumahnya sama, hanya koordinat yang perlu disamakan. Batas 30 m mengikuti galat GPS ponsel di permukiman."],
+ ["Rasio pancingan maksimum terhadap kabel 24C/48C adalah…",["5%","15%","50%"],1,"Aturan QC operasional: pancingan ≤ 15% panjang kabel, closure ≤ 10% jumlah FAT."],
+ ["Bentang tiang 55 m berstatus…",["Lolos tanpa catatan","WARNING: di atas regulasi daerah 50 m tapi ≤ 60 m Handbook","ERROR"],1,"Perlu justifikasi/izin pemda. Di atas 60 m baru ERROR."]];
+var qz=$("#quiz"),right=0,answered=0;
+qz.innerHTML=QZ.map(function(q,i){return "<div class='q' data-q='"+i+"'><p>"+(i+1)+". "+esc(q[0])+"</p><div class='opts'>"+
+  q[1].map(function(o,j){return "<button type='button' data-o='"+j+"'>"+esc(o)+"</button>"}).join("")+"</div><div class='why'>"+esc(q[3])+"</div></div>"}).join("");
+qz.addEventListener("click",function(e){var o=e.target.getAttribute("data-o");if(o===null)return;var box=e.target.closest(".q");if(box.classList.contains("done"))return;
+  var q=QZ[+box.getAttribute("data-q")];box.classList.add("done");answered++;
+  $$("button",box).forEach(function(b,j){if(j===q[2])b.classList.add("ok")});
+  if(+o===q[2])right++;else e.target.classList.add("no");
+  $("#score").textContent="Skor: "+right+" / "+answered+(answered===QZ.length?(right===QZ.length?" — sempurna, siap pakai Seranta!":" — baca lagi bagian yang salah, lalu coba muat ulang halaman."):"")});
+/* ---- daftar isi: cari, sorot, tema, progres ---- */
+var nav=$("nav.toc"),bar=document.createElement("div");bar.className="tocbar";
+bar.innerHTML="<input type='search' id='tq' placeholder='Cari di handbook…' aria-label='Cari di handbook'><div class='row'><button class='btn' type='button' id='tt'>Tema</button><button class='btn' type='button' id='pr'>Cetak / PDF</button></div>";
+nav.insertBefore(bar,nav.querySelector("ol"));
+$("#tt").addEventListener("click",function(){var cur=root.getAttribute("data-theme")||(matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");
+  var nx=cur==="dark"?"light":"dark";root.setAttribute("data-theme",nx);store.set("theme",nx)});
+$("#pr").addEventListener("click",function(){window.print()});
+var secs=$$("main section");
+function clearHL(){$$("mark.hl").forEach(function(m){var t=document.createTextNode(m.textContent);m.parentNode.replaceChild(t,m);t.parentNode.normalize()})}
+function hl(node,q){var w=document.createTreeWalker(node,NodeFilter.SHOW_TEXT,{acceptNode:function(n){return n.parentNode.closest("script,style,svg,input,#klist")?2:1}}),list=[],n;
+  while((n=w.nextNode()))if(n.nodeValue.toLowerCase().indexOf(q)>=0)list.push(n);
+  list.forEach(function(t){var i=t.nodeValue.toLowerCase().indexOf(q),r=document.createRange();r.setStart(t,i);r.setEnd(t,i+q.length);var m=document.createElement("mark");m.className="hl";try{r.surroundContents(m)}catch(e){}})}
+var tmr;$("#tq").addEventListener("input",function(e){clearTimeout(tmr);tmr=setTimeout(function(){var q=e.target.value.toLowerCase().trim();clearHL();
+  secs.forEach(function(s){var hit=!q||s.textContent.toLowerCase().indexOf(q)>=0;s.classList.toggle("hide",!hit);if(hit&&q.length>1)hl(s,q)});
+  $$("nav.toc li").forEach(function(l){var a=l.querySelector("a"),s=a&&$(a.getAttribute("href"));l.style.display=(s&&s.classList.contains("hide"))?"none":""})},200)});
+var links=$$("nav.toc ol a"),tt=$("#totop"),pg=$("#progress");
+function onScroll(){var y=window.scrollY,h=document.documentElement.scrollHeight-innerHeight;pg.style.width=(h>0?100*y/h:0)+"%";tt.classList.toggle("show",y>600);
+  var cur=null;secs.forEach(function(s){if(!s.classList.contains("hide")&&s.getBoundingClientRect().top<140)cur=s.id});
+  links.forEach(function(a){a.classList.toggle("active",a.getAttribute("href")==="#"+cur)})}
+addEventListener("scroll",onScroll,{passive:true});onScroll();
+tt.addEventListener("click",function(){scrollTo(0,0)});
+})();
+</script>
