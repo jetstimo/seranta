@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.5.3 – hasil QC lebih tepat dan jelas
+- Alat 1 standar 4: rumah yang sama (no. rumah HPDB = nama titik KMZ) dengan koordinat bergeser 5–30 m dilaporkan sekali
+  sebagai `HP_BERGESER` (perlu ditinjau), bukan dua temuan "tidak ada" (galat GPS ponsel 7–13 m di permukiman).
+- Titik di folder DUPLIKAT/ERROR KMZ hanya dihitung sebagai duplikat, tidak lagi sebagai "KMZ tidak ada di HPDB".
+- Catatan cakupan bila KMZ ≥ 1,5× HPDB dan bila CLUSTER_NAME HPDB bercampur.
+- Alat 4: garis folder "Keterangan Infra" adalah penanda, bukan kabel (slack, BOM, rasio pancingan tidak lagi terpengaruh).
+- Pancingan tidak ditandai "tanpa status COLO/NEW INFRA".
+- QC-06: bila sebagian perangkat belum bisa dicek, status "Belum bisa dicek" (bukan "Lolos").
+- Aturan lolos yang punya keterbatasan cakupan ditulis "Lolos dengan catatan" di HTML dan Word.
+- Versi aturan di laporan = versi logika kode (2026.10-r5), bukan angka lama di file profil.
+- 59 uji otomatis (uji baru `tests/test_v353.py`).
+
 ## 3.5.2 – laporan interaktif, gambar temuan dan laporan Word
 - Setiap temuan punya ID tetap (F-0001 di alat 1, ID temuan di alat 4) yang sama di HTML, Word, layer temuan dan Navigator QC.
 - Gambar peta per temuan (sorotan geometri, label tiang/perangkat, skala, arah utara; tanpa peta dasar/internet) di

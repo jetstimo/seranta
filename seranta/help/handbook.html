@@ -123,7 +123,7 @@ html{scroll-behavior:smooth}
     <div>
       <h1>SERANTA</h1>
       <div class="tag">FTTH Design Assistant untuk QGIS · Serat untuk Nusantara</div>
-      <div class="meta">Handbook pengguna · versi plugin 3.5.2 · © 2026 Joseph Edward Timothy Siahaan</div>
+      <div class="meta">Handbook pengguna · versi plugin 3.5.3 · © 2026 Joseph Edward Timothy Siahaan</div>
     </div>
   </div>
 </header>
@@ -146,7 +146,7 @@ html{scroll-behavior:smooth}
 <li><a href="#keandalan">Keandalan &amp; dasar angka</a></li>
 <li><a href="#laporan">Membaca laporan HTML</a></li>
 <li><a href="#profil">Profil standar organisasi</a></li>
-<li><a href="#baru">Yang baru di 3.5.2</a></li>
+<li><a href="#baru">Yang baru di 3.5.3</a></li>
 <li><a href="#masalah">Masalah umum</a></li>
 <li><a href="#istilah">Istilah</a></li>
 </ol></nav>
@@ -567,7 +567,21 @@ html{scroll-behavior:smooth}
 
 <section id="baru">
   <div class="kicker">Perbandingan versi</div>
-  <h2>Yang baru di 3.5.2: laporan interaktif dan Word</h2>
+  <h2>Yang baru di 3.5.3: hasil QC lebih tepat dan jelas</h2>
+  <p>Perbaikan dari pengujian data nyata (Minahasa Roong, Banda Aceh Permata Hijau). Semua hitungan dicocokkan ulang
+  secara independen terhadap HPDB, KMZ, FAT FDT CODE dan Splice Plan.</p>
+  <div class="tablebox"><table>
+    <tr><th>Pemeriksaan</th><th>Sebelumnya</th><th>3.5.3</th><th>Dasar</th></tr>
+    <tr><td>HPDB vs KMZ (alat 1, standar 4)</td><td>Rumah yang sama dengan koordinat bergeser &gt; 5 m muncul dua kali: "HPDB tidak ada di KMZ" dan "KMZ tidak ada di HPDB"</td><td>Bila no. rumah HPDB = nama titik KMZ dan jarak &le; 30 m: satu temuan <b>HP_BERGESER</b> (perlu ditinjau) dengan jaraknya</td><td>Galat GPS ponsel 7&ndash;13 m di permukiman (Merry &amp; Bettinger, PLOS ONE 2019); 30 m = &plusmn;2&times; batas atas</td></tr>
+    <tr><td>Titik folder DUPLIKAT (ERROR) di KMZ</td><td>Dihitung sebagai duplikat dan juga sebagai "KMZ tidak ada di HPDB"</td><td>Hanya dihitung sebagai duplikat</td><td>Hindari hitung ganda</td></tr>
+    <tr><td>Cakupan HPDB</td><td>Puluhan temuan tanpa konteks</td><td>Catatan cakupan bila KMZ &ge; 1,5&times; HPDB; catatan bila CLUSTER_NAME HPDB bercampur</td><td>Arahkan tim ke akar masalah dulu</td></tr>
+    <tr><td>Garis "Keterangan Infra" (alat 4)</td><td>Dinilai sebagai kabel (slack, BOM, rasio pancingan)</td><td>Penanda saja, tidak dinilai sebagai kabel</td><td>Templat KMZ APD: garis penanda menumpang di atas kabel</td></tr>
+    <tr><td>Label status kabel</td><td>Pancingan ikut ditandai "tanpa status COLO/NEW INFRA"</td><td>Pancingan tidak dinilai</td><td>Folder Pancingan sudah menyatakan jenisnya</td></tr>
+    <tr><td>QC-06 perangkat di tiang</td><td>"Lolos" walau sebagian perangkat belum bisa dicek</td><td>"Belum bisa dicek" dengan rincian (mis. 17 dari 18 OK)</td><td>Lolos hanya bila semua dicek</td></tr>
+    <tr><td>Aturan lolos dengan keterbatasan</td><td>Tertulis "Lolos. Tidak ada temuan."</td><td>"Lolos dengan catatan: ..." di HTML dan Word</td><td>Kejelasan bagi semua pengguna</td></tr>
+    <tr><td>Versi aturan di laporan</td><td>Diambil dari file profil (bisa angka lama)</td><td>Versi logika kode yang menilai (2026.10-r5)</td><td>Jejak audit</td></tr>
+  </table></div>
+  <h3>3.5.2: laporan interaktif dan Word</h3>
   <div class="tablebox"><table>
     <tr><th>Fitur</th><th>Cara memakai</th></tr>
     <tr><td>ID temuan tetap</td><td>Setiap temuan punya ID (F-0001 di alat 1; ID temuan di alat 4) yang sama di laporan HTML, laporan Word, layer temuan dan panel Navigator QC. Sebut ID ini saat berdiskusi dengan tim.</td></tr>

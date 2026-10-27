@@ -880,7 +880,8 @@ def write_word(path, results, prof, meta, net, out_dir, max_img=80):
     for r in results:
         c = r.counts()
         rows.append(("%s" % (X.RULES.get(r.rule_id, {}).get("judul") or r.title), r.status, sum(c.values()),
-                     (r.unverified or "")[:160] if r.status == "UNVERIFIED" else ", ".join("%s %d" % kv for kv in sorted(c.items()))))
+                     (r.unverified or "")[:160] if r.status == "UNVERIFIED" else (", ".join("%s %d" % kv for kv in sorted(c.items())) or (
+                         ("catatan: " + next(n for n in r.notes if n))[:160] if [n for n in r.notes if n] else ""))))
     rows.sort(key=lambda t: Q.SEV_RANK.get(t[1], 9))
     D.qc_report(path, "Laporan QC APD - %s" % str(meta.get("cluster", "")).replace("_", " "),
                 "QC paket desain APD pasca-desain - %s" % meta.get("produk", ""),
@@ -919,6 +920,9 @@ def write_html(path, results, prof, meta):
             sub = "%d temuan" % len(r.findings)
         elif r.status == "UNVERIFIED":
             sub = U.plain(r.unverified or "data belum lengkap")
+        elif [n for n in r.notes if n]:
+            # lolos, tetapi ada keterbatasan cakupan yang harus diketahui pembaca (bukan lolos penuh)
+            sub = "Lolos dengan catatan: " + U.plain(next(n for n in r.notes if n))[:140]
         else:
             sub = "Lolos. Tidak ada temuan."
         inner = []

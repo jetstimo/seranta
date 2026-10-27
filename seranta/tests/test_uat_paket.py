@@ -86,7 +86,10 @@ def fids(r):
 def test_S01_consistent_design_passes():
     net, pr = design()
     res = by_id(P.run_paket(net, net, PROF))
-    for rid in ("QC05_RASIO", "QC06_TIANG_PERANGKAT", "QC07_PANCINGAN"):
+    # QC-06: closure lingkup FEEDER tanpa data tiang -> sebagian belum dapat dicek = UNVERIFIED (3.5.3), bukan PASS
+    assert res["QC06_TIANG_PERANGKAT"].status == "UNVERIFIED" and not res["QC06_TIANG_PERANGKAT"].findings
+    assert "18 dari 19" in res["QC06_TIANG_PERANGKAT"].unverified
+    for rid in ("QC05_RASIO", "QC07_PANCINGAN"):
         assert res[rid].status == "PASS", (rid, res[rid].status, [f["message"] for f in res[rid].findings], res[rid].unverified)
 
 

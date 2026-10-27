@@ -1,6 +1,6 @@
 {
  "profile_id": "APD_1X4",
- "rule_version": "2026.10-r2",
+ "rule_version": "2026.10-r5",
  "nama": "APD distribusi - FDT splitter 1x4 (bawaan)",
  "keterangan": "Profil bawaan. Batas tegas mengikuti handbook KMZ internal dan config desain otomatis splitter 1x4; batas regulasi daerah 50 m menjadi WARNING.",
  "params": {

@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.5.2"
+__version__ = "3.5.3"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -31,6 +31,7 @@ except ImportError:  # dijalankan sebagai modul lepas (uji unit)
     import _log
 import os
 import re
+from collections import Counter
 
 from osgeo import gdal, ogr
 from qgis.PyQt.QtCore import QCoreApplication
@@ -139,6 +140,8 @@ POLE_RX = re.compile(r"\b(poles?|tiang|np|ep)\b", re.IGNORECASE)
 SKIP_RX = re.compile(r"\b(hp|homepass|home ?pass|evid[ae]n[cs]e|boundary|bondary)\b", re.IGNORECASE)
 # folder bukti foto lapangan (juga salah ketik 'EVIDANCE' yang ditemui di KMZ vendor) - bukan homepass
 EVID_RX = re.compile(r"evid[ae]n[cs]e|evident|foto|photo|dokumentasi", re.IGNORECASE)
+# folder titik HP yang sudah ditandai surveyor sebagai duplikat/kesalahan (mis. "DUPLIKAT HOMEPASS (ERROR)")
+DUPF_RX = re.compile(r"duplikat|duplicate|\berror\b", re.IGNORECASE)
 ROUTE_RX = re.compile(r"\b(routes?|cables?|kabel|roads?|jalur)\b", re.IGNORECASE)
 
 
@@ -1429,6 +1432,7 @@ QC_LABELS = [
     (r"^HP_DUPLIKAT_ID", 4, "HP duplikat: ID operator sama", "S4_DUPLIKAT_ID", "satu rumah satu homepass"),
     (r"^HP_HPDB_TIDAK_ADA_DI_KMZ", 4, "HP di HPDB tidak ada di KMZ", "S4_HPDB_TANPA_KMZ", "konsistensi HPDB-KMZ"),
     (r"^HP_KMZ_TIDAK_ADA_DI_HPDB", 4, "HP di KMZ tidak ada di HPDB", "S4_KMZ_TANPA_HPDB", "konsistensi HPDB-KMZ"),
+    (r"^HP_BERGESER", 4, "HP sama (no. rumah) tetapi koordinat bergeser", "S4_HP_BERGESER", "konsistensi HPDB-KMZ"),
     (r"^LAT_LONG_TERTUKAR", 4, "Latitude/longitude tertukar", "S4_LATLONG_TERTUKAR", "validasi koordinat"),
     (r"^HP_LUAR_FUNNEL", 5, "HP di luar boundary Funnel", "S5_HP_LUAR_FUNNEL",
      "toleransi GPS ponsel 4,9 m terbuka / 7-13 m urban (GPS.gov; PLOS ONE 2019)"),
@@ -1514,7 +1518,7 @@ QC_DASAR = [  # (pola kode, kategori dasar) untuk kolom dasar_src
 
 # Temuan yang perlu ditinjau tetapi belum tentu salah desain (bukan "wajib diperbaiki"):
 # tiang survei yang belum dilewati jalur bisa jadi cadangan rute; keputusan ada di desain.
-WARNING_KINDS = {"TIANG_NGANGGUR"}
+WARNING_KINDS = {"TIANG_NGANGGUR", "HP_BERGESER"}
 
 
 def qc_severity(kind):
@@ -3224,6 +3228,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             kmz_hp = [(geom, nm) for folders, nm, kind, geom in feats
                       if kind == "point" and any(HP_RX.search(f) for f in folders)
                       and not any(EVID_RX.search(f) for f in folders)]
+            # titik di folder 'DUPLIKAT ... (ERROR)' sudah ditandai surveyor sebagai duplikat: tetap dihitung sebagai
+            # HP duplikat KMZ, tetapi tidak dilaporkan lagi sebagai 'HP KMZ tidak ada di HPDB' (hindari hitung ganda)
+            kmz_dupf = {j for j, (folders, nm, kind, geom) in enumerate(
+                [x for x in feats if x[2] == "point" and any(HP_RX.search(f) for f in x[0])
+                 and not any(EVID_RX.search(f) for f in x[0])]) if any(DUPF_RX.search(f) for f in folders)}
             n_main = len(kmz_hp)
             kmz_hp += [(geom, nm) for folders, nm, kind, geom in feats
                        if kind == "point" and any(HP_RX.search(f) for f in folders)
@@ -3255,6 +3264,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         else:
             own_bnd, kmz_hp = [], []
             kmz_ev0 = 0
+            kmz_dupf = set()
             ppts, _, pnames, pl = self._read_kml(pole_path)
             pkinds = [pole_kind([], nm) for nm in pnames]
             pheights = [pole_height([], nm) for nm in pnames]
@@ -3640,8 +3650,37 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             for d, i, j in cand:
                 if i not in pair_h and j not in pair_k:
                     pair_h[i], pair_k[j] = j, i
-            no_kmz = no_hpdb = 0
+            no_kmz = no_hpdb = n_geser = 0
             dup_idx = {k for j_, ks in dup_groups if j_ == "koordinat sama" for k in ks}
+            # Tahap 2 - pasangan berdasarkan identitas: nomor rumah HPDB = nama titik KMZ (aplikasi survei menamai titik
+            # dengan nomor rumah) dan jarak <= hp_shift_max. Rumah yang sama dengan koordinat bergeser (galat GPS ponsel
+            # 7-13 m di permukiman, Merry & Bettinger 2019) dilaporkan sekali sebagai HP_BERGESER, bukan dua temuan
+            # 'tidak ada'.
+            shift_max = float(opt.get("hp_shift_max", 30.0) or 30.0)
+            hn_i = i_adr[1]
+
+            def _norm_no(v):
+                v = re.sub(r"\s+", "", str(v or "")).upper().lstrip("?-").lstrip("0")
+                return v
+
+            kname = {}
+            for j, (g, nm) in enumerate(kmz_hp):
+                if j not in pair_k and j < kmz_ev0 and j not in kmz_dupf and _norm_no(nm):
+                    kname.setdefault(_norm_no(nm), []).append(j)
+            for i, (r, p) in enumerate(data):
+                if i in pair_h or hn_i is None or hn_i >= len(r):
+                    continue
+                key = _norm_no(r[hn_i])
+                if not key or key in ("-", ""):
+                    continue
+                best = min(((da.measureLine(p, kmz_hp[j][0]), j) for j in kname.get(key, []) if j not in pair_k),
+                           default=None)
+                if best and best[0] <= shift_max:
+                    pair_h[i], pair_k[best[1]] = best[1], i
+                    n_geser += 1
+                    qc.append((p, "HP_BERGESER", "%s: no. rumah %s sama dengan titik KMZ '%s' tetapi koordinat bergeser %.1f m"
+                               " (> %.0f m); samakan koordinat HPDB dengan KMZ" % (
+                                   _hpname(i), r[hn_i].strip(), kmz_hp[best[1]][1], best[0], hp_tol)))
             for i, (r, p) in enumerate(data):
                 if i in pair_h:
                     continue
@@ -3649,13 +3688,13 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 j = kidx.nearestNeighbor(p, 1)[0]
                 d = da.measureLine(p, kmz_hp[j][0])
                 why = "duplikat koordinat; titik KMZ-nya sudah dipakai baris lain" if i in dup_idx and d <= hp_tol \
-                    else "HP KMZ terdekat %.1f m" % d
+                    else "HP KMZ terdekat %.1f m, tidak ada titik KMZ dengan no. rumah sama" % d
                 qc.append((p, "HP_HPDB_TIDAK_ADA_DI_KMZ", "%s: %s" % (_hpname(i), why)))
             n_ev = len(kmz_hp) - kmz_ev0
             ev_used = sum(1 for j in pair_k if j >= kmz_ev0)
             n_kmz = kmz_ev0 + ev_used          # HP KMZ efektif: folder HP + titik evidence yang berpasangan HPDB
             for j, (g, nm) in enumerate(kmz_hp):
-                if j in pair_k or j >= kmz_ev0:
+                if j in pair_k or j >= kmz_ev0 or j in kmz_dupf:
                     continue
                 no_hpdb += 1
                 i = hidx.nearestNeighbor(g, 1)[0]
@@ -3668,7 +3707,23 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 if n_ev else ""))
             rep.append("  HP duplikat        : HPDB %d (koordinat) / %d (ID operator), KMZ %d (koordinat)" % (dup, dup_id, kmz_dup))
             rep.append("  HPDB tanpa pasangan di KMZ (> %.0f m atau duplikat) : %d" % (hp_tol, no_kmz))
-            rep.append("  KMZ tanpa pasangan di HPDB (> %.0f m)              : %d" % (hp_tol, no_hpdb))
+            rep.append("  KMZ tanpa pasangan di HPDB (> %.0f m)              : %d%s" % (
+                hp_tol, no_hpdb, (" (titik folder DUPLIKAT %d tidak dihitung ulang)" % len(kmz_dupf)) if kmz_dupf else ""))
+            rep.append("  HP sama (no. rumah) tapi bergeser %.0f-%.0f m     : %d" % (hp_tol, shift_max, n_geser))
+            # Cakupan: HPDB jauh lebih sedikit dari KMZ -> kemungkinan HPDB hanya sebagian dari survei
+            if n_kmz >= 1.5 * max(1, len(data)) and no_hpdb >= 10:
+                rep.append("  Info cakupan: KMZ memuat %d HP, HPDB %d baris - HPDB kemungkinan hanya sebagian wilayah survei;"
+                           " pastikan cakupan pengajuan sebelum memperbaiki satu per satu" % (n_kmz, len(data)))
+                parts_scope = "cakupan: KMZ %d vs HPDB %d (HPDB kemungkinan sebagian survei)" % (n_kmz, len(data))
+            else:
+                parts_scope = ""
+            ci = _col("CLUSTER_NAME")
+            if ci is not None:
+                cn = Counter(r[ci].strip() for r, _p in data if ci < len(r) and r[ci].strip() not in ("", "-"))
+                if len(cn) > 1:
+                    rep.append("  Info: CLUSTER_NAME HPDB bercampur: %s" % ", ".join("%s %d" % kv for kv in cn.most_common()))
+                    parts_scope = (parts_scope + "; " if parts_scope else "") + "CLUSTER_NAME bercampur (%s)" % ", ".join(
+                        "%s %d" % kv for kv in cn.most_common())
             parts = ["HPDB %d vs KMZ %d%s" % (len(data), n_kmz, (" (%d dari folder EVIDENCE)" % ev_used) if ev_used else "")]
             if dup or dup_id or kmz_dup:
                 parts.append("HP duplikat: %s" % ", ".join(x for x in (
@@ -3678,12 +3733,16 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 if first:
                     parts.append("contoh " + "; ".join(" & ".join(_hpname(k) for k in g) for g in first))
             parts.append("tanpa pasangan: HPDB %d, KMZ %d" % (no_kmz, no_hpdb))
+            if n_geser:
+                parts.append("%d HP sama no. rumah tapi koordinat bergeser" % n_geser)
+            if parts_scope:
+                parts.append(parts_scope)
             m_nhp = re.search(r"(?<![0-9])(\d{1,5})\s*HP(?![A-Za-z])", os.path.basename(hpdb), re.IGNORECASE)
             if m_nhp and int(m_nhp.group(1)) != len(data):
                 parts.append("info: nama file HPDB menyebut %s HP, isi HPDB %d baris valid" % (m_nhp.group(1), len(data)))
                 rep.append("  Info: nama file HPDB menyebut %s HP, isi HPDB %d baris valid (cek versi HPDB/TSSR)"
                            % (m_nhp.group(1), len(data)))
-            std[4] = (no_kmz == 0 and no_hpdb == 0 and n_kmz == len(data) and not dup and not dup_id and not kmz_dup,
+            std[4] = (no_kmz == 0 and no_hpdb == 0 and n_geser == 0 and n_kmz == len(data) and not dup and not dup_id and not kmz_dup,
                       "; ".join(parts))
         else:
             rep.append("  Folder HP tidak ditemukan di KMZ cluster (cek dilewati)")

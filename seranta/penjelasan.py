@@ -357,6 +357,8 @@ TOOL1_KIND = [
     ("HP_DUPLIKAT_KOORDINAT", "Dua atau lebih HP di koordinat yang sama.", "Sisakan satu HP per rumah."),
     ("HP_DUPLIKAT_ID", "Dua atau lebih HP memakai ID operator yang sama.", "Beri ID unik atau hapus duplikat."),
     ("HP_HPDB_TIDAK_ADA_DI_KMZ", "HP ada di HPDB tetapi tidak tergambar di KMZ.", "Tambahkan titik di KMZ atau hapus dari HPDB."),
+    ("HP_BERGESER", "Rumah yang sama (nomor rumah HPDB = nama titik KMZ) tetapi koordinatnya berbeda lebih dari toleransi.",
+     "Samakan koordinat HPDB dengan titik survei KMZ (atau sebaliknya bila survei yang salah)."),
     ("HP_KMZ_TIDAK_ADA_DI_HPDB", "HP tergambar di KMZ tetapi tidak ada di HPDB.", "Tambahkan baris di HPDB atau hapus titik di KMZ."),
     ("LAT_LONG_TERTUKAR", "Kolom latitude dan longitude tampaknya tertukar.", "Tukar nilai kedua kolom pada baris tersebut."),
     ("HP_LUAR_FUNNEL", "Rumah di luar batas Funnel.", "Keluarkan HP atau ajukan perubahan batas."),

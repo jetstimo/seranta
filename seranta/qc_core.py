@@ -29,7 +29,7 @@ try:  # defusedxml bila terpasang; bila tidak, ElementTree standar (expat >= 2.4
 except ImportError:
     import xml.etree.ElementTree as ET  # nosec B405
 
-RULE_VERSION = "2026.10-r4"
+RULE_VERSION = "2026.10-r5"
 SEVERITIES = ("ERROR", "WARNING", "UNVERIFIED", "INFO", "PASS")
 SEV_RANK = {s: i for i, s in enumerate(SEVERITIES)}
 DASAR_LABEL = {"REGULASI": "Regulasi Indonesia", "STANDAR": "Standar (ITU-T/GR/konstruksi distribusi)",
@@ -79,6 +79,9 @@ def _read_profiles(folder, origin):
                     d = json.load(fh)
                 if d.get("profile_id") and isinstance(d.get("params"), dict):
                     d["_asal"] = origin
+                    # versi aturan = versi logika kode yang menilai (bukan angka lama tertulis di file profil organisasi)
+                    d["profile_rule_version"] = d.get("rule_version", "")
+                    d["rule_version"] = RULE_VERSION
                     d["_file"] = os.path.join(folder, fn)
                     out[d["profile_id"]] = d
             except (OSError, ValueError):
@@ -569,6 +572,9 @@ def make_endpoint(a, name, x, y, folders=(), src=""):
             "x": x, "y": y, "attrs": a or {}, "name": name or "", "src": src}
 
 
+ANNOT_RX = re.compile(r"keterangan\s*infra", re.I)
+
+
 def make_cable(a, name, pts, folders=(), src="", color=None, width=None):
     txt = " ".join(list(folders) + [name or "", str(_get(a, "MODELNUM", "MODEL", "CABLEMODEL", "NAME") or "")])
     # kapasitas nominal (folder/model, mis. 'New Cable 24C') dipisah dari jumlah serat atribut (FIBERS=20 pada kabel
@@ -577,7 +583,11 @@ def make_cable(a, name, pts, folders=(), src="", color=None, width=None):
     nom = nominal_core(" ".join(list(folders) + [str(_get(a, "MODELNUM", "MODEL", "CABLEMODEL") or ""), name or ""]))
     core = nom or (int(fc) if fc else None)
     kind = "dist"
-    if DROP_RX.search(txt) or core == 1:
+    if any(ANNOT_RX.search(f or "") for f in folders):
+        # garis 'Keterangan Infra' di templat KMZ APD hanya penanda jenis infrastruktur (colo tiang / new infra / galian)
+        # yang menumpang di atas kabel sebenarnya: bukan kabel, tidak dinilai sebagai kabel (slack, bentang, BOM, rasio)
+        kind = "annot"
+    elif DROP_RX.search(txt) or core == 1:
         kind = "drop"
     elif re.search(r"pancingan", txt, re.I):
         kind = "pancingan"
@@ -1488,8 +1498,12 @@ def rule_slack(net, prof, pr):
         cuts = [0.0] + chs + [L]
         gaps = [b - a for a, b in zip(cuts, cuts[1:])]
         if max(gaps) > itv * 1.1:
-            r.add(finding("SLACK_GAP_OVER_PROFILE", "WARNING", "Kabel %s %.0f m: jarak antar slack terpanjang %.0f m > %d m"
-                          % (c["name"] or c["id"], L, max(gaps), itv), ("line", c["pts"]), "KABEL", c["name"], round(max(gaps), 1), itv))
+            need = int(L // itv)
+            msg = ("Kabel %s %.0f m belum punya penanda slack sama sekali; butuh minimal %d slack (satu tiap %d m)"
+                   % (c["name"] or c["id"], L, need, itv)) if not chs else (
+                "Kabel %s %.0f m: ada %d slack, tetapi jarak antar slack terpanjang %.0f m > %d m; tambah slack di ruas itu"
+                % (c["name"] or c["id"], L, len(chs), max(gaps), itv))
+            r.add(finding("SLACK_GAP_OVER_PROFILE", "WARNING", msg, ("line", c["pts"]), "KABEL", c["name"], round(max(gaps), 1), itv))
     return r
 
 
@@ -1709,7 +1723,7 @@ def rule_bom(net, bom_path, prof, pr):
             r.notes.append("tinggi tiang diketahui pada %d dari %d tiang baru di APD -> BOM dibandingkan pada total tiang"
                            % (known, len(newp)))
     for core in (24, 48, 96, 144):
-        cs = [c for c in net.cables if c["core"] == core and c["kind"] != "drop" and c["status"] != "EXISTING"]
+        cs = [c for c in net.cables if c["core"] == core and c["kind"] not in ("drop", "annot") and c["status"] != "EXISTING"]
         if cs:
             design["CABLE_%d" % core] = sum(line_len(c["pts"], pr) for c in cs)
     table = []
@@ -1781,18 +1795,21 @@ def rule_kmz(net, fdt_colo, prof, pr):
                       case_id="18", recommendation="sertakan file ikon di folder files/ KMZ atau pakai URL valid"))
     cols = pv(prof, "cable_colors", {}) or {}
     for c in net.cables:
-        if c["kind"] in ("drop",) or c["status"] == "EXISTING" or not c["core"]:
+        if c["kind"] in ("drop", "annot") or c["status"] == "EXISTING" or not c["core"]:
             continue
         want = cols.get(str(c["core"]))
         if want and c["color"] and c["color"].lower() != want.lower():
             r.add(finding("CABLE_COLOR_MISMATCH", "WARNING", "Kabel %s %d core berwarna %s, seharusnya %s" % (
                 c["name"] or c["id"], c["core"], c["color"], want), ("line", c["pts"]), "KABEL", c["name"], case_id="28"))
     for c in _dist_cables(net):
+        if c["kind"] == "pancingan":
+            continue          # pancingan bukan kabel berstatus COLO/NEW INFRA (folder Pancingan sudah menyatakan jenisnya)
         txt = (c["name"] + " " + c["desc"]).strip()
         if not txt:
             r.add(finding("CABLE_LABEL_MISSING", "WARNING", "Kabel tanpa keterangan (nama/deskripsi kosong)", ("line", c["pts"]), "KABEL", "",
                           case_id="20"))
-        elif not re.search(r"colo|new ?infra|existing|eksisting|\bnew\b", txt, re.I):
+        elif not re.search(r"colo|new ?infra|existing|eksisting|\bnew\b", txt + " " + " ".join(c.get("folders") or []), re.I):
+            # status boleh dinyatakan lewat folder templat (mis. 'New Infra Aerial/Udara/New Cable 24C', 'Collo Cable')
             r.add(finding("CABLE_LABEL_NO_STATUS", "INFO", "Keterangan kabel '%s' tanpa status COLO/NEW INFRA" % txt[:40],
                           ("line", c["pts"]), "KABEL", c["name"], case_id="5"))
     if fdt_colo and not any(re.search(r"existing", x) for x in names):

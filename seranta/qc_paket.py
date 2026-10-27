@@ -609,7 +609,7 @@ def rule_ratio(kmz, prof, pr):
         return (o.get("scope") or "") == sc or (sc and not o.get("scope"))
     lim_p, lim_c = pv(prof, "pancingan_max_pct", 15.0), pv(prof, "closure96_max_pct", 10.0)
     panc = [c for c in kmz.cables if c["kind"] == "pancingan" and in_sc(c)]
-    base = [c for c in kmz.cables if in_sc(c) and c["kind"] != "pancingan" and c.get("nominal_core") in (24, 48)
+    base = [c for c in kmz.cables if in_sc(c) and c["kind"] not in ("pancingan", "annot") and c.get("nominal_core") in (24, 48)
             and c.get("status") != "EXISTING" and re.search(r"new\s*cable\s*(24|48)\s*c", _path(c))]
     Lp = sum(line_len(c["pts"], pr) for c in panc)
     Lb = sum(line_len(c["pts"], pr) for c in base)
@@ -674,8 +674,10 @@ def rule_device_pole(kmz, prof, pr, extra_poles=()):
                           tol, "letakkan perangkat di titik tiang atau tambah tiang", scope=sc, unit="m"))
     if unv:
         r.notes.append("Belum dapat dicek (data tiang lingkup tersebut belum ada): " + "; ".join(unv))
-        if not r.findings and len(unv) == len(items):
-            r.unverify("UNVERIFIED: " + "; ".join(unv))
+        if not r.findings:
+            # sebagian perangkat belum dapat dicek -> jangan tampil PASS (pengguna mengira semua aman)
+            r.unverify("UNVERIFIED: %d dari %d perangkat OK di tiang; belum dapat dicek: %s"
+                       % (len(items) - len(unv), len(items), "; ".join(unv)))
     r.stats["dicek"] = "%d perangkat, %d belum dapat dicek" % (len(items) - len(unv), len(unv))
     return r
 
