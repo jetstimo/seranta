@@ -198,7 +198,7 @@ var s=load();boxes.forEach(function(b){b.checked=!!s[b.dataset.k];b.addEventList
     doc = U.page("QC %s" % meta.get("kode", ""), "QC data survei sebelum desain", meta.get("cluster", ""), verdict,
                  [("Kode cluster", meta.get("kode", "")), ("ID", meta.get("cl_id", "")), ("Dibuat", meta.get("date", "")),
                   ("Profil desain", meta.get("profile", "")), ("Alat", "%s v%s" % (meta.get("product", ""), meta.get("version", "")))],
-                 counts, items, U.howto() + "".join(cards) + "".join(sec),
+                 counts, items, (meta.get("map_html") or "") + U.howto() + "".join(cards) + "".join(sec),
                  "%s v%s. &copy; 2026 %s, GPL-2.0-or-later. Hasil QC adalah alat bantu; keputusan desain tetap pada desainer "
                  "dan reviewer." % (_E(meta.get("product", "")), _E(meta.get("version", "")), _E(meta.get("author", ""))),
                  run_key=str(meta.get("kode", "")), word_href=meta.get("word"))

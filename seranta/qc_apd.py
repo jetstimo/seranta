@@ -719,6 +719,11 @@ class QcApd(QgsProcessingAlgorithm):
         return loads
 
     def _html(self, path, results, prof, meta, net):
+        try:
+            from . import mapview as MV
+            meta["map_html"] = MV.block(MV.data_from_scene(scene_of(net), finding_recs(results)), "Peta temuan QC APD")
+        except Exception as _e:          # peta adalah pelengkap: laporan tetap ditulis tanpa peta
+            _log.note(_e)
         write_html(path, results, prof, meta)
 
 
@@ -816,24 +821,47 @@ def scene_of(net):
     """Objek peta dari jaringan QC (kabel, tiang, perangkat, homepass, batas) untuk gambar temuan."""
     from . import snapshot as S
     sc = S.Scene()
+    def at(o, pairs):
+        a = {}
+        for lab, key in pairs:
+            v = o.get(key)
+            if v not in (None, "", [], {}):
+                a[lab] = ("%g" % v) if isinstance(v, float) else v
+        for k, v in (o.get("attrs") or {}).items():
+            if len(a) >= 22:
+                break
+            if k not in a and not isinstance(v, (list, dict, tuple, bytes)) and str(v).strip() not in ("", "-"):
+                a[str(k)] = v
+        return a
     for c in getattr(net, "cables", []) or []:
         k = c.get("kind") or "dist"
+        if k == "annot":
+            continue          # garis penanda 'Keterangan Infra' bukan kabel
         kind = {"drop": "drop", "pancingan": "pancingan", "feeder": "feeder"}.get(k, "cable_new" if c.get("status") != "EXISTING"
                                                                                   else "cable")
-        sc.add_line(c.get("pts") or [], kind)
+        a = at(c, (("Nama", "name"), ("Jenis", "kind"), ("Status", "status"), ("Core (nominal)", "nominal_core"),
+                   ("Serat dipakai", "fibers"), ("Lingkup", "scope"), ("Deskripsi", "desc")))
+        if c.get("folders"):
+            a["Folder KMZ"] = " / ".join(c["folders"])
+        sc.add_line(c.get("pts") or [], kind, a)
     for pl in getattr(net, "polys", []) or []:
         try:
-            sc.add_poly(pl["poly"][0], "funnel")
+            sc.add_poly(pl["poly"][0], "coverage" if pl.get("owner") else "funnel", at(pl, (("Pemilik (FAT)", "owner"), ("ID", "id"))))
         except Exception as _e:
             _log.note(_e)
     for e in getattr(net, "endpoints", []) or []:
-        sc.add_point(e["x"], e["y"], "hp", "")
+        sc.add_point(e["x"], e["y"], "hp", e.get("name") or e.get("id") or "",
+                     at(e, (("ID", "id"), ("Nama", "name"), ("Induk (FAT)", "sup"), ("Status sambungan", "conn"))))
     for p in getattr(net, "poles", []) or []:
-        sc.add_point(p["x"], p["y"], "pole_ext" if p.get("status") == "EXISTING" else "pole_new", p.get("name") or "")
+        sc.add_point(p["x"], p["y"], "pole_ext" if p.get("status") == "EXISTING" else "pole_new", p.get("name") or "",
+                     at(p, (("Nama", "name"), ("Status", "status"), ("Tinggi (m)", "height"), ("Lingkup", "scope"))))
     for c in getattr(net, "closures", []) or []:
-        sc.add_point(c["x"], c["y"], "closure", c.get("name") or "")
+        sc.add_point(c["x"], c["y"], "closure", c.get("name") or "", at(c, (("Nama", "name"), ("Status", "status"), ("Lingkup", "scope"))))
     for n in getattr(net, "nodes", []) or []:
-        sc.add_point(n["x"], n["y"], "fdt" if n.get("kind") == "FDT" else "fat", n.get("name") or n.get("label") or "")
+        sc.add_point(n["x"], n["y"], "fdt" if n.get("kind") == "FDT" else "fat", n.get("name") or n.get("label") or "",
+                     at(n, (("Kode", "name"), ("Jenis", "kind"), ("ID", "id"), ("Induk", "sup"), ("Premises", "premises"),
+                            ("Splitter (jumlah)", "spl_n"), ("Rasio splitter", "spl_r"), ("Status", "status"),
+                            ("Jarak HP terjauh (m)", "maxpp"), ("Jarak ke induk (m)", "supdist"), ("Lingkup", "scope"))))
     return sc
 
 
@@ -857,6 +885,15 @@ def write_word(path, results, prof, meta, net, out_dir, max_img=80):
     from . import docx_writer as D
     from . import penjelasan as X
     sc = scene_of(net)
+    recs = finding_recs(results)
+    shots = [dict(r, title="%s: %s" % (r["title"], r["obj"] or r["arti"])) for r in recs if r["lat"] is not None
+             and r["sev"] != "PASS"][:max_img]
+    return _word_rest(path, results, prof, meta, out_dir, sc, recs, shots, S, D, X, max_img)
+
+
+def finding_recs(results):
+    """Temuan alat 4 dalam bentuk seragam (untuk gambar, Word dan peta HTML)."""
+    from . import penjelasan as X
     fs = sorted(Q.findings_of(results), key=lambda f: Q.SEV_RANK.get(f["severity"], 9))
     recs = []
     for f in fs:
@@ -873,8 +910,10 @@ def write_word(path, results, prof, meta, net, out_dir, max_img=80):
                      "arti": a, "fix": fx, "value": f.get("value"), "limit": f.get("threshold"), "unit": f.get("unit") or "",
                      "lat": lat, "lon": lon, "line": line, "dasar": f.get("dasar") or "", "source": f.get("source_file") or "",
                      "rule": f["rule_id"]})
-    shots = [dict(r, title="%s: %s" % (r["title"], r["obj"] or r["arti"])) for r in recs if r["lat"] is not None
-             and r["sev"] != "PASS"][:max_img]
+    return recs
+
+
+def _word_rest(path, results, prof, meta, out_dir, sc, recs, shots, S, D, X, max_img=80):
     imgs = S.render_many(sc, shots, out_dir=os.path.join(out_dir, "QC_GAMBAR"), max_n=max_img)
     rows = []
     for r in results:
@@ -1033,7 +1072,7 @@ def write_html(path, results, prof, meta):
                    [("Status keseluruhan", U.SEV_WORD.get(ov, ov)), ("Profil", prof["profile_id"]),
                     ("Versi aturan", prof.get("rule_version", "")), ("Status FDT", meta.get("status_fdt", "")),
                     ("Dibuat", meta["dibuat"].replace("T", " ")), ("Alat", meta["produk"])],
-                   counts, items, body,
+                   counts, items, (meta.get("map_html") or "") + body,
                    "%s. &copy; 2026 Joseph Edward Timothy Siahaan, GPL-2.0-or-later. Hasil QC adalah alat bantu; keputusan desain "
                    "dan pengecualian tetap pada desainer dan reviewer." % _E(meta["produk"]),
                    run_key=str(meta.get("cluster", "")), word_href=meta.get("word"))

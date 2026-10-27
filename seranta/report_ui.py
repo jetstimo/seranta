@@ -48,20 +48,21 @@ def font_css():
 
 
 CSS = r"""
-/* Token desain: gaya sistem desain perusahaan besar (netral merek), kontras WCAG 2.2 AA. */
+/* Token desain Seranta (netral merek): prinsip sistem desain operator telekomunikasi besar - satu warna aksen yang
+   hemat, pita gelap untuk kepala, tipografi tegas, spasi 4/8 px, kontras WCAG 2.2 AA. Aksen: serat (teal) + fajar (oranye). */
 :root{
- --paper:#F4F4F4;--sheet:#FFFFFF;--ink:#161616;--ink2:#525252;--mute:#6F6F6F;--line:#E0E0E0;--line2:#F2F4F8;
- --deep:#161616;--deep2:#262626;--accent:#0F62FE;--accent-bg:#EDF5FF;--fiber:#0F62FE;
+ --paper:#F3F7F9;--sheet:#FFFFFF;--ink:#161616;--ink2:#525252;--mute:#6F6F6F;--line:#E0E0E0;--line2:#F2F4F8;
+ --deep:#06294F;--deep2:#0B3A66;--accent:#0A6F86;--accent-bg:#E6F4F6;--fiber:#0B8F95;--dawn:#E8780E;
  --err:#DA1E28;--err-bg:#FFF1F1;--wrn:#BA4E00;--wrn-bg:#FFF2E8;--unv:#6F6F6F;--unv-bg:#F4F4F4;
  --inf:#0043CE;--inf-bg:#EDF5FF;--ok:#198038;--ok-bg:#DEFBE6;
- --r-lg:8px;--r-md:6px;--shadow:0 1px 2px rgba(0,0,0,.06);
+ --r-lg:14px;--r-md:9px;--shadow:0 1px 2px rgba(6,41,79,.05),0 6px 20px rgba(6,41,79,.06);
  --sans:'Inter',"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
- --head:'Inter',"Segoe UI",system-ui,sans-serif;
+ --head:'Poppins','Inter',"Segoe UI",system-ui,sans-serif;
  --mono:"Cascadia Mono",Consolas,"DejaVu Sans Mono",ui-monospace,monospace;
 }
 @media (prefers-color-scheme:dark){:root{
- --paper:#161616;--sheet:#262626;--ink:#F4F4F4;--ink2:#C6C6C6;--mute:#A8A8A8;--line:#393939;--line2:#2E2E2E;
- --deep:#0B0B0B;--deep2:#1C1C1C;--accent:#78A9FF;--accent-bg:#1C2B44;
+ --paper:#07131F;--sheet:#0E2032;--ink:#F4F4F4;--ink2:#C6C6C6;--mute:#A8A8A8;--line:#393939;--line2:#2E2E2E;
+ --deep:#041A33;--deep2:#0B2A4A;--accent:#5CF2E8;--accent-bg:#0E3140;
  --err:#FA4D56;--err-bg:#3A1A1C;--wrn:#FF832B;--wrn-bg:#3A2614;--unv:#A8A8A8;--unv-bg:#2E2E2E;
  --inf:#78A9FF;--inf-bg:#1C2B44;--ok:#42BE65;--ok-bg:#16301F;--shadow:none}}
 *{box-sizing:border-box}
@@ -70,27 +71,26 @@ body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.55 var(--sans
  -webkit-font-smoothing:antialiased}
 a{color:var(--accent)}
 h1,h2,h3{font-family:var(--head);line-height:1.25;margin:0;letter-spacing:-.005em}
-h1{font-size:28px;font-weight:600}h2{font-size:20px;font-weight:600}h3{font-size:15px;font-weight:600}
+h1{font-size:30px;font-weight:700;letter-spacing:-.01em}h2{font-size:20px;font-weight:600}h3{font-size:15px;font-weight:600}
 p{margin:.4em 0}
 code{font-family:var(--mono);font-size:.86em;background:var(--line2);padding:1px 5px;border-radius:4px}
 .wrap{max-width:1180px;margin:0 auto;padding:0 24px}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 /* ---------- kepala ---------- */
-.top{background:var(--deep);color:#F4F4F4;padding:22px 0 0;border-bottom:4px solid var(--accent)}
-.top .tool{font:600 12px var(--sans);letter-spacing:.08em;text-transform:uppercase;color:#A8A8A8}
+.top{background:radial-gradient(1200px 400px at 85% -10%,rgba(92,242,232,.18),transparent 60%),linear-gradient(125deg,#06294F 0%,#0A4F6E 100%);color:#F4F4F4;padding:26px 0 0;border-bottom:4px solid transparent;border-image:linear-gradient(90deg,#5CF2E8,#E8780E) 1}
+.top .tool{font:600 12px var(--sans);letter-spacing:.14em;text-transform:uppercase;color:#9FE8E2}
 .top h1{color:#fff;margin:6px 0 2px;max-width:40ch}
 .top .verdict{font-size:16px;max-width:80ch;margin:10px 0 2px;color:#E0E0E0}
 .top .verdict b{font-weight:600;color:#fff}
 .meta{display:flex;flex-wrap:wrap;gap:6px 26px;margin:14px 0 0;font-size:13px;color:#C6C6C6}
-.meta div span{display:block;color:#8D8D8D;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+.meta div span{display:block;color:#8FB7C6;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
 .meta div b{font-weight:600;color:#F4F4F4}
-.tally{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:1px;margin:18px 0 0;background:#393939;
- border:1px solid #393939}
-.tally button{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:2px;padding:12px 16px;background:var(--deep2);color:#C6C6C6;
- font-size:12.5px;border-top:3px solid transparent}
-.tally button b{font:600 26px var(--sans);color:#fff;letter-spacing:-.01em}
-.tally button:hover{background:#333}
+.tally{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 0}
+.tally button{all:unset;cursor:pointer;display:flex;flex-direction:column;gap:2px;padding:12px 16px;background:rgba(255,255,255,.07);color:#D6E6EE;
+ font-size:12.5px;border-top:3px solid transparent;border-radius:12px;backdrop-filter:blur(2px);transition:background .15s}
+.tally button b{font:700 28px var(--head);color:#fff;letter-spacing:-.01em}
+.tally button:hover{background:rgba(255,255,255,.14)}
 .tally button:focus-visible{outline:2px solid #fff;outline-offset:-2px}
 .tally button[aria-pressed=true]{background:#F4F4F4;color:#161616}.tally button[aria-pressed=true] b{color:#161616}
 .tally .dot{display:none}
@@ -99,10 +99,10 @@ code{font-family:var(--mono);font-size:.86em;background:var(--line2);padding:1px
 
 /* ---------- jalur aturan (kabel + tiang) ---------- */
 .route{position:relative;margin:20px 0 0;padding:0 0 18px}
-.route .cable{position:absolute;left:8px;right:8px;top:21px;height:3px;background:#525252}
+.route .cable{position:absolute;left:8px;right:8px;top:21px;height:3px;background:linear-gradient(90deg,rgba(92,242,232,.55),rgba(232,120,14,.55));border-radius:2px}
 .route ol{list-style:none;margin:0;padding:0;display:flex;justify-content:space-between;position:relative;gap:4px}
 .route li{flex:1 1 0;min-width:0;display:flex;flex-direction:column;align-items:center;text-align:center}
-.route a{text-decoration:none;color:#C6C6C6;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;
+.route a{text-decoration:none;color:#CFE3EA;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;
  line-height:1.25;padding:0 2px;border-radius:4px}
 .route a:focus-visible{outline:2px solid #fff;outline-offset:3px}
 .route .pole{width:16px;height:16px;border-radius:50%;margin-top:14px;border:3px solid var(--deep);box-shadow:0 0 0 2px currentColor}
@@ -112,7 +112,7 @@ code{font-family:var(--mono);font-size:.86em;background:var(--line2);padding:1px
 .route .lbl{max-width:11ch;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .route a:hover .lbl{color:#fff}
 .route .lbl.quiet{visibility:hidden}.route a:hover .lbl.quiet,.route a:focus-visible .lbl.quiet{visibility:visible}
-.route .rcap{margin:12px 0 0;font-size:12px;color:#A8A8A8}
+.route .rcap{margin:12px 0 0;font-size:12px;color:#9FC3D1}
 
 /* ---------- isi ---------- */
 main{padding:20px 0 60px}
@@ -334,9 +334,12 @@ def chip(sev, text=None):
 
 
 def map_link(lon, lat):
-    return ("<a class='map' target='_blank' rel='noopener' title='Buka lokasi di OpenStreetMap (butuh internet)' "
-            "href='https://www.openstreetmap.org/?mlat=%.7f&amp;mlon=%.7f#map=19/%.7f/%.7f'>Lihat di peta</a>"
-            % (lat, lon, lat, lon))
+    """Tautan luar (butuh internet): citra satelit Google Maps dan Google Earth 3D. Peta temuan di laporan sendiri
+    (bagian 'Peta temuan') tetap jalan tanpa internet."""
+    return ("<a class='map' target='_blank' rel='noopener' title='Buka citra satelit di Google Maps (butuh internet)' "
+            "href='https://www.google.com/maps/@?api=1&amp;map_action=map&amp;center=%.7f,%.7f&amp;zoom=20&amp;basemap=satellite'>"
+            "Satelit</a> <a class='map' target='_blank' rel='noopener' title='Buka di Google Earth 3D (butuh internet)' "
+            "href='https://earth.google.com/web/@%.7f,%.7f,30a,180d,35y,0h,45t,0r'>Earth 3D</a>" % (lat, lon, lat, lon))
 
 
 def meta_list(pairs):

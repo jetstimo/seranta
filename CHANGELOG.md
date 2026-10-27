@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.5.6 – peta temuan interaktif di setiap laporan
+- Laporan HTML alat 1 dan alat 4 kini memuat peta temuan (Leaflet 1.9.4, BSD-2, disematkan; jalan tanpa internet).
+- Klik temuan: isi, tindakan, nilai vs batas, panjang garis, gambar, centang review (sinkron), koordinat desimal & DMS,
+  objek di sekitar (≤ 25 m), temuan lain di sekitar (≤ 30 m), tautan citra satelit / Earth 3D / Street View.
+- Klik objek: atribut lengkap (HP dari HPDB, tinggi tiang, premises & splitter FAT, core kabel, folder KMZ) dan temuan
+  yang melekat.
+- Peta dasar citra satelit / jalan opsional saat online (atribusi tampil); saring tingkat, lapisan, cari, ukur jarak,
+  layar penuh, navigasi keyboard; tombol "Tampilkan di peta" di setiap temuan.
+- Tampilan laporan diperbarui: kepala navy–teal, Poppins + Inter tertanam, ubin KPI membulat, mode gelap.
+
 ## 3.5.5 – nomor menu sesuai urutan kerja
 - Menu: 1 Siapkan Input + QC Survei → 2 Alokasi FDT & FAT (sebelum desain) → (desain otomatis) → 3 Pasca-Desain → 4 QC APD.
 - ID algoritma Processing tidak berubah (skrip/model lama tetap jalan); teks bantuan, handbook dan README disesuaikan.

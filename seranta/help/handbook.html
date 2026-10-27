@@ -201,7 +201,7 @@ mark.hl{background:var(--dawn-soft);color:inherit;border-radius:3px;outline:1px 
     <div>
       <h1>SERANTA</h1>
       <div class="tag">FTTH Design Assistant untuk QGIS · Serat untuk Nusantara</div>
-      <div class="meta">Handbook pengguna · versi plugin 3.5.5 · © 2026 Joseph Edward Timothy Siahaan</div>
+      <div class="meta">Handbook pengguna · versi plugin 3.5.6 · © 2026 Joseph Edward Timothy Siahaan</div>
     </div>
   </div>
 </header>
@@ -226,7 +226,7 @@ mark.hl{background:var(--dawn-soft);color:inherit;border-radius:3px;outline:1px 
 <li><a href="#keandalan">Keandalan &amp; dasar angka</a></li>
 <li><a href="#laporan">Membaca laporan HTML</a></li>
 <li><a href="#profil">Profil standar organisasi</a></li>
-<li><a href="#baru">Yang baru di 3.5.5</a></li>
+<li><a href="#baru">Yang baru di 3.5.6</a></li>
 <li><a href="#masalah">Masalah umum</a></li>
 <li><a href="#kamus">Kamus temuan</a></li>
 <li><a href="#kuis">Uji pemahaman</a></li>
@@ -684,7 +684,18 @@ mark.hl{background:var(--dawn-soft);color:inherit;border-radius:3px;outline:1px 
 
 <section id="baru">
   <div class="kicker">Perbandingan versi</div>
-  <h2>Yang baru di 3.5.5, 3.5.4 dan 3.5.3: hasil QC lebih tepat dan jelas</h2>
+  <h2>Yang baru di 3.5.6: peta temuan interaktif di setiap laporan</h2>
+  <p>Laporan HTML alat 1 (<code>RINGKASAN_QC.html</code>) dan alat 4 (<code>QC_APD.html</code>) kini dibuka dengan <b>peta temuan</b>
+  yang memuat seluruh objek jaringan dan setiap temuan. Tidak perlu lagi bolak-balik ke Google Earth untuk mengecek.</p>
+  <div class="tablebox"><table>
+    <tr><th>Fitur peta</th><th>Cara memakai</th></tr>
+    <tr><td>Klik titik temuan</td><td>Panel kanan menampilkan isi temuan, tindakan, <b>nilai vs batas</b>, panjang garis temuan, gambar, centang <i>Sudah dicek</i> (sinkron dengan daftar), koordinat desimal &amp; DMS, <b>objek di sekitar (&le; 25 m)</b> dan <b>temuan lain di sekitar (&le; 30 m)</b>.</td></tr>
+    <tr><td>Klik objek</td><td>Tiang, homepass, FAT/FDT, closure, kabel, atau batas: semua atributnya (mis. tinggi tiang, alamat &amp; RT/RW HP dari HPDB, premises &amp; splitter FAT, core kabel, folder KMZ), panjang kabel, dan <b>temuan QC yang melekat</b> pada objek itu.</td></tr>
+    <tr><td>Peta dasar</td><td><i>Tanpa peta dasar</i> (offline, bawaan), <i>Citra satelit</i> atau <i>Peta jalan</i> bila ada internet (atribusi penyedia tampil). Tautan <b>Google Maps satelit</b>, <b>Google Earth 3D</b> dan <b>Street View</b> ada di setiap temuan/objek.</td></tr>
+    <tr><td>Alat bantu</td><td>Saring per tingkat, hidup/matikan lapisan, cari ID temuan / nama tiang / HP, <b>ukur jarak</b> (M), layar penuh (F), temuan sebelumnya/berikutnya (<kbd>[</kbd> <kbd>]</kbd>), dan tombol <b>Tampilkan di peta</b> pada setiap temuan di daftar.</td></tr>
+    <tr><td>Tampilan</td><td>Kepala laporan bergaya pita gelap navy&ndash;teal dengan aksen serat &amp; fajar, huruf Poppins + Inter tertanam, ubin KPI membulat, mode gelap otomatis; dirancang mengikuti prinsip sistem desain operator telekomunikasi besar (aksen hemat, tipografi tegas, kontras WCAG AA) tanpa meniru merek mana pun.</td></tr>
+  </table></div>
+  <h3>3.5.5, 3.5.4 dan 3.5.3: hasil QC lebih tepat dan jelas</h3>
   <p><b>3.5.5</b>: nomor menu disamakan dengan urutan kerja. <b>1</b> Siapkan input + QC survei &rarr; <b>2</b> Alokasi FDT &amp; FAT
   (sebelum desain) &rarr; desain otomatis &rarr; <b>3</b> Pasca-desain (kode FDT-FAT) &rarr; <b>4</b> QC APD. Nama algoritma di
   Processing (ID) tidak berubah, jadi skrip/model lama tetap jalan. Handbook ini juga dibuat ulang menjadi interaktif:
@@ -865,7 +876,7 @@ var root=document.documentElement,th=store.get("theme","");if(th)root.setAttribu
 var ST=[
  {n:"Alat 1",t:"Siapkan Input Desain Otomatis + QC Survei (Review Strand)",kap:"Paling awal: begitu HPDB dan KMZ survei vendor diterima.",
   in:["Folder cluster berisi HPDB (.xlsx) dan KMZ survei (HP, tiang, jalur, BOUNDARY)","BAKP (PDF izin warga)","Folder data referensi: Funnel, Design Lite, HPDB attributes (FINDIM)"],
-  out:["HP.shp/HP.csv, POLE.kmz, ROADS.shp untuk desain otomatis","Ringkasan QC 9 standar (HTML) + laporan Word + gambar temuan","Layer QC_TEMUAN untuk Navigator QC"],
+  out:["HP.shp/HP.csv, POLE.kmz, ROADS.shp untuk desain otomatis","Ringkasan QC 9 standar (HTML) dengan peta temuan interaktif + laporan Word + gambar temuan","Layer QC_TEMUAN untuk Navigator QC"],
   cek:["9 standar review strand bertanda OK atau temuannya sudah dijelaskan","HPDB = KMZ (tidak ada HP bergeser / tanpa pasangan)","BAKP sudah dicek manual (isian, ttd, stempel)","Bentang tiang ≤ 60 m, tidak ada tiang nganggur tanpa alasan"],to:"#alat1"},
  {n:"Alat 2",t:"Alokasi FDT & FAT (estimasi kebutuhan)",kap:"Setelah Alat 1, sebelum desain. Wajib bila standar 7 (bisa colo FDT) berstatus CEK.",
   in:["Folder cluster yang sudah diproses Alat 1","Data referensi Design Lite (FDT existing sekitar)"],
@@ -881,7 +892,7 @@ var ST=[
   cek:["Kode FDT/FAT sesuai format dan urutan","Premises & splitter tiap FAT sesuai Splice Plan"],to:"#alat3"},
  {n:"Alat 4",t:"QC APD Pasca-Desain (paket final)",kap:"Paling akhir, sebelum paket APD dikirim atau di-approve.",
   in:["KMZ APD final dan/atau folder OUTPUT","FAT FDT CODE + Splice Plan","Opsional tapi disarankan: rekap kode FDT, tiang existing per kota, BOM"],
-  out:["22 aturan + 7 aturan paket (QC-01…QC-07) berstatus PASS/ERROR/WARNING/INFO/UNVERIFIED","QC_APD.html interaktif + QC_APD_LAPORAN.docx + gambar temuan","Layer temuan untuk Navigator QC"],
+  out:["22 aturan + 7 aturan paket (QC-01…QC-07) berstatus PASS/ERROR/WARNING/INFO/UNVERIFIED","QC_APD.html dengan peta temuan interaktif + QC_APD_LAPORAN.docx + gambar temuan","Layer temuan untuk Navigator QC"],
   cek:["Tidak ada ERROR tersisa","Aturan UNVERIFIED sudah dilengkapi datanya","Pancingan ≤ 15%, closure ≤ 10% FAT","Semua FDT/FAT/closure berdiri di tiang"],to:"#alat4"}];
 var sel=store.get("st",0),done=store.get("cek",{}),panel=$("#stpanel");
 function li(a){return "<ul>"+a.map(function(x){return "<li>"+esc(x)+"</li>"}).join("")+"</ul>"}
@@ -909,7 +920,7 @@ var ANS=[["Jalankan Alat 1","Isi folder cluster dan folder data referensi, lalu 
  ["Lanjut ke desain otomatis","Impor HP.shp, POLE.kmz, ROADS.shp dari folder INPUT hasil Alat 1 ke software desain otomatis.",2],
  ["Jalankan Alat 3","Buat FAT FDT CODE dan tabel closure dari folder OUTPUT + Splice Plan.",3],
  ["Jalankan Alat 4","QC paket final. Sertakan rekap kode, tiang existing per kota, dan BOM bila ada agar tidak ada aturan 'belum bisa dicek'.",4],
- ["Buka Navigator QC","Panel di kanan QGIS: saring temuan, lompat ke lokasinya, beri status review, salin gambar, dan buat laporan Word.",-1]];
+ ["Buka peta temuan di laporan HTML atau Navigator QC","Di laporan HTML: klik titik temuan di peta untuk detail lengkap. Di QGIS: panel kanan: saring temuan, lompat ke lokasinya, beri status review, salin gambar, dan buat laporan Word.",-1]];
 $("#ask").addEventListener("click",function(e){var a=e.target.getAttribute("data-a");if(a===null)return;var r=ANS[+a];
   $$("#ask .btn").forEach(function(b){b.classList.toggle("on",b===e.target)});
   var box=$("#answer");box.innerHTML="<b class='big'>→ "+esc(r[0])+"</b><p style='margin:.3rem 0 .5rem'>"+esc(r[1])+"</p>"+

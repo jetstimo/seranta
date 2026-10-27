@@ -72,6 +72,30 @@ def test_bakp_scanner_badge_not_a_stamp():
     assert any(k == "BAKP_STEMPEL_TTD_TEMPELAN_DIGITAL" for k, _ok, _t in items2), items2
 
 
+def test_mapview_data_and_block():
+    import json
+    import mapview as MV
+
+    class Sc(object):
+        lines = [([(104.75, -2.98), (104.751, -2.98)], "cable_new")]
+        points = [(104.75, -2.98, "pole_new", "NP-1"), (104.7505, -2.9801, "hp", "H00001")]
+        polys = []
+        attrs_l = [{"Nama": "24D", "Core (nominal)": 24}]
+        attrs_p = [{"Tinggi (m)": 7}, {"Alamat": "Jl. A 1", "kosong": "-"}]
+        attrs_y = []
+    d = MV.data_from_scene(Sc(), [{"fid": "F-0001", "sev": "ERROR", "lon": 104.7501, "lat": -2.98, "value": 76.0, "limit": 60,
+                                   "unit": "m", "line": [(104.75, -2.98), (104.751, -2.98)]},
+                                  {"fid": "F-0002", "sev": "INFO", "lon": None, "lat": None}])
+    assert len(d["L"]) == 3 and d["F"][0]["v"] == 76.0 and d["F"][0]["ln"]
+    assert len(d["F"]) == 1                                       # temuan tanpa lokasi tidak digambar
+    assert "kosong" not in d["L"][2]["a"]                         # nilai '-' dibuang
+    h = MV.block(d)
+    assert "window.SERANTA_MAP=" in h and "L.map(" in h and "id='smap'" in h
+    js = h.split("window.SERANTA_MAP=", 1)[1].split(";</script>", 1)[0]
+    assert json.loads(js)["F"][0]["id"] == "F-0001"
+    assert MV.block({"L": [], "F": []}) == ""
+
+
 def test_rule_version_from_code():
     p, _ = Q.get_profile("APD_1X4")
     assert p["rule_version"] == Q.RULE_VERSION

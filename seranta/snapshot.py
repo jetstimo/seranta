@@ -69,17 +69,22 @@ class Scene(object):
         self.lines = []      # (pts, kind)
         self.points = []     # (x, y, kind, label)
         self.polys = []      # (ring, kind)
+        # atribut per objek (sejajar dengan daftar di atas) untuk peta interaktif di laporan HTML
+        self.attrs_l, self.attrs_p, self.attrs_y = [], [], []
 
-    def add_line(self, pts, kind="route"):
+    def add_line(self, pts, kind="route", attrs=None):
         if pts and len(pts) >= 2:
             self.lines.append(([(float(x), float(y)) for x, y in pts], kind))
+            self.attrs_l.append(attrs or {})
 
-    def add_point(self, x, y, kind="pole", label=""):
+    def add_point(self, x, y, kind="pole", label="", attrs=None):
         self.points.append((float(x), float(y), kind, label or ""))
+        self.attrs_p.append(attrs or {})
 
-    def add_poly(self, ring, kind="boundary"):
+    def add_poly(self, ring, kind="boundary", attrs=None):
         if ring and len(ring) >= 3:
             self.polys.append(([(float(x), float(y)) for x, y in ring], kind))
+            self.attrs_y.append(attrs or {})
 
 
 class _Proj(object):

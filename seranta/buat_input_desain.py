@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.5.5"
+__version__ = "3.5.6"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -2523,7 +2523,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
 
     @staticmethod
     def _qc_word(qc, outp, inp, kode, cluster, std, judul, poles, names, kinds, hp_xy, segs, own_bnd, funnel_polys, feedback,
-                 max_img=80):
+                 max_img=80, hp_attrs=None, heights=None):
         """Gambar peta per temuan (folder QC_GAMBAR) dan laporan Word <KODE>_LAPORAN_QC.docx.
         Kembali (nama file Word, {F-0001: data URI})."""
         import math
@@ -2531,7 +2531,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         from . import docx_writer as _docx
         from . import penjelasan as X
         if not qc:
-            return None, {}
+            return None, {}, None
         sc = _snap.Scene()
         for f in segs:
             try:
@@ -2540,15 +2540,23 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             except Exception:
                 parts = []
             for part in parts:
-                sc.add_line([(q.x(), q.y()) for q in part], "route")
+                pts_ = [(q.x(), q.y()) for q in part]
+                L_ = sum(math.hypot((b[0] - a[0]) * 111320.0 * math.cos(math.radians(a[1])), (b[1] - a[1]) * 110574.0)
+                         for a, b in zip(pts_, pts_[1:]))
+                sc.add_line(pts_, "route", {"Jenis": "Ruas jalur (ROADS)", "Panjang ruas (m)": "%.1f" % L_})
         for ring in own_bnd or []:
-            sc.add_poly(ring[0], "boundary")
+            sc.add_poly(ring[0], "boundary", {"Jenis": "BOUNDARY cluster (KMZ)"})
         for poly in funnel_polys or []:
-            sc.add_poly(poly[0], "funnel")
-        for x, y, hid in hp_xy:
-            sc.add_point(x, y, "hp", str(hid))
-        for p, nm, kd in zip(poles, names, kinds):
-            sc.add_point(p.x(), p.y(), "pole_ext" if kd == "existing" else "pole_new", nm or "")
+            sc.add_poly(poly[0], "funnel", {"Jenis": "Funnel"})
+        hp_attrs = hp_attrs or []
+        for k_, (x, y, hid) in enumerate(hp_xy):
+            sc.add_point(x, y, "hp", str(hid), hp_attrs[k_] if k_ < len(hp_attrs) else {"ID": hid})
+        heights = heights or []
+        for k_, (p, nm, kd) in enumerate(zip(poles, names, kinds)):
+            a_ = {"Nama": nm or "", "Jenis": "Tiang existing (EP)" if kd == "existing" else "Tiang baru (NP)"}
+            if k_ < len(heights) and heights[k_]:
+                a_["Tinggi (m)"] = "%g" % heights[k_]
+            sc.add_point(p.x(), p.y(), "pole_ext" if kd == "existing" else "pole_new", nm or "", a_)
         items, order = qc_order(qc)
         noisy = ("INFO_HP_ALAMAT_SAMA",)
         pxy = [(p.x(), p.y(), nm or "") for p, nm in zip(poles, names)]
@@ -2603,7 +2611,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         footer="%s v%s - hasil QC adalah alat bantu; keputusan tetap pada desainer dan reviewer" % (
                             __product__, __version__))
         feedback.pushInfo("Laporan Word: %s" % path)
-        return os.path.basename(path), {k: _snap.data_uri(v[0]) for k, v in imgs.items()}
+        from . import mapview as _mv
+        map_data = _mv.data_from_scene(sc, recs)
+        return os.path.basename(path), {k: _snap.data_uri(v[0]) for k, v in imgs.items()}, map_data
 
     def processAlgorithm(self, parameters, context, feedback):
         outdir = self.parameterAsFile(parameters, self.OUTDIR, context)
@@ -4518,15 +4528,38 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         feedback.pushInfo("")
         feedback.pushInfo("Laporan disimpan di: %s" % lap)
         lap_html = outp("RINGKASAN_QC.html")
-        fid_map, snaps_uri, word_name = {}, {}, None
+        fid_map, snaps_uri, word_name, map_html = {}, {}, None, ""
         try:
             fid_map = qc_fid_map(qc)
             feedback.setProgressText("Gambar peta temuan dan laporan Word")
-            word_name, snaps_uri = self._qc_word(qc, outp, inp, kode, cluster_label(outdir, hpdb), std, judul, poles, names,
-                                                 kinds, locals().get("hp_xy") or [], segs, own_bnd,
-                                                 [f["poly"] for f in (locals().get("own_f") or [])], feedback)
+            # atribut HP dari HPDB (kolom terisi saja) untuk panel detail peta interaktif
+            hp_attrs = []
+            pri_ = ("ID", "HOMEPASS_ID", "HOMEPASS_ADDRESS_PREFIX", "HOMEPASS_ADDRESS", "HOMEPASS_HOUSE_NUMBER", "HOMEPASS_ADDRESS_BLOCK",
+                    "NEIGHBORHOOD_NO_RT", "HAMLET_NO_RW", "CLUSTER_NAME", "SUBDISTRICT", "DISTRICT", "CITY", "BUILDING_TYPE",
+                    "HOMEPASS_STATUS", "HOMEPASS_RFSDATE", "HOMEPASS_LATITUDE", "HOMEPASS_LONGITUDE")
+            ordr_ = sorted(range(len(headers)), key=lambda k_: (pri_.index(str(headers[k_]).upper())
+                                                                 if str(headers[k_]).upper() in pri_ else 99, k_))
+            for r_, _p in data:
+                a_ = {}
+                for k_ in ordr_:
+                    v_ = r_[k_] if k_ < len(r_) else ""
+                    if str(v_).strip() in ("", "-", "None"):
+                        continue
+                    if "DATE" in str(headers[k_]).upper() and re.match(r"^\d{5}(\.0+)?$", str(v_).strip()):
+                        try:      # tanggal serial Excel -> dd-mm-yyyy
+                            v_ = (_dt.date(1899, 12, 30) + _dt.timedelta(days=int(float(v_)))).strftime("%d-%m-%Y")
+                        except (ValueError, OverflowError):
+                            pass
+                    a_[headers[k_]] = v_
+                hp_attrs.append(a_)
+            word_name, snaps_uri, map_data = self._qc_word(
+                qc, outp, inp, kode, cluster_label(outdir, hpdb), std, judul, poles, names, kinds,
+                locals().get("hp_xy") or [], segs, own_bnd, [f["poly"] for f in (locals().get("own_f") or [])], feedback,
+                hp_attrs=hp_attrs, heights=heights)
+            from . import mapview as _mv
+            map_html = _mv.block(map_data, "Peta temuan QC survei")
         except Exception as e:
-            feedback.reportError("Gambar temuan / laporan Word tidak dibuat: %s" % e, fatalError=False)
+            feedback.reportError("Gambar temuan / laporan Word / peta tidak dibuat: %s" % e, fatalError=False)
         try:
             _report_html.build(
                 lap_html,
@@ -4536,7 +4569,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                  "profile": "%s (%s)" % (opt["prof"]["name"], opt["prof"]["src"]),
                  "ref_dir": funnel_dir, "refs": refs, "qc_counts": qc_counts(qc), "qc_by_std": qc_by_std(qc),
                  "qc_profile_id": qprof.get("profile_id"), "rule_version": qprof.get("rule_version"),
-                 "fid_map": fid_map, "snaps": snaps_uri, "word": word_name,
+                 "fid_map": fid_map, "snaps": snaps_uri, "word": word_name, "map_html": map_html,
                  "qc_params": [(k, e.get("v"), e.get("unit"), _qc.DASAR_LABEL.get(e.get("dasar"), e.get("dasar")),
                                 e.get("sumber"), e.get("status")) for k, e in qprof["params"].items()
                                if k in ("span_max_m", "span_reg_m", "hp_pole_max_m", "clear_road_m", "sag_pct", "dup_near_m",
