@@ -51,6 +51,27 @@ def test_label_status_from_template_folder():
     assert s.status == "UNVERIFIED" or all("slack" in f["message"] for f in s.findings)
 
 
+def test_bakp_scanner_badge_not_a_stamp():
+    try:
+        import numpy as np
+        import bakp as K
+    except Exception:  # noqa: BLE001 - lingkungan tanpa numpy: lewati
+        return
+    badge = np.full((90, 240, 3), 235, np.uint8)
+    badge[30:60, 20:220] = 60                                  # teks abu-abu
+    stamp = np.full((300, 300, 3), 255, np.uint8)
+    stamp[50:250, 50:250] = (60, 60, 200)                      # tinta biru
+    pages = [{"arr": np.full((10, 10, 3), 255, np.uint8), "w": 2000, "h": 2800, "no": i} for i in range(1, 6)]
+    doc = {"pages": pages, "n_pages": 5, "notes": [],
+           "overlays": [{"page": i, "w": 240, "h": 90, "hash": "b", "smask": False, "arr": badge} for i in range(1, 6)]}
+    items = K.offline_check(doc)[1]
+    assert not any(k == "BAKP_STEMPEL_TTD_TEMPELAN_DIGITAL" for k, _ok, _t in items), items
+    doc2 = {"pages": pages, "n_pages": 5, "notes": [],
+            "overlays": [{"page": i, "w": 300, "h": 300, "hash": "s", "smask": False, "arr": stamp} for i in (2, 3)]}
+    items2 = K.offline_check(doc2)[1]
+    assert any(k == "BAKP_STEMPEL_TTD_TEMPELAN_DIGITAL" for k, _ok, _t in items2), items2
+
+
 def test_rule_version_from_code():
     p, _ = Q.get_profile("APD_1X4")
     assert p["rule_version"] == Q.RULE_VERSION

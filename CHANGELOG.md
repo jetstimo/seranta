@@ -1,5 +1,12 @@
 # Changelog
 
+## 3.5.4 – koreksi hasil tinjauan ulang data nyata
+- BAKP: lencana aplikasi pemindai ("Dipindai dengan CamScanner") yang tertanam kecil di setiap halaman tidak lagi dilaporkan
+  sebagai stempel/tanda tangan ditempel digital (sebelumnya positif palsu ERROR pada BAKP Minahasa Roong).
+- Alat 1: rentang tiang yang muncul dua kali karena dua garis jalur bertumpuk dinilai sekali (temuan bentang 50–60 m dan
+  kabel rendah tidak lagi ganda); jumlah rentang ganda dicatat di laporan.
+- 60 uji otomatis.
+
 ## 3.5.3 – hasil QC lebih tepat dan jelas
 - Alat 1 standar 4: rumah yang sama (no. rumah HPDB = nama titik KMZ) dengan koordinat bergeser 5–30 m dilaporkan sekali
   sebagai `HP_BERGESER` (perlu ditinjau), bukan dua temuan "tidak ada" (galat GPS ponsel 7–13 m di permukiman).

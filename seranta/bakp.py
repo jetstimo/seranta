@@ -525,6 +525,28 @@ def offline_check(doc):
     pages = doc["pages"]
     info["n_pages"] = doc["n_pages"]
     groups = []                      # kelompok gambar tempelan yang identik secara visual
+    # Lencana aplikasi pemindai (mis. 'Dipindai dengan CamScanner', 240x90 px) ikut tertanam sebagai gambar kecil di
+    # SETIAP halaman. Itu bukan stempel/tanda tangan: kecil (< 2% luas halaman) dan abu-abu, atau muncul di >= 80%
+    # halaman pada ukuran yang sama. Disaring dulu agar tidak dilaporkan sebagai "stempel ditempel digital".
+    area = {p["no"]: float(p["w"] * p["h"]) for p in pages if p.get("w") and p.get("h")}
+    n_pg = max(1, doc.get("n_pages") or len(pages))
+    by_hash = {}
+    for ov in doc["overlays"]:
+        by_hash.setdefault(ov["hash"], set()).add(ov["page"])
+    keep, badge = [], 0
+    for ov in doc["overlays"]:
+        pa = area.get(ov["page"]) or 0.0
+        small = pa > 0 and (ov["w"] * ov["h"]) / pa < 0.02
+        gray = ov.get("arr") is not None and ink_stats(ov["arr"])["gray"]
+        everywhere = len(by_hash.get(ov["hash"], ())) >= max(2, int(round(0.8 * n_pg)))
+        if small and (gray or everywhere):
+            badge += 1
+            continue
+        keep.append(ov)
+    if badge:
+        doc.setdefault("notes", []).append("%d lencana/watermark aplikasi pemindai (gambar kecil abu-abu atau sama di "
+                                           "hampir semua halaman) diabaikan - bukan stempel/tanda tangan" % badge)
+    doc["overlays"] = keep
     for ov in doc["overlays"]:
         ov["ahash"] = ahash(ov["arr"]) if ov.get("arr") is not None else None
         for g in groups:

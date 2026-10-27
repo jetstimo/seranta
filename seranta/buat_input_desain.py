@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.5.3"
+__version__ = "3.5.4"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -3463,9 +3463,17 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         span_scope = opt.get("span_scope", 0)
         n_epep = n_reg = n_low6 = 0
         span_layer_rows = []      # untuk QC per kategori
+        # Dua garis jalur yang saling menumpang (mis. jalur utama + garis 'Penanda' di folder yang sama) menghasilkan
+        # rentang tiang yang sama dua kali (A-B dan B-A). Satu rentang fisik = satu penilaian.
+        seen_span, n_dup_span = set(), 0
         for ka, kb, L, pts in spans:
             if ka[0] != "P" or kb[0] != "P":
                 continue          # ujung jalur tanpa tiang: dicek di analisa ujung jalur
+            key_ = (frozenset((ka, kb)), int(round(L / 2.0)))
+            if key_ in seen_span:
+                n_dup_span += 1
+                continue
+            seen_span.add(key_)
             ta, tb = kinds[ka[1]], kinds[kb[1]]
             na, nb = names[ka[1]] or "tiang", names[kb[1]] or "tiang"
             pn = "%s - %s" % (na, nb)
@@ -3514,6 +3522,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         rep.append("RENTANG TIANG KE TIANG (sepanjang jalur, termasuk belokan tanpa tiang)")
         rep.append("  Rentang dinilai    : NP-NP%s; EP-EP tidak dinilai (%d rentang, tiang pihak lain)"
                    % (" dan NP-EP" if span_scope == 0 else " saja", n_epep))
+        if n_dup_span:
+            rep.append("  Rentang ganda (garis jalur bertumpuk) diabaikan: %d" % n_dup_span)
         rep.append("  > %.0f m (CEK)       : %d" % (span_max, long_n))
         rep.append("  %.0f-%.0f m (WARNING regulasi daerah %.0f m): %d" % (span_reg, span_max, span_reg, n_reg))
         if n_low6:
