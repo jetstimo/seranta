@@ -62,7 +62,8 @@ def user_profile_dirs():
         base = QgsApplication.qualifiedSettingsDirPath() if hasattr(QgsApplication, "qualifiedSettingsDirPath") else ""
         if base:
             out.append(os.path.join(str(base), "seranta", "profiles"))
-    except Exception:  # nosec B110 - di luar QGIS (uji unit) cukup folder bawaan
+    # di luar QGIS (uji unit) cukup folder bawaan
+    except Exception:  # nosec B110
         pass
     home = os.path.expanduser("~")
     out += [os.path.join(home, "Documents", "Seranta", "profiles"), os.path.join(home, "Seranta", "profiles")]
@@ -262,7 +263,7 @@ def attach_evidence(results, net, extra_sources=None):
     idx = {}
     for kind in ("nodes", "endpoints", "cables", "poles", "closures", "polys"):
         for o in getattr(net, kind, []) or []:
-            for key in (o.get("name"), o.get("id"), o.get("setics_name"), o.get("object_ref")):
+            for key in (o.get("name"), o.get("id"), o.get("autodesign_name"), o.get("object_ref")):
                 if key:
                     idx.setdefault(str(key), (kind, o))
     extra = dict(extra_sources or {})

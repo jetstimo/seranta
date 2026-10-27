@@ -29,8 +29,8 @@ import re
 from qgis.core import (
     QgsDistanceArea, QgsFeature, QgsGeometry, QgsPointXY, QgsProcessingAlgorithm, QgsProcessingContext,
     QgsProcessingException, QgsProcessingLayerPostProcessorInterface, QgsProcessingParameterBoolean,
-    QgsProcessingParameterEnum, QgsProcessingParameterFile, QgsProcessingParameterNumber, QgsProject, QgsSettings,
-    QgsVectorLayer, QgsWkbTypes,
+    QgsProcessingParameterEnum, QgsProcessingParameterFile, QgsProcessingParameterNumber, QgsSettings,
+    QgsVectorLayer,
 )
 from qgis.PyQt.QtCore import QCoreApplication
 

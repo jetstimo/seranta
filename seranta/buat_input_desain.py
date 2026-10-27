@@ -1662,7 +1662,7 @@ def kode_wilayah(cluster_dir, hpdb_path=""):
     nm = re.sub(r"(?<!\d)\d{9,12}(?!\d)", " ", nm)
     nm = re.sub(r"(?<![0-9])\d+\s*HP(?![A-Za-z]).*$", " ", nm, flags=re.IGNORECASE)
     nm = re.sub(r"(?<![A-Za-z])PT[.\s_]+\S+.*$", " ", nm, flags=re.IGNORECASE)
-    nm = re.sub(r"[_\s-]+\d{1,5}[_\s-]+[A-Za-z.]{2,8}\s*$", " ", nm)          # ..._244_BMI (jumlah HP + vendor)
+    nm = re.sub(r"[_\s-]+\d{1,5}[_\s-]+[A-Za-z.]{2,8}\s*$", " ", nm)          # ..._244_XYZ (jumlah HP + kode vendor)
     nm = re.sub(r"^\s*(KOTA|KABUPATEN|KAB\.?)\s+", "", nm, flags=re.IGNORECASE)
     nm = re.sub(r"(?<![A-Za-z])PERUMAHAN(?![A-Za-z])", "PERUM", nm, flags=re.IGNORECASE)
     code = re.sub(r"[^A-Z0-9]+", "_", nm.upper()).strip("_") or "CLUSTER"
@@ -2638,7 +2638,6 @@ class BuatInputDesain(QgsProcessingAlgorithm):
           masing-masing dengan gaya .qml (merah = perlu dicek, kuning = info) -> analisa per kategori.
         - <KODE>_QC_TEMUAN.shp gabungan semua temuan (titik) dan <KODE>_QC_TEMUAN.kmz untuk aplikasi peta KMZ.
         Mengembalikan (path gabungan atau None, [(path kategori, nama tampilan, jumlah)])."""
-        import shutil
         qdir = os.path.join(inp, "QC")
         qc_map = outp("QC_TEMUAN.shp")
         qbase = os.path.splitext(qc_map)[0]

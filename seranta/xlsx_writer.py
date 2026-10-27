@@ -8,7 +8,11 @@ Part of Seranta - FTTH Design Assistant.
 Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-2.0-or-later (see LICENSE).
 """
 import zipfile
-from xml.sax.saxutils import escape
+
+
+def escape(text):
+    """Escape karakter khusus XML (&, <, >) untuk isi sel dan atribut."""
+    return str(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
 
 _NS = 'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ' \
       'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"'
@@ -39,9 +43,9 @@ _STYLES = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <xf numFmtId="0" fontId="3" fillId="5" borderId="1" applyFont="1" applyFill="1"><alignment vertical="top"/></xf>
 <xf numFmtId="0" fontId="3" fillId="6" borderId="1" applyFont="1" applyFill="1"><alignment vertical="top"/></xf>
 <xf numFmtId="0" fontId="3" fillId="7" borderId="1" applyFont="1" applyFill="1"><alignment vertical="top"/></xf>
-</cellXfs></styleSheet>"""
+</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>"""
 
-SEVERITY_STYLE = {"ERROR": 5, "WARNING": 6, "UNVERIFIED": 7, "INFO": 8, "PASS": 9}
+SEVERITY_STYLE = dict(zip(("ERROR", "WARNING", "UNVERIFIED", "INFO", "PASS"), range(5, 10)))
 
 
 def _col(i):

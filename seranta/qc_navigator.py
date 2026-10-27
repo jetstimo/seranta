@@ -9,7 +9,6 @@ try:
     from . import _log
 except ImportError:  # dijalankan sebagai modul lepas (uji unit)
     import _log
-import os
 import re
 
 from qgis.core import QgsProject, QgsRectangle, QgsVectorLayer, QgsCoordinateTransform

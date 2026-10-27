@@ -15,7 +15,7 @@ def test_cluster_label_generic_folder():
 
 
 def test_kode_wilayah():
-    assert B.kode_wilayah("/x/TES 1", "HPDB_BANDA ACEH_2356732370_LAMBARO SKEP JL. SYIAH KUALA_607_BMI.xlsx") \
+    assert B.kode_wilayah("/x/TES 1", "HPDB_BANDA ACEH_2356732370_LAMBARO SKEP JL. SYIAH KUALA_607_XYZ.xlsx") \
         == "BANDA_ACEH_LAMBARO_SKEP_JL_SYIAH_KUALA"
     assert B.kode_wilayah("/x/MARTOBA RW 002", "HPDB_SIANTAR_1234567890_MARTOBA RW 002_80HP_X.xlsx") == "SIANTAR_MARTOBA_RW_002"
 
