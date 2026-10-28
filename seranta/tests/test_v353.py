@@ -96,6 +96,19 @@ def test_mapview_data_and_block():
     assert MV.block({"L": [], "F": []}) == ""
 
 
+def test_evidence_panel():
+    import report_ui as U
+    h = U.evidence_html("F-0009", {"rule": [("Bentang", 60, 76, "m")], "rows": [{"t": "HPDB baris 51", "src": "HPDB.xlsx",
+                                    "d": {"LAT": "1.2", "ALAMAT": "Jl. A"}, "hi": ["LAT"]}], "audit": [("ID temuan", "F-0009"), ("x", "")]},
+                        "data:image/jpeg;base64,AA==", "Judul")
+    for k in ("data-pt='img'", "data-pt='rule'", "data-pt='data'", "data-pt='audit'", "+16 m", "(+27%)", "class='hit'",
+              "HPDB.xlsx", "data-img='copy'", "data-img='png'"):
+        assert k in h, k
+    assert U.evidence_html("F-1", {}) == ""
+    li = U.finding_li("ERROR", "t", "", "a", "f", fid="F-0009", ev={"rule": [("p", 1, 2, "")]})
+    assert "class='proof'" in li
+
+
 def test_rule_version_from_code():
     p, _ = Q.get_profile("APD_1X4")
     assert p["rule_version"] == Q.RULE_VERSION

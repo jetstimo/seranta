@@ -720,6 +720,10 @@ class QcApd(QgsProcessingAlgorithm):
 
     def _html(self, path, results, prof, meta, net):
         try:
+            meta["obj_ix"] = obj_index(net, os.path.basename(str(meta.get("apd_kmz") or meta.get("autodesign") or "")))
+        except Exception as _e:
+            _log.note(_e)
+        try:
             from . import mapview as MV
             meta["map_html"] = MV.block(MV.data_from_scene(scene_of(net), finding_recs(results)), "Peta temuan QC APD")
         except Exception as _e:          # peta adalah pelengkap: laporan tetap ditulis tanpa peta
@@ -934,6 +938,57 @@ def _word_rest(path, results, prof, meta, out_dir, sc, recs, shots, S, D, X, max
     return os.path.basename(path), {k: S.data_uri(v[0]) for k, v in imgs.items()}
 
 
+def _evidence(f, r, prof, meta):
+    """Bukti satu temuan alat 4: aturan vs nilai, atribut objek yang disebut (dari KMZ/hasil desain), bukti sistem, jejak."""
+    ev = {}
+    if f.get("value") is not None or f.get("threshold") is not None:
+        v = f.get("value")
+        ev["rule"] = [(("%s%s" % (r.title.split(" (")[0], (" - " + f["object_id"]) if f.get("object_id") else ""))[:90],
+                       f.get("threshold"), ("%.2f" % v).rstrip("0").rstrip(".") if isinstance(v, float) else v, f.get("unit") or "")]
+    ix = meta.get("obj_ix") or {}
+    rows = []
+    oid = str(f.get("object_id") or "").strip()
+    hits = [oid] if oid in ix else []
+    if not hits and oid:
+        # objek gabungan (mis. 'NP-20-EP-11' = dua tiang): cari setiap nama objek yang muncul utuh di ID
+        for k in sorted(ix, key=len, reverse=True):
+            if len(k) >= 3 and re.search(r"(^|[^A-Za-z0-9])%s($|[^0-9A-Za-z])" % re.escape(k), oid):
+                hits.append(k)
+    for nm in hits[:4]:
+        o = ix[nm]
+        rows.append({"t": "%s %s" % (o[0], nm), "src": o[2], "d": o[1], "hi": []})
+    if rows:
+        ev["rows"] = rows
+    if f.get("evidence"):
+        ev["note"] = "Bukti sistem: %s" % f["evidence"]
+    ev["audit"] = [("ID temuan", f.get("finding_id") or ""), ("Kode aturan", f["rule_id"]), ("Aturan", r.title),
+                   ("Dasar", "%s - %s" % (Q.DASAR_LABEL.get(r.dasar, r.dasar or ""), r.sumber or "")),
+                   ("Berkas sumber", f.get("source_file") or ""), ("Lingkup", f.get("scope") or ""),
+                   ("Profil", "%s (versi aturan %s)" % (prof.get("profile_id"), prof.get("rule_version"))),
+                   ("Alat", meta.get("produk", "")), ("Dibuat", str(meta.get("dibuat", "")).replace("T", " ")[:16])]
+    return ev
+
+
+def obj_index(net, src_name=""):
+    """{nama objek: (jenis, atribut, sumber)} dari jaringan QC, untuk bukti 'Data sumber' di laporan HTML."""
+    sc = scene_of(net)
+    lab = {"pole_new": "Tiang baru", "pole_ext": "Tiang existing", "fat": "FAT", "fdt": "FDT", "closure": "Closure", "hp": "Homepass"}
+    ix = {}
+    for i, (x, y, kind, label) in enumerate(sc.points):
+        a = dict(sc.attrs_p[i] if i < len(sc.attrs_p) else {})
+        a["Koordinat (lat, lon)"] = "%.7f, %.7f" % (y, x)
+        rec = (lab.get(kind, kind), {k: str(v)[:120] for k, v in a.items()}, src_name)
+        for key in (label, a.get("ID"), a.get("Kode")):
+            if key and str(key) not in ix:
+                ix[str(key)] = rec
+    for i, (pts, kind) in enumerate(sc.lines):
+        a = sc.attrs_l[i] if i < len(sc.attrs_l) else {}
+        nm = str(a.get("Nama") or "")
+        if nm and nm not in ix:
+            ix[nm] = ("Kabel", {k: str(v)[:120] for k, v in a.items()}, src_name)
+    return ix
+
+
 def write_html(path, results, prof, meta):
     """Laporan QC_APD.html: satu kalimat keputusan, jalur aturan, lalu kartu per aturan yang menjelaskan
     apa yang dicek, kenapa penting, hasilnya, dan apa yang harus dilakukan untuk setiap temuan."""
@@ -1027,7 +1082,8 @@ def write_html(path, results, prof, meta):
                     tech += "<br>%s%s" % (("Bukti: %s. " % _E(f["evidence"])) if f.get("evidence") else "",
                                           ("Sumber: <code>%s</code>" % _E(f["source_file"])) if f.get("source_file") else "")
                 fid = f.get("finding_id") or None
-                lis.append(U.finding_li(f["severity"], j, f.get("object_id") or "", a, fx, tech, ll, fid=fid, snap=snaps.get(fid)))
+                lis.append(U.finding_li(f["severity"], j, f.get("object_id") or "", a, fx, tech, ll, fid=fid, snap=snaps.get(fid),
+                                        ev=_evidence(f, r, prof, meta)))
             more = ("<li class='more'>+%d temuan lain. Daftar lengkap ada di QC_APD_TEMUAN.csv dan panel Navigator QC.</li>"
                     % (len(fs) - 80)) if len(fs) > 80 else ""
             inner.append("<ul class='finds'>%s%s</ul>" % ("".join(lis), more))

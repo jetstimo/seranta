@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.5.7 – bukti temuan langsung di laporan
+- Panel bukti bertab di setiap temuan HTML: Gambar (statis; salin/unduh PNG) · Aturan vs nilai (syarat, nilai, selisih, %) ·
+  Data sumber (kutipan baris HPDB / atribut tiang, FAT/FDT, HP, kabel; kolom penentu disorot; nama berkas) · Jejak (audit).
+- Peta interaktif: tombol Salin gambar / Unduh gambar tampilan saat ini (judul, koordinat pusat, skala, utara).
+- HP duplikat: baris ganda yang tidak punya titik KMZ tidak lagi dilaporkan terpisah (satu akar masalah, satu temuan).
+- Token desain diselaraskan dengan pola sistem desain telco besar (netral merek): aksen petrol-teal, warna status
+  fungsional, ikon tingkat berbentuk berbeda (aman buta warna), IBM Plex Mono (OFL) untuk kutipan data.
+- 62 uji otomatis.
+
 ## 3.5.6 – peta temuan interaktif di setiap laporan
 - Laporan HTML alat 1 dan alat 4 kini memuat peta temuan (Leaflet 1.9.4, BSD-2, disematkan; jalan tanpa internet).
 - Klik temuan: isi, tindakan, nilai vs batas, panjang garis, gambar, centang review (sinkron), koordinat desimal & DMS,

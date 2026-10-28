@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.5.6"
+__version__ = "3.5.7"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -1608,6 +1608,51 @@ def read_dbf(path, encoding="utf-8"):
     return out
 
 
+PARAM_LABEL = [(r"^HP_JAUH", "Jarak HP ke tiang terdekat"), (r"RENTANG", "Bentang tiang ke tiang (sepanjang jalur)"),
+               (r"BELOKAN", "Sudut belokan jalur"), (r"^INFO_KABEL_RENDAH", "Tinggi kabel di tengah bentang (perkiraan)"),
+               (r"BOUNDARY|FUNNEL", "Jarak HP dari garis batas"), (r"DUPLIKAT", "Jarak antar HP"), (r"COLO", "Jarak / kapasitas FDT")]
+
+
+def _qc_evidence(recs, hp_rows, poles, names, kinds, heights, src):
+    """Bukti per temuan alat 1: aturan vs nilai, kutipan baris HPDB yang disebut ('baris N'), atribut tiang yang disebut,
+    dan jejak (berkas sumber, profil, versi). Semua diambil dari data yang dibaca plugin - tanpa membuka folder."""
+    pole_ix = {}
+    for k_, (p, nm, kd) in enumerate(zip(poles, names, kinds)):
+        if nm:
+            pole_ix[str(nm)] = {"Nama": nm, "Jenis": "Tiang existing (EP)" if kd == "existing" else "Tiang baru (NP)",
+                                "Tinggi (m)": ("%g" % heights[k_]) if k_ < len(heights) and heights[k_] else "-",
+                                "Koordinat (lat, lon)": "%.7f, %.7f" % (p.y(), p.x())}
+    hi_keys = ("HOMEPASS_LATITUDE", "HOMEPASS_LONGITUDE", "LATITUDE", "LONGITUDE", "LAT", "LONG", "HOMEPASS_HOUSE_NUMBER")
+    out = {}
+    for r in recs:
+        ev = {}
+        kind, val, lim, unit = r["kind"], r.get("value"), r.get("limit"), r.get("unit") or ""
+        if val is not None or lim is not None:
+            lab = next((t for rx, t in PARAM_LABEL if re.search(rx, kind)), r.get("title") or "Nilai")
+            ev["rule"] = [(lab, lim, ("%.2f" % val).rstrip("0").rstrip(".") if isinstance(val, float) else val, unit)]
+            if kind.startswith("INFO_KABEL_RENDAH"):
+                ev["note"] = "Untuk kabel rendah, nilai di bawah syarat berarti kabel lebih rendah dari ruang bebas minimum."
+        rows = []
+        for n_ in sorted({int(x) for x in re.findall(r"baris (\d+)", r.get("arti") or "")})[:4]:
+            d = hp_rows.get(n_)
+            if d:
+                hi = [k for k in d if str(k).upper() in hi_keys] if "DUPLIKAT" in kind or "KMZ" in kind or "BERGESER" in kind \
+                    else [k for k in d if str(k).upper() in ("HOMEPASS_HOUSE_NUMBER",)]
+                rows.append({"t": "HPDB baris %d" % n_, "src": src.get("HPDB", ""), "d": d, "hi": hi})
+        for nm in sorted({x for x in re.findall(r"[A-Za-z]{1,10}[- ]?\d{1,4}", r.get("arti") or "") if x in pole_ix})[:4]:
+            rows.append({"t": "Tiang %s" % nm, "src": src.get("KMZ cluster", ""), "d": pole_ix[nm], "hi": ["Tinggi (m)"]})
+        m_ = re.search(r"titik KMZ '([^']+)'", r.get("arti") or "")
+        if m_:
+            rows.append({"t": "Titik survei KMZ '%s'" % m_.group(1), "src": src.get("KMZ cluster", ""),
+                         "d": {"Nama titik": m_.group(1), "Keterangan": "lihat jarak pada kalimat temuan"}, "hi": []})
+        if rows:
+            ev["rows"] = rows
+        ev["audit"] = [("ID temuan", r["fid"]), ("Kode aturan", kind), ("Dasar aturan", r.get("dasar") or "")] + \
+            [(k, v) for k, v in src.items() if v]
+        out[r["fid"]] = ev
+    return out
+
+
 def qc_order(qc):
     """(items ternormalisasi, urutan) - urutan yang sama dipakai untuk ID temuan F-0001.. di QC_TEMUAN, HTML dan Word."""
     items = [qc_item(it) for it in qc]
@@ -2523,7 +2568,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
 
     @staticmethod
     def _qc_word(qc, outp, inp, kode, cluster, std, judul, poles, names, kinds, hp_xy, segs, own_bnd, funnel_polys, feedback,
-                 max_img=80, hp_attrs=None, heights=None):
+                 max_img=80, hp_attrs=None, heights=None, hp_rows=None, src=None):
         """Gambar peta per temuan (folder QC_GAMBAR) dan laporan Word <KODE>_LAPORAN_QC.docx.
         Kembali (nama file Word, {F-0001: data URI})."""
         import math
@@ -2613,6 +2658,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         feedback.pushInfo("Laporan Word: %s" % path)
         from . import mapview as _mv
         map_data = _mv.data_from_scene(sc, recs)
+        map_data["EV"] = _qc_evidence(recs, hp_rows or {}, poles, names, kinds, heights or [], src or {})
         return os.path.basename(path), {k: _snap.data_uri(v[0]) for k, v in imgs.items()}, map_data
 
     def processAlgorithm(self, parameters, context, feedback):
@@ -3670,7 +3716,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             for d, i, j in cand:
                 if i not in pair_h and j not in pair_k:
                     pair_h[i], pair_k[j] = j, i
-            no_kmz = no_hpdb = n_geser = 0
+            no_kmz = no_hpdb = n_geser = n_dupabs = 0
             dup_idx = {k for j_, ks in dup_groups if j_ == "koordinat sama" for k in ks}
             # Tahap 2 - pasangan berdasarkan identitas: nomor rumah HPDB = nama titik KMZ (aplikasi survei menamai titik
             # dengan nomor rumah) dan jarak <= hp_shift_max. Rumah yang sama dengan koordinat bergeser (galat GPS ponsel
@@ -3707,9 +3753,22 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 no_kmz += 1
                 j = kidx.nearestNeighbor(p, 1)[0]
                 d = da.measureLine(p, kmz_hp[j][0])
-                why = "duplikat koordinat; titik KMZ-nya sudah dipakai baris lain" if i in dup_idx and d <= hp_tol \
-                    else "HP KMZ terdekat %.1f m, tidak ada titik KMZ dengan no. rumah sama" % d
-                qc.append((p, "HP_HPDB_TIDAK_ADA_DI_KMZ", "%s: %s" % (_hpname(i), why)))
+                if i in dup_idx and d <= hp_tol:
+                    n_dupabs += 1
+                    # Akibat langsung dari HP duplikat (satu titik KMZ untuk dua baris HPDB): satu akar masalah = satu
+                    # temuan. Keterangan ditambahkan ke temuan HP_DUPLIKAT_KOORDINAT, bukan temuan terpisah.
+                    tag = _hpname(i)
+                    for q_, it_ in enumerate(qc):
+                        if it_[1] == "HP_DUPLIKAT_KOORDINAT" and tag in it_[2]:
+                            qc[q_] = (it_[0], it_[1], it_[2] + " | KMZ hanya punya 1 titik di lokasi ini, sehingga %s tidak punya "
+                                      "pasangan KMZ (dihitung di sini, tidak dilaporkan terpisah)" % tag) + tuple(it_[3:])
+                            break
+                    else:
+                        qc.append((p, "HP_HPDB_TIDAK_ADA_DI_KMZ", "%s: duplikat koordinat; titik KMZ-nya sudah dipakai baris lain"
+                                   % tag))
+                    continue
+                qc.append((p, "HP_HPDB_TIDAK_ADA_DI_KMZ", "%s: HP KMZ terdekat %.1f m, tidak ada titik KMZ dengan no. rumah sama"
+                           % (_hpname(i), d)))
             n_ev = len(kmz_hp) - kmz_ev0
             ev_used = sum(1 for j in pair_k if j >= kmz_ev0)
             n_kmz = kmz_ev0 + ev_used          # HP KMZ efektif: folder HP + titik evidence yang berpasangan HPDB
@@ -3752,7 +3811,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 first = [g for j_, g in dup_groups if j_ in ("koordinat sama", "ID operator sama")][:2]
                 if first:
                     parts.append("contoh " + "; ".join(" & ".join(_hpname(k) for k in g) for g in first))
-            parts.append("tanpa pasangan: HPDB %d, KMZ %d" % (no_kmz, no_hpdb))
+            parts.append("tanpa pasangan: HPDB %d%s, KMZ %d" % (no_kmz, (" (%d akibat HP duplikat)" % n_dupabs) if n_dupabs else "",
+                                                                no_hpdb))
             if n_geser:
                 parts.append("%d HP sama no. rumah tapi koordinat bergeser" % n_geser)
             if parts_scope:
@@ -4552,10 +4612,14 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                             pass
                     a_[headers[k_]] = v_
                 hp_attrs.append(a_)
+            hp_rows = {meta[k_][0]: (hp_attrs[k_] if k_ < len(hp_attrs) else {}) for k_ in range(len(data))}
+            src_ = {"HPDB": os.path.basename(hpdb or ""), "KMZ cluster": os.path.basename(cluster_kmz or pole_path or ""),
+                    "Profil": "%s (versi aturan %s)" % (qprof.get("profile_id"), qprof.get("rule_version")),
+                    "Alat": "%s v%s" % (__product__, __version__), "Dibuat": _dt.datetime.now().strftime("%d-%m-%Y %H:%M")}
             word_name, snaps_uri, map_data = self._qc_word(
                 qc, outp, inp, kode, cluster_label(outdir, hpdb), std, judul, poles, names, kinds,
                 locals().get("hp_xy") or [], segs, own_bnd, [f["poly"] for f in (locals().get("own_f") or [])], feedback,
-                hp_attrs=hp_attrs, heights=heights)
+                hp_attrs=hp_attrs, heights=heights, hp_rows=hp_rows, src=src_)
             from . import mapview as _mv
             map_html = _mv.block(map_data, "Peta temuan QC survei")
         except Exception as e:
@@ -4570,6 +4634,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                  "ref_dir": funnel_dir, "refs": refs, "qc_counts": qc_counts(qc), "qc_by_std": qc_by_std(qc),
                  "qc_profile_id": qprof.get("profile_id"), "rule_version": qprof.get("rule_version"),
                  "fid_map": fid_map, "snaps": snaps_uri, "word": word_name, "map_html": map_html,
+                 "evidence": (map_data or {}).get("EV", {}) if "map_data" in locals() else {},
                  "qc_params": [(k, e.get("v"), e.get("unit"), _qc.DASAR_LABEL.get(e.get("dasar"), e.get("dasar")),
                                 e.get("sumber"), e.get("status")) for k, e in qprof["params"].items()
                                if k in ("span_max_m", "span_reg_m", "hp_pole_max_m", "clear_road_m", "sag_pct", "dup_near_m",

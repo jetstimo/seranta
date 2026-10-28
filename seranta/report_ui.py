@@ -36,7 +36,8 @@ def font_css():
         return _FONT_CACHE[0]
     out = []
     for fam, fn, w in (("Inter", "inter-400.woff", 400), ("Inter", "inter-600.woff", 600),
-                       ("Poppins", "poppins-500.woff", 500), ("Poppins", "poppins-700.woff", 700)):
+                       ("Poppins", "poppins-500.woff", 500), ("Poppins", "poppins-700.woff", 700),
+                       ("IBM Plex Mono", "plexmono-400.woff", 400)):
         p = os.path.join(FONT_DIR, fn)
         if os.path.isfile(p):
             with open(p, "rb") as fh:
@@ -52,19 +53,19 @@ CSS = r"""
    hemat, pita gelap untuk kepala, tipografi tegas, spasi 4/8 px, kontras WCAG 2.2 AA. Aksen: serat (teal) + fajar (oranye). */
 :root{
  --paper:#F3F7F9;--sheet:#FFFFFF;--ink:#161616;--ink2:#525252;--mute:#6F6F6F;--line:#E0E0E0;--line2:#F2F4F8;
- --deep:#06294F;--deep2:#0B3A66;--accent:#0A6F86;--accent-bg:#E6F4F6;--fiber:#0B8F95;--dawn:#E8780E;
- --err:#DA1E28;--err-bg:#FFF1F1;--wrn:#BA4E00;--wrn-bg:#FFF2E8;--unv:#6F6F6F;--unv-bg:#F4F4F4;
- --inf:#0043CE;--inf-bg:#EDF5FF;--ok:#198038;--ok-bg:#DEFBE6;
+ --deep:#06294F;--deep2:#0B3A66;--accent:#0B6E79;--accent-bg:#E3F2F3;--fiber:#0B8F95;--dawn:#E8780E;
+ --err:#B42318;--err-bg:#FEF3F2;--wrn:#B54708;--wrn-bg:#FFFAEB;--unv:#5B6676;--unv-bg:#F0F2F5;
+ --inf:#175CD3;--inf-bg:#EFF8FF;--ok:#067647;--ok-bg:#ECFDF3;
  --r-lg:14px;--r-md:9px;--shadow:0 1px 2px rgba(6,41,79,.05),0 6px 20px rgba(6,41,79,.06);
  --sans:'Inter',"Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
  --head:'Poppins','Inter',"Segoe UI",system-ui,sans-serif;
- --mono:"Cascadia Mono",Consolas,"DejaVu Sans Mono",ui-monospace,monospace;
+ --mono:"IBM Plex Mono","Cascadia Mono",Consolas,"DejaVu Sans Mono",ui-monospace,monospace;
 }
 @media (prefers-color-scheme:dark){:root{
  --paper:#07131F;--sheet:#0E2032;--ink:#F4F4F4;--ink2:#C6C6C6;--mute:#A8A8A8;--line:#393939;--line2:#2E2E2E;
- --deep:#041A33;--deep2:#0B2A4A;--accent:#5CF2E8;--accent-bg:#0E3140;
- --err:#FA4D56;--err-bg:#3A1A1C;--wrn:#FF832B;--wrn-bg:#3A2614;--unv:#A8A8A8;--unv-bg:#2E2E2E;
- --inf:#78A9FF;--inf-bg:#1C2B44;--ok:#42BE65;--ok-bg:#16301F;--shadow:none}}
+ --deep:#041A33;--deep2:#0B2A4A;--accent:#5CC8CF;--accent-bg:#0F3236;
+ --err:#F97066;--err-bg:#3A1614;--wrn:#FDB022;--wrn-bg:#3A2A0A;--unv:#A9B3C1;--unv-bg:#1F2630;
+ --inf:#84ADFF;--inf-bg:#0F2547;--ok:#47CD89;--ok-bg:#0C2E1E;--shadow:none}}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
 body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.55 var(--sans);font-feature-settings:"tnum" 1;
@@ -162,7 +163,12 @@ kbd{font:600 11px var(--mono);border:1px solid var(--line);border-bottom-width:2
 .chip.err{background:var(--err-bg);color:var(--err);border-color:var(--err)}.chip.wrn{background:var(--wrn-bg);color:var(--wrn);border-color:var(--wrn)}
 .chip.unv{background:var(--unv-bg);color:var(--unv);border-color:var(--unv)}.chip.inf{background:var(--inf-bg);color:var(--inf);border-color:var(--inf)}
 .chip.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
-.chip i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+.chip i{width:8px;height:8px;border-radius:50%;background:currentColor;display:inline-block;flex:none}
+/* bentuk ikon tingkat berbeda (aman buta warna, WCAG 1.4.1): segi delapan, segitiga, cincin putus, lingkaran, centang */
+.chip.err i{border-radius:0;width:9px;height:9px;clip-path:polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%)}
+.chip.wrn i{border-radius:0;width:10px;height:9px;clip-path:polygon(50% 0,100% 100%,0 100%)}
+.chip.unv i{background:transparent;border:1.6px dashed currentColor;width:9px;height:9px}
+.chip.ok i{border-radius:0;background:transparent;width:5px;height:9px;border:solid currentColor;border-width:0 2px 2px 0;transform:rotate(45deg) translate(-1px,-1px)}
 .chip.err i{border-radius:1px;transform:rotate(45deg)}.chip.wrn i{width:0;height:0;border-radius:0;background:none;
  border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:7px solid currentColor}
 .rbody{padding:0 18px 16px}
@@ -199,7 +205,27 @@ kbd{font:600 11px var(--mono);border:1px solid var(--line);border-bottom-width:2
 .finds .acts{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
 .finds .acts .btn{padding:3px 8px;font-size:12px}
 .finds label.rv{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--ink2);cursor:pointer}
-.shot{margin:8px 0 2px;display:block;max-width:420px;border:1px solid var(--line);cursor:zoom-in;background:var(--sheet)}
+.shot{margin:0;display:block;max-width:520px;border:1px solid var(--line);cursor:zoom-in;background:var(--sheet);border-radius:8px;overflow:hidden}
+.proof{margin:10px 0 4px;border:1px solid var(--line);border-radius:12px;background:var(--line2);overflow:hidden;max-width:760px}
+.ptabs{display:flex;gap:2px;padding:6px 6px 0;border-bottom:1px solid var(--line);background:var(--sheet)}
+.ptabs button{all:unset;cursor:pointer;font:600 12.5px var(--sans);padding:7px 12px;border-radius:8px 8px 0 0;color:var(--ink2);
+ border-bottom:2px solid transparent}
+.ptabs button[aria-selected=true]{color:var(--accent);border-bottom-color:var(--accent);background:var(--line2)}
+.ptabs button:focus-visible{outline:2px solid var(--accent)}
+.pp{padding:10px 12px 12px}
+.shotfig{margin:0}.shotfig figcaption{display:flex;flex-wrap:wrap;gap:6px 12px;justify-content:space-between;align-items:center;margin-top:8px;
+ font-size:12px;color:var(--mute)}
+.imgacts{display:flex;gap:6px}.imgacts .btn{padding:4px 9px;font-size:12px}
+table.evt,table.kv{font-size:13px;background:var(--sheet);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+table.evt caption{caption-side:top;text-align:left;font-size:11.5px;color:var(--mute);padding:0 0 6px;text-transform:uppercase;letter-spacing:.06em}
+table.evt th,table.evt td,table.kv th,table.kv td{padding:6px 10px}
+table.evt td.bad{font-weight:700;color:var(--err)}
+table.kv{font-family:"IBM Plex Mono",var(--mono);font-size:12px}
+table.kv th{font-weight:500;color:var(--mute);width:40%;white-space:normal;word-break:break-word}
+table.kv td{word-break:break-word}
+table.kv tr.hit th,table.kv tr.hit td{background:var(--wrn-bg);color:var(--ink);font-weight:600}
+.evsrc{margin-top:8px}.evh{font-size:12.5px;margin-bottom:4px}.evh span{color:var(--mute);font-size:11.5px}
+.evn{font-size:12.5px;color:var(--ink2);margin:6px 0 0}
 .shot img{display:block;width:100%;height:auto}
 .map{font-size:12px;text-decoration:none;border:1px solid var(--line);padding:3px 8px;white-space:nowrap;color:var(--ink)}
 .map:hover{border-color:var(--accent);color:var(--accent)}
@@ -233,6 +259,7 @@ dialog.help ul{margin:8px 0;padding-left:18px}dialog.help{max-width:520px;paddin
  .top{background:#fff;color:#000;padding-top:0;border-bottom:2px solid #000}.top h1,.top .verdict,.top .verdict b{color:#000}
  .meta,.meta div b,.top .tool{color:#333}
  .rule,.block,.finds>li{break-inside:avoid;box-shadow:none}.hide{display:block!important}.shot{max-width:320px}
+ .ptabs,.imgacts{display:none}.pp[hidden]{display:block!important}
  details>*{display:block}}
 """
 
@@ -284,6 +311,16 @@ JS = r"""
   var csv=rows.map(function(r){return r.map(function(c){return '"'+String(c).replace(/"/g,'""')+'"'}).join(';')}).join('\r\n');
   var a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['﻿'+csv],{type:'text/csv'}));
   a.download=(document.body.dataset.run||'review')+'_REVIEW.csv';document.body.appendChild(a);a.click();a.remove();});
+ // tab bukti + salin/unduh gambar
+ document.addEventListener('click',function(e){var t=e.target.closest('.ptabs [data-pt]');if(t){var pr=t.closest('.proof');
+   [].forEach.call(pr.querySelectorAll('.ptabs [data-pt]'),function(b){b.setAttribute('aria-selected',b===t?'true':'false')});
+   [].forEach.call(pr.querySelectorAll('.pp'),function(p){p.hidden=p.dataset.pp!==t.dataset.pt});return;}
+  var ib=e.target.closest('[data-img]');if(!ib)return;var fig=ib.closest('.proof'),im=fig&&fig.querySelector('.shot img');if(!im)return;
+  var c=document.createElement('canvas'),i2=new Image();i2.onload=function(){c.width=i2.naturalWidth;c.height=i2.naturalHeight;
+   c.getContext('2d').drawImage(i2,0,0);c.toBlob(function(b){var nm=(fig.dataset.fid||'temuan')+'.png';
+    if(ib.dataset.img==='png'){var a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=nm;document.body.appendChild(a);a.click();a.remove();toast('Gambar diunduh: '+nm);}
+    else{try{navigator.clipboard.write([new ClipboardItem({'image/png':b})]).then(function(){toast('Gambar tersalin. Tempel di Word dengan Ctrl+V')},function(){toast('Browser menolak menyalin gambar; pakai Unduh PNG')})}
+     catch(x){toast('Browser belum mendukung salin gambar; pakai Unduh PNG')}}},'image/png')};i2.src=im.src;});
  // pratinjau gambar
  var lb=document.getElementById('lb'),lbi=lb&&lb.querySelector('img'),lbc=lb&&lb.querySelector('.cap'),shots=[],si=0;
  function openShot(i){shots=[].slice.call(document.querySelectorAll('.shot img')).filter(function(im){return !im.closest('.hide')});
@@ -399,24 +436,82 @@ def toolbar(placeholder="Cari ID temuan, kode perangkat, tiang, atau kata kunci"
                  "Unduh laporan Word</a>" % E(word_href)) if word_href else ""))
 
 
-def finding_li(sev, title, obj, arti, fix, tech="", lonlat=None, extra="", fid=None, snap=None):
+def _num(v):
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def evidence_html(fid, ev, snap=None, title=""):
+    """Panel bukti satu temuan dengan tiga tab: Gambar (tangkapan statis untuk laporan) | Aturan vs nilai | Data sumber.
+    ev: {"rule": [(parameter, batas, nilai, unit)], "rows": [{"t": judul, "src": berkas, "d": {kolom: nilai}, "hi": [kolom]}],
+         "note": teks, "audit": [(label, nilai)]}. Peta interaktif dibuka dengan tombol 'Tampilkan di peta'."""
+    ev = ev or {}
+    tabs, panes = [], []
+    if snap:
+        tabs.append(("img", "Gambar"))
+        panes.append("<figure class='shotfig'><a class='shot' href='#' title='Perbesar gambar (G)'><img loading='lazy' src='%s' alt='%s %s'>"
+                     "</a><figcaption><span>Tangkapan statis (untuk laporan/Word). Untuk mengklik objek dan melihat atributnya, "
+                     "pakai <b>Tampilkan di peta</b>.</span><span class='imgacts'><button class='btn' type='button' data-img='copy'>"
+                     "Salin gambar</button><button class='btn' type='button' data-img='png'>Unduh PNG</button></span></figcaption></figure>"
+                     % (snap, E(fid), E(title)))
+    rule = [r for r in ev.get("rule") or [] if r]
+    if rule:
+        rows = []
+        for par, lim, val, unit in rule:
+            a, b = _num(val), _num(lim)
+            d = ("%+.2f %s" % (a - b, unit or "")).replace(".00 ", " ") if a is not None and b is not None else "-"
+            pct = (" (%+.0f%%)" % (100.0 * (a - b) / b)) if a is not None and b not in (None, 0) else ""
+            rows.append("<tr><th scope='row'>%s</th><td class='n'>%s %s</td><td class='n bad'>%s %s</td><td class='n'>%s%s</td></tr>" % (
+                E(str(par)), E(str(lim) if lim is not None else "-"), E(str(unit or "")), E(str(val) if val is not None else "-"),
+                E(str(unit or "")), E(d), E(pct)))
+        tabs.append(("rule", "Aturan vs nilai"))
+        panes.append("<table class='evt'><caption>Syarat aturan dibanding nilai di data</caption><tr><th scope='col'>Parameter</th>"
+                     "<th scope='col' class='n'>Syarat</th><th scope='col' class='n'>Nilai di data</th><th scope='col' class='n'>Selisih</th></tr>"
+                     "%s</table>%s" % ("".join(rows), ("<p class='evn'>%s</p>" % E(ev["note"])) if ev.get("note") else ""))
+    srcs = [r for r in ev.get("rows") or [] if r and r.get("d")]
+    if srcs:
+        blocks = []
+        for r in srcs[:6]:
+            hi = set(r.get("hi") or [])
+            kv = "".join("<tr%s><th scope='row'>%s</th><td>%s</td></tr>" % (" class='hit'" if k in hi else "", E(str(k)), E(str(v)))
+                         for k, v in list(r["d"].items())[:40])
+            blocks.append("<div class='evsrc'><div class='evh'><b>%s</b>%s</div><table class='kv'>%s</table></div>" % (
+                E(r.get("t") or "Data"), (" <span>%s</span>" % E(r["src"])) if r.get("src") else "", kv))
+        tabs.append(("data", "Data sumber"))
+        panes.append("<p class='evn'>Kutipan langsung dari berkas sumber, tanpa perlu membuka folder. Kolom yang menjadi dasar temuan "
+                     "disorot.</p>" + "".join(blocks))
+    if ev.get("audit"):
+        tabs.append(("audit", "Jejak"))
+        panes.append("<table class='kv'>%s</table>" % "".join("<tr><th scope='row'>%s</th><td>%s</td></tr>" % (E(str(k)), E(str(v)))
+                                                             for k, v in ev["audit"] if v not in (None, "")))
+    if not tabs:
+        return ""
+    return ("<div class='proof' data-fid='%s'><div class='ptabs' role='tablist' aria-label='Bukti temuan %s'>%s</div>%s</div>" % (
+        E(fid), E(fid), "".join("<button type='button' role='tab' data-pt='%s' aria-selected='%s'>%s</button>"
+                                % (k, "true" if i == 0 else "false", E(t)) for i, (k, t) in enumerate(tabs)),
+        "".join("<div class='pp' data-pp='%s'%s>%s</div>" % (k, "" if i == 0 else " hidden", h)
+                for i, ((k, _t), h) in enumerate(zip(tabs, panes)))))
+
+
+def finding_li(sev, title, obj, arti, fix, tech="", lonlat=None, extra="", fid=None, snap=None, ev=None):
     """Satu temuan. fid: ID tetap (F-0001 / ID temuan alat 4) untuk tautan langsung, review dan laporan Word;
-    snap: data URI gambar peta temuan (opsional)."""
+    snap: data URI gambar peta temuan (opsional); ev: bukti terstruktur (lihat evidence_html)."""
     fid = fid or next_id()
     side = map_link(*lonlat) if lonlat else ""
     acts = ("<div class='acts'><button class='btn' type='button' data-copy='link' title='Salin tautan langsung ke temuan ini'>"
             "Salin tautan</button>%s</div>" % (
                 ("<button class='btn' type='button' data-copy='%.6f, %.6f' title='Salin koordinat lat, lon'>Koordinat</button>"
                  % (lonlat[1], lonlat[0])) if lonlat else ""))
-    shot = ("<a class='shot' href='#' title='Perbesar gambar (G)'><img loading='lazy' src='%s' alt='%s %s'></a>"
-            % (snap, E(fid), E(title))) if snap else ""
+    proof = evidence_html(fid, ev, snap, title)
     return ("<li class='%s' id='%s' data-fid='%s' data-s='%s'><span class='bar'></span><div><div class='t'>"
             "<a class='fid' href='#%s' data-copy='link' title='Salin tautan'>%s</a>%s%s</div>"
             "<p class='a'>%s</p>%s%s%s%s</div><div class='side'>%s%s<label class='rv'><input type='checkbox' class='rvc'> "
             "Sudah dicek</label>%s</div></li>" % (
                 SEV_CLS.get(sev, "unv"), E(fid), E(fid), E(sev), E(fid), E(fid), E(title),
                 (" <span class='obj'>%s</span>" % E(obj)) if obj else "",
-                E(arti), ("<p class='fix'>%s</p>" % E(fix)) if fix else "", extra, shot,
+                E(arti), ("<p class='fix'>%s</p>" % E(fix)) if fix else "", extra, proof,
                 ("<details><summary>Detail teknis</summary>%s</details>" % tech) if tech else "", chip(sev), side, acts))
 
 

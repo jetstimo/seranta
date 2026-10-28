@@ -354,7 +354,10 @@ TOOL1_KIND = [
     ("HP_DI_RFS_EXT", "Rumah berada di wilayah perluasan cluster lain.", "Koordinasikan dengan pemilik cluster; biasanya dikeluarkan."),
     ("HP_DI_FUNNEL_LAIN", "Rumah masuk funnel cluster lain.", "Keluarkan dari cluster ini atau koordinasikan batas funnel."),
     ("ADMIN_", "Nama wilayah di HPDB berbeda dengan data wilayah resmi.", "Perbaiki kolom wilayah di HPDB."),
-    ("HP_DUPLIKAT_KOORDINAT", "Dua atau lebih HP di koordinat yang sama.", "Sisakan satu HP per rumah."),
+    ("HP_DUPLIKAT_KOORDINAT", "Dua atau lebih baris HPDB memakai koordinat yang sama (satu rumah tercatat lebih dari sekali). "
+     "Akibatnya baris ganda juga tidak punya pasangan titik di KMZ; itu sudah dihitung di temuan ini.",
+     "Bila satu rumah: hapus baris ganda dari HPDB. Bila memang rumah berbeda (bersebelahan/bertingkat): perbaiki koordinat "
+     "baris itu ke rumahnya sendiri dan tambahkan titiknya di KMZ."),
     ("HP_DUPLIKAT_ID", "Dua atau lebih HP memakai ID operator yang sama.", "Beri ID unik atau hapus duplikat."),
     ("HP_HPDB_TIDAK_ADA_DI_KMZ", "HP ada di HPDB tetapi tidak tergambar di KMZ.", "Tambahkan titik di KMZ atau hapus dari HPDB."),
     ("HP_BERGESER", "Rumah yang sama (nomor rumah HPDB = nama titik KMZ) tetapi koordinatnya berbeda lebih dari toleransi.",

@@ -97,6 +97,8 @@ def block(data, title="Peta temuan QC"):
             "<select data-base aria-label='Peta dasar'><option value='none'>Tanpa peta dasar (offline)</option>"
             "<option value='sat'>Citra satelit (online)</option><option value='osm'>Peta jalan (online)</option></select>"
             "<button type='button' class='sbtn' data-meas title='Ukur jarak (M)'>Ukur</button>"
+            "<button type='button' class='sbtn' data-snap title='Salin gambar tampilan peta sekarang (tempel di Word)'>Salin gambar</button>"
+            "<button type='button' class='sbtn' data-snapd title='Unduh gambar tampilan peta sekarang (PNG)'>Unduh gambar</button>"
             "<button type='button' class='sbtn' data-fit title='Tampilkan semua'>Semua</button>"
             "<button type='button' class='sbtn' data-full title='Layar penuh (F)'>Layar penuh</button></div>"
             "<div class='smap-body'><div class='smap-map'><div class='smap-legend'>%s</div><div class='smap-meas'></div>"

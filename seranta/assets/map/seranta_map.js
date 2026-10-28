@@ -155,6 +155,28 @@ function toggleMeas(on){meas.on=on==null?!meas.on:on;$("[data-meas]",head).class
 map.on("click",function(e){if(meas.on)addMeas(e.latlng)});
 $("[data-meas]",head).addEventListener("click",function(){toggleMeas()});
 $("[data-fit]",head).addEventListener("click",fit);
+/* ---- tangkapan gambar tampilan peta (tanpa peta dasar online agar tidak terblokir CORS) ---- */
+function snap(mode){var mc=map.getContainer(),r=mc.getBoundingClientRect(),W=Math.round(r.width),H=Math.round(r.height),hb=46,sc=2;
+  var c=document.createElement("canvas");c.width=W*sc;c.height=(H+hb)*sc;var g=c.getContext("2d");g.scale(sc,sc);
+  g.fillStyle=box.classList.contains("light")?"#eef3f6":"#0f2236";g.fillRect(0,hb,W,H);
+  var tiles=curBase?$$(".leaflet-tile-pane img.leaflet-tile-loaded",mc):[];var tainted=false;
+  tiles.forEach(function(im){var b=im.getBoundingClientRect();try{g.drawImage(im,b.left-r.left,b.top-r.top+hb,b.width,b.height);g.getImageData(0,0,1,1)}catch(e){tainted=true}});
+  if(tainted){g.fillStyle=box.classList.contains("light")?"#eef3f6":"#0f2236";g.fillRect(0,hb,W,H)}
+  $$(".leaflet-overlay-pane canvas, .leaflet-overlay-pane svg",mc).forEach(function(cv){var b=cv.getBoundingClientRect();
+    if(cv.tagName.toLowerCase()==="canvas")g.drawImage(cv,b.left-r.left,b.top-r.top+hb,b.width,b.height)});
+  g.fillStyle="#06294F";g.fillRect(0,0,W,hb);g.fillStyle="#fff";g.font="600 14px Inter,Segoe UI,sans-serif";
+  var f=curF&&fx[curF],t=f?(curF+" \u00b7 "+(SEV[f.s]||SEV.INFO)[0]+" \u00b7 "+ftitle(f)):"Peta temuan QC";g.fillText(t.slice(0,110),12,19);
+  g.font="12px Inter,Segoe UI,sans-serif";g.fillStyle="#9FE8E2";var ce=map.getCenter();
+  g.fillText("Pusat "+ce.lat.toFixed(6)+", "+ce.lng.toFixed(6)+" \u00b7 zoom "+map.getZoom()+" \u00b7 "+new Date().toLocaleString("id-ID")+(tainted?" \u00b7 peta dasar online tidak ikut tergambar":""),12,37);
+  /* skala 50/100 m dan panah utara */
+  var p0=map.containerPointToLatLng([20,H-24]),mpp=hav([p0.lng,p0.lat],[map.containerPointToLatLng([120,H-24]).lng,p0.lat])/100,len=[10,20,50,100,200,500,1000].filter(function(m){return m/mpp<=180}).pop()||10,px=len/mpp;
+  g.fillStyle="rgba(255,255,255,.9)";g.fillRect(14,hb+H-34,px+52,22);g.fillStyle="#0b1d2e";g.fillRect(20,hb+H-22,px,3);g.font="11px Inter,sans-serif";g.fillText(len+" m",24+px,hb+H-16);
+  g.fillStyle="rgba(255,255,255,.9)";g.beginPath();g.moveTo(W-24,hb+12);g.lineTo(W-32,hb+32);g.lineTo(W-16,hb+32);g.closePath();g.fill();
+  c.toBlob(function(b){var nm=(curF||"peta_temuan")+"_peta.png";
+    if(mode==="png"){var a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=nm;document.body.appendChild(a);a.click();a.remove();note("Gambar peta diunduh: "+nm)}
+    else{try{navigator.clipboard.write([new ClipboardItem({"image/png":b})]).then(function(){note("Gambar peta tersalin. Tempel di Word dengan Ctrl+V")},function(){note("Browser menolak menyalin; pakai Unduh gambar")})}catch(x){note("Browser belum mendukung salin gambar; pakai Unduh gambar")}}},"image/png")}
+function note(t){var el=document.getElementById("toast");if(el){el.textContent=t;el.classList.add("on");setTimeout(function(){el.classList.remove("on")},2600)}else{mtxt.textContent=t;mtxt.classList.add("on");setTimeout(function(){if(!meas.on)mtxt.classList.remove("on")},2600)}}
+$("[data-snap]",head).addEventListener("click",function(){snap("copy")});$("[data-snapd]",head).addEventListener("click",function(){snap("png")});
 function full(){box.classList.toggle("full");setTimeout(function(){map.invalidateSize()},50)}
 $("[data-full]",head).addEventListener("click",full);
 $("[data-prev]",nav).addEventListener("click",function(){step(-1)});$("[data-next]",nav).addEventListener("click",function(){step(1)});

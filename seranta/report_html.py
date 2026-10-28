@@ -61,6 +61,7 @@ def build(path, meta, std, judul, extra_lines, bakp, files, full_text):
     by_std = meta.get("qc_by_std") or {}
     fid_map = meta.get("fid_map") or {}          # (kind, lon7, lat7, ket) -> F-0001 (sama dengan QC_TEMUAN & Word)
     snaps = meta.get("snaps") or {}              # F-0001 -> data URI gambar peta
+    evid = meta.get("evidence") or {}            # F-0001 -> bukti terstruktur (aturan vs nilai, kutipan data sumber, jejak)
     counts = {}
     for st, _no, _lab, n, _ex, _src, _slug in (meta.get("qc_counts") or []):
         sv = "ERROR" if st == "CEK" else st
@@ -87,7 +88,7 @@ def build(path, meta, std, judul, extra_lines, bakp, files, full_text):
             arti, aksi = X.tool1_kind_text(kind)
             fid = fid_map.get((kind, lon, lat, ket))
             lis.append(U.finding_li(sev, lab, "", ket, aksi, ("<code>%s</code> %s" % (_E(kind), _E(arti))) if kind else "",
-                                    (lon, lat), fid=fid, snap=snaps.get(fid)))
+                                    (lon, lat), fid=fid, snap=snaps.get(fid), ev=evid.get(fid)))
         more = ("<li class='more'>+%d titik lain. Semua titik ada di folder QC (QGIS), QC_TEMUAN.kmz dan panel Navigator QC.</li>"
                 % (len(lst) - limit)) if len(lst) > limit else ""
         return "<ul class='finds'>%s%s</ul>" % ("".join(lis), more)

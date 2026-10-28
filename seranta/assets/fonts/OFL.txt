@@ -1,7 +1,8 @@
 Inter: Copyright (c) 2016 The Inter Project Authors (https://github.com/rsms/inter)
 Poppins: Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins)
+IBM Plex Mono: Copyright 2017 IBM Corp. (https://github.com/IBM/plex), with Reserved Font Name "Plex"
 
-Subsets of these fonts (Latin) are embedded in Seranta reports. Both are licensed under the SIL Open Font License,
+Subsets of these fonts (Latin) are embedded in Seranta reports. All are licensed under the SIL Open Font License,
 Version 1.1, reproduced below. The fonts are not sold by themselves.
 
 -----------------------------------------------------------
