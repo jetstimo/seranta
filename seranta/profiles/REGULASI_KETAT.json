@@ -1,6 +1,6 @@
 {
  "profile_id": "REGULASI_KETAT",
- "rule_version": "2026.10-r5",
+ "rule_version": "2026.10-r7",
  "nama": "Regulasi daerah ketat (span 50 m ERROR, lendutan 6 m)",
  "keterangan": "Untuk kota yang Perwal-nya membatasi jarak tiang 50 m dan lendutan kabel >= 6 m (mis. Pekalongan 21/2024, Yogyakarta 13/2018).",
  "params": {
@@ -441,6 +441,54 @@
    "sumber": "NESC Table 232-1: kabel komunikasi >= 15,5 ft (4,7 m) di atas jalan pada lendutan akhir (batas aman internasional; regulasi Indonesia 5 m = Permen PU 20/2010). 4,7-5 m = tinjau, < 4,7 m = catatan per rentang",
    "status": "APPROVED",
    "severity": "INFO",
+   "unit": "m"
+  },
+  "cross_name_match_m": {
+   "v": 15.0,
+   "dasar": "RISET",
+   "sumber": "Rumah sama di dua cluster saudara bila nomor rumah/nama titik sama dalam jarak ini: batas atas galat GPS ponsel di permukiman 7-13 m (Merry & Bettinger, PLOS ONE 14(7) e0219890, 2019) + 2 m; GPS.gov 4,9 m langit terbuka",
+   "status": "NOT_APPROVED",
+   "severity": "ERROR",
+   "unit": "m"
+  },
+  "cross_label_match_m": {
+   "v": 25.0,
+   "dasar": "INTERNAL+RISET",
+   "sumber": "Pola temuan tim QC (review Jambi Okt 2026, Pasir Putih RT 05/22/23/24): label survei ?NNN dan nama usaha unik per rumah; titik berlabel sama yang bergeser tetap satu rumah. 25 m = 2x batas atas galat GPS ponsel urban 13 m (Merry & Bettinger, PLOS ONE 2019)",
+   "status": "NOT_APPROVED",
+   "severity": "ERROR",
+   "unit": "m"
+  },
+  "same_street_match_m": {
+   "v": 30.0,
+   "dasar": "INTERNAL+RISET",
+   "sumber": "Nomor rumah sama di nama jalan yang sama: toleransi HP_BERGESER plugin (30 m, galat GPS ponsel di permukiman)",
+   "status": "NOT_APPROVED",
+   "severity": "ERROR",
+   "unit": "m"
+  },
+  "cross_fuzzy_match_m": {
+   "v": 30.0,
+   "dasar": "INTERNAL+RISET",
+   "sumber": "Nama mirip >= 85% (salah ketik) dalam jarak ini: WARNING, perlu cek citra",
+   "status": "NOT_APPROVED",
+   "severity": "WARNING",
+   "unit": "m"
+  },
+  "same_building_m": {
+   "v": 2.0,
+   "dasar": "INTERNAL+RISET",
+   "sumber": "Dua titik <= 2 m dengan label berbeda: kemungkinan satu bangunan dua titik (lebar muka rumah/ruko umumnya 3-5 m)",
+   "status": "NOT_APPROVED",
+   "severity": "WARNING",
+   "unit": "m"
+  },
+  "label_review_m": {
+   "v": 50.0,
+   "dasar": "INTERNAL",
+   "sumber": "Label kuat sama pada 25-50 m: WARNING duplikat atau salah ketik label (kalibrasi data Tomohon: '? -37' dua kali 48,7 m, '? -36' hilang dari urutan)",
+   "status": "NOT_APPROVED",
+   "severity": "WARNING",
    "unit": "m"
   }
  }
