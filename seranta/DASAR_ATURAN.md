@@ -49,6 +49,13 @@ mis. sudut belok, toleransi snap, dan toleransi FAT ke tiang.
 | Wilayah HPDB vs FINDIM | beda | ERROR | data resmi operator |
 | HP duplikat koordinat (≤ 0,5 m) / ID | ada | ERROR | satu rumah satu homepass |
 | Kemungkinan duplikat | 0,5–**5 m** (naik dari 3 m), nomor rumah sama/kosong | INFO | RISET: GPS ponsel 4,9 m |
+| HP duplikat **lintas cluster** (folder cluster saudara di folder induk) | koordinat ≤ 0,5 m; label survei ?NNN / nama usaha sama ≤ **25 m** (25–50 m WARNING); no. rumah biasa sama ≤ **15 m** (≤ 30 m bila nama jalan sama) | ERROR | pola temuan tim QC (review Jambi 2026); RISET: GPS ponsel 7–13 m urban |
+| HP duplikat **label** di dalam satu cluster (HP_DUPLIKAT_LABEL) | aturan label yang sama, titik bergeser > 0,5 m | ERROR | pola temuan tim QC |
+| Mungkin duplikat lintas cluster | nama mirip ≥ 85 % ≤ 30 m; dua titik ≤ 2 m beda label | WARNING | salah ketik / satu bangunan |
+| Kemungkinan duplikat lintas cluster | 0,5–5 m, no. rumah kosong | INFO | GPS.gov 4,9 m |
+| HP di dalam BOUNDARY cluster saudara | > 10 m dari garis = ERROR; ≤ 10 m = INFO tepi | ERROR/INFO | Standar Review Strand; toleransi GPS ponsel |
+| BOUNDARY tumpang tindih dengan cluster saudara | irisan berisi HP dan lebar > 10 m = WARNING; irisan tipis = INFO | WARNING/INFO | satu rumah satu cluster |
+| ID cluster dipakai cluster lain | ID 9–12 digit di nama file HPDB/KMZ sama | WARNING/INFO | ID cluster unik |
 | HP di luar Funnel | > **15 m** dari tepi = ERROR; ≤ 15 m = INFO tepi (naik dari 10 m) | ERROR/INFO | RISET: 7–13 m urban |
 | Rentang tiang NP–NP / NP–EP (sepanjang jalur) | > 60 m | ERROR | INTERNAL (Handbook kasus 9) |
 | Rentang 50–60 m | di atas Perwal | **WARNING** (sebelumnya info) | REGULASI daerah |
@@ -69,6 +76,14 @@ mis. sudut belok, toleransi snap, dan toleransi FAT ke tiang.
 | 9 m | ±7,2 m | ±6,4 m | ±6,2 m | lolos (juga 6 m Perwal) |
 
 \*Tinggi klem = H − (10 % H + 0,6 m) − 0,3 m. Rumus tanam 10 % + 0,6 m (RUS 1724E-200) memberi hasil yang mirip dengan aturan tanam 1/6 panjang tiang.
+
+### Mengapa perlu cek lintas cluster (3.5.8)
+Sub-cluster satu wilayah survei (contoh review Jambi: Pasir Putih RT 05, RT 22, RT 23, RT 24) berada di dalam **satu**
+poligon Funnel induk ("RT 023 PASIR PUTIH", HP plan 2192) dan memakai BAKP induk yang sama. Cek Funnel (standar 2 dan 5)
+karena itu selalu lolos, padahal titik HP yang sama disalin ke dua cluster dan BOUNDARY KMZ saling tumpang tindih.
+Pembanding yang benar adalah HPDB + KMZ cluster saudara. Saran cluster pemilik: (1) cluster yang BOUNDARY-nya memuat rumah;
+(2) bila keduanya/tidak satu pun, cluster yang rumahnya lebih dalam di BOUNDARY (selisih ≥ 3 m); (3) bila setara, cluster
+dengan tiang terdekat (kabel drop lebih pendek). Parameter `cross_name_match_m` berstatus NOT_APPROVED (perlu kalibrasi).
 
 ## Alat 2 — Alokasi FDT & FAT (estimasi)
 | Langkah | Nilai | Dasar |

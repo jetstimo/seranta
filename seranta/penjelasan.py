@@ -320,15 +320,21 @@ TOOL1_STD = {
     1: dict(cek="Setiap rumah (HP) cukup dekat ke tiang terdekat agar kabel drop bisa ditarik.",
             alasan="Rumah yang terlalu jauh dari tiang butuh tiang tambahan atau tidak bisa dilayani.",
             tindakan="Tambahkan tiang baru di dekat rumah tersebut, atau keluarkan rumah dari daftar HP."),
-    2: dict(cek="Rumah tidak berada di cluster yang sudah dibangun (RFS) atau di funnel cluster lain.",
-            alasan="Rumah yang sudah dilayani cluster lain akan dihitung dua kali (double tagging).",
-            tindakan="Hapus HP yang sudah menjadi milik cluster lain dari HPDB dan KMZ."),
+    2: dict(cek="Rumah tidak berada di cluster yang sudah dibangun (RFS), di funnel cluster lain, atau di dalam BOUNDARY "
+                "cluster saudara (sub-cluster lain di wilayah yang sama, dibaca dari folder lain di folder induk).",
+            alasan="Rumah yang sudah dilayani cluster lain akan dihitung dua kali (double tagging). Sub-cluster satu "
+                   "wilayah biasanya berada di dalam satu Funnel induk, jadi hanya BOUNDARY KMZ yang memisahkannya.",
+            tindakan="Hapus HP yang sudah menjadi milik cluster lain dari HPDB dan KMZ, dan rapikan BOUNDARY yang "
+                     "tumpang tindih agar satu rumah hanya masuk satu cluster."),
     3: dict(cek="Nama kelurahan/kecamatan/kota di HPDB sama dengan data wilayah resmi (FINDIM).",
             alasan="Wilayah yang salah membuat laporan penjualan dan perizinan salah alamat.",
             tindakan="Perbaiki kolom wilayah HPDB mengikuti data wilayah resmi."),
-    4: dict(cek="HPDB dan KMZ berisi rumah yang sama, satu rumah satu homepass, tanpa duplikat dan koordinat yang tertukar.",
-            alasan="Duplikat membuat jumlah HP terlihat lebih besar dari kenyataan.",
-            tindakan="Hapus duplikat, lengkapi HP yang hilang di salah satu file, dan perbaiki koordinat."),
+    4: dict(cek="HPDB dan KMZ berisi rumah yang sama, satu rumah satu homepass, tanpa duplikat dan koordinat yang tertukar, "
+                "termasuk duplikat dengan cluster saudara (rumah yang sama di HPDB/KMZ cluster lain di folder induk).",
+            alasan="Duplikat membuat jumlah HP terlihat lebih besar dari kenyataan; duplikat lintas cluster membuat rumah "
+                   "yang sama didesain dan ditagih dua kali.",
+            tindakan="Hapus duplikat, lengkapi HP yang hilang di salah satu file, dan perbaiki koordinat. Untuk duplikat "
+                     "lintas cluster, simpan rumah di satu cluster saja sesuai saran di temuan."),
     5: dict(cek="Rumah berada di dalam batas Funnel dan BOUNDARY cluster (rumah yang hanya beberapa meter di luar garis "
                 "dicatat sebagai 'di tepi', karena GPS ponsel meleset 5-13 m).",
             alasan="Rumah di luar batas bukan bagian dari target cluster ini.",
@@ -350,6 +356,34 @@ TOOL1_STD = {
 # Tool 1 - arti jenis temuan (cocokkan dengan awalan kode, urutan penting)
 TOOL1_KIND = [
     ("HP_JAUH_DARI_TIANG", "Rumah terlalu jauh dari tiang terdekat.", "Tambahkan tiang di dekat rumah atau periksa koordinat rumah."),
+    ("HP_DUPLIKAT_LINTAS_CLUSTER", "Rumah yang sama juga tercatat di cluster saudara (koordinat sama, atau nomor rumah/nama "
+     "sama dalam jarak galat GPS). Satu rumah akan dihitung dua kali bila kedua cluster didesain.",
+     "Tentukan satu cluster pemilik (lihat saran: di dalam BOUNDARY siapa, tiang siapa lebih dekat), hapus baris HPDB dan "
+     "titik KMZ dari cluster yang lain, lalu rapikan BOUNDARY."),
+    ("WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER", "HP cluster ini sangat mungkin rumah yang sama dengan HP cluster saudara: "
+     "namanya hampir sama (salah ketik) atau titiknya berimpit dalam satu bangunan.",
+     "Cek di citra satelit; bila sama, simpan di satu cluster saja. Bila memang dua unit (ruko/kos), beri label yang jelas."),
+    ("WARN_HP_LABEL_SAMA", "Dua HP memakai label survei yang sama tetapi berjauhan (25-50 m): rumah yang sama dengan titik "
+     "bergeser jauh, atau label salah ketik pada rumah berbeda.",
+     "Cek citra satelit: bila rumah sama hapus salah satu; bila berbeda beri label unik (mis. nomor yang hilang di urutan)."),
+    ("HP_DUPLIKAT_LABEL", "Dua baris HP di cluster ini memakai label survei (mis. ?327) atau nama/nomor rumah yang sama "
+     "tetapi titiknya bergeser: satu rumah tercatat dua kali.",
+     "Hapus salah satu baris HPDB dan titik KMZ; bila memang rumah berbeda, perbaiki label/nomor rumahnya."),
+    ("INFO_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER", "HP cluster ini sangat dekat dengan HP cluster saudara dan nomor rumahnya "
+     "kosong; mungkin rumah yang sama.", "Cek di citra satelit atau lapangan; bila sama, simpan di satu cluster saja."),
+    ("HP_DI_BOUNDARY_CLUSTER_LAIN", "Rumah cluster ini berada jauh di dalam BOUNDARY cluster saudara (lebih dari toleransi "
+     "GPS), sehingga dua cluster sama-sama mengklaim wilayah rumah itu.",
+     "Tentukan cluster pemilik; keluarkan HP dari cluster yang bukan pemilik, atau perbaiki garis BOUNDARY."),
+    ("INFO_HP_TEPI_BOUNDARY_CLUSTER_LAIN", "Rumah hanya beberapa meter di dalam tepi BOUNDARY cluster saudara (masih dalam "
+     "toleransi GPS ponsel).", "Cukup dicatat; bila mau rapi, geser garis BOUNDARY bersama."),
+    ("WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "BOUNDARY cluster ini tumpang tindih dengan BOUNDARY cluster saudara dan di "
+     "irisan itu ada rumah.", "Gambar ulang garis batas bersama sehingga tidak ada rumah yang masuk dua BOUNDARY."),
+    ("INFO_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "Irisan tipis antara BOUNDARY cluster ini dan cluster saudara, tanpa rumah di "
+     "dalamnya.", "Cukup dicatat (garis batas digambar tangan)."),
+    ("WARN_ID_CLUSTER_GANDA", "ID cluster yang sama dipakai di file dua cluster berbeda (sering karena nama file disalin).",
+     "Pastikan nama file HPDB, KMZ dan BAKP memakai ID cluster masing-masing."),
+    ("INFO_ID_CLUSTER_SAMA_DI_CLUSTER_LAIN", "ID cluster ini juga muncul di nama file/dokumen cluster lain.",
+     "Cek apakah itu ID induk Funnel yang dipakai bersama; bila bukan, perbaiki nama file cluster lain."),
     ("HP_DI_RFS_DONE", "Rumah berada di cluster yang sudah terbangun.", "Keluarkan dari HPDB/KMZ cluster ini."),
     ("HP_DI_RFS_EXT", "Rumah berada di wilayah perluasan cluster lain.", "Koordinasikan dengan pemilik cluster; biasanya dikeluarkan."),
     ("HP_DI_FUNNEL_LAIN", "Rumah masuk funnel cluster lain.", "Keluarkan dari cluster ini atau koordinasikan batas funnel."),

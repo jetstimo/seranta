@@ -29,10 +29,10 @@ try:  # defusedxml bila terpasang; bila tidak, ElementTree standar (expat >= 2.4
 except ImportError:
     import xml.etree.ElementTree as ET  # nosec B405
 
-RULE_VERSION = "2026.10-r5"
+RULE_VERSION = "2026.10-r7"
 SEVERITIES = ("ERROR", "WARNING", "UNVERIFIED", "INFO", "PASS")
 SEV_RANK = {s: i for i, s in enumerate(SEVERITIES)}
-DASAR_LABEL = {"REGULASI": "Regulasi Indonesia", "STANDAR": "Standar (ITU-T/GR/konstruksi distribusi)",
+DASAR_LABEL = {"INTERNAL+RISET": "kebijakan internal dengan dukungan riset", "REGULASI": "Regulasi Indonesia", "STANDAR": "Standar (ITU-T/GR/konstruksi distribusi)",
                "PRAKTIK": "Praktik industri (operator/vendor)", "RISET": "Riset peer-review",
                "INTERNAL": "kebijakan internal (Handbook/config desain otomatis)"}
 REVIEW_STATES = ("OPEN", "VERIFIED", "FALSE_POSITIVE", "APPROVED_EXCEPTION", "RESOLVED")
