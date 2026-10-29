@@ -17,7 +17,7 @@ var KIND={hp:["Homepass","#2EC4B6","pt",3.5,"obj"],pole_new:["Tiang baru (NP)","
  fat:["FAT","#3A86FF","pt",7,"dev"],fdt:["FDT","#8338EC","pt",8,"dev"],closure:["Closure","#FF006E","pt",6,"dev"],
  route:["Jalur kabel","#5CF2E8","ln",3,"cab"],cable_new:["Kabel baru","#5CF2E8","ln",3,"cab"],cable:["Kabel existing/colo","#F7D774","ln",3,"cab"],
  feeder:["Kabel feeder","#FB5607","ln",3.5,"cab"],drop:["Kabel drop","#7FDBFF","ln",1,"drop"],pancingan:["Pancingan","#FFBE0B","ln",3,"cab"],
- boundary:["BOUNDARY cluster","#FFFFFF","pg",2,"area"],funnel:["Funnel / coverage","#9AE6B4","pg",1.5,"area"],coverage:["FAT coverage","#9AE6B4","pg",1,"area"]};
+ boundary:["BOUNDARY cluster","#FFFFFF","pg",2,"area"],boundary_other:["BOUNDARY cluster saudara","#FF6FAE","pg",2,"area"],hp_other:["Homepass cluster saudara","#FF6FAE","pt",3.5,"obj"],funnel:["Funnel / coverage","#9AE6B4","pg",1.5,"area"],coverage:["FAT coverage","#9AE6B4","pg",1,"area"]};
 var GROUP={obj:"Homepass",pole:"Tiang",dev:"FAT / FDT / closure",cab:"Kabel / jalur",drop:"Kabel drop",area:"Batas area"};
 function hav(a,b){var R=6371008.8,r=Math.PI/180,dl=(b[0]-a[0])*r,dp=(b[1]-a[1])*r,p1=a[1]*r,p2=b[1]*r;
   var h=Math.sin(dp/2)*Math.sin(dp/2)+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)*Math.sin(dl/2);return 2*R*Math.asin(Math.sqrt(h))}
@@ -43,7 +43,7 @@ Object.keys(GROUP).forEach(function(g){groups[g]=L.layerGroup()});
 D.L.forEach(function(o,i){var st=KIND[o.k]||["Objek","#ccc",o.t,3,"obj"],g=st[4],lay;o.i=i;
   if(o.t==="pt")lay=L.circleMarker(ll(o.c),{radius:st[3],color:"#0b1d2e",weight:1,fillColor:st[1],fillOpacity:.95});
   else if(o.t==="ln")lay=L.polyline(o.c.map(ll),{color:st[1],weight:st[3],opacity:.9});
-  else lay=L.polygon(o.c.map(ll),{color:st[1],weight:st[3],fill:o.k!=="boundary",fillOpacity:.06,dashArray:o.k==="boundary"?"8 6":null});
+  else lay=L.polygon(o.c.map(ll),{color:st[1],weight:st[3],fill:o.k!=="boundary"&&o.k!=="boundary_other",fillOpacity:.06,dashArray:(o.k==="boundary"||o.k==="boundary_other")?"8 6":null});
   if(o.n)lay.bindTooltip(esc((st[0])+": "+o.n),{sticky:true,direction:"top"});
   lay.on("click",function(e){L.DomEvent.stopPropagation(e);if(meas.on){addMeas(e.latlng);return}showObj(o)});
   o.lay=lay;groups[g].addLayer(lay);objs.push(o)});
@@ -74,7 +74,7 @@ function links(c){var la=c[1].toFixed(7),lo=c[0].toFixed(7);
    "<a target='_blank' rel='noopener' href='https://www.google.com/maps/@?api=1&map_action=pano&viewpoint="+la+","+lo+"'>Street View</a>"+
    "<a href='#' data-copy-c='"+la+", "+lo+"'>Salin koordinat</a></div>"}
 function coordTable(c){return "<tr><td>Koordinat (lat, lon)</td><td>"+c[1].toFixed(7)+", "+c[0].toFixed(7)+"</td></tr><tr><td>DMS</td><td>"+dms(c[1],"LU","LS")+" "+dms(c[0],"BT","BB")+"</td></tr>"}
-function nearObjs(c,r,skip){return objs.filter(function(o){return o!==skip&&o.k!=="boundary"&&o.k!=="funnel"&&o.k!=="coverage"}).map(function(o){return [dist(c,o),o]})
+function nearObjs(c,r,skip){return objs.filter(function(o){return o!==skip&&o.k!=="boundary"&&o.k!=="boundary_other"&&o.k!=="funnel"&&o.k!=="coverage"}).map(function(o){return [dist(c,o),o]})
   .filter(function(x){return x[0]<=r}).sort(function(a,b){return a[0]-b[0]}).slice(0,8)}
 function nearF(c,r,skip){return D.F.filter(function(f){return f.id!==skip}).map(function(f){return [Math.min(hav(c,f.c),f.ln?dist(c,{t:"ln",c:f.ln}):1e9),f]})
   .filter(function(x){return x[0]<=r}).sort(function(a,b){return a[0]-b[0]}).slice(0,8)}

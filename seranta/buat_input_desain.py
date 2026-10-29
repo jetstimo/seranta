@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.5.7"
+__version__ = "3.5.9"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -50,10 +50,12 @@ try:
     from . import bakp as _bakp
     from . import qc_core as _qc
     from . import report_html as _report_html
+    from . import lintas_cluster as _lintas
 except ImportError:          # dijalankan sebagai skrip tunggal
     import bakp as _bakp
     import qc_core as _qc
     import report_html as _report_html
+    import lintas_cluster as _lintas
 
 # Kompatibilitas: QGIS 3.36+ (termasuk 3.40 Bratislava) memindahkan enum ke kelas Qgis.
 try:
@@ -1427,6 +1429,27 @@ QC_LABELS = [
     (r"^HP_DI_RFS_DONE", 2, "HP di cluster terbangun (RFS DONE)", "S2_HP_RFS_DONE", "Standar Review Strand"),
     (r"^HP_DI_RFS_EXT", 2, "HP di RFS EXTENSION cluster lain", "S2_HP_RFS_EXT", "Standar Review Strand"),
     (r"^HP_DI_FUNNEL_LAIN", 2, "HP di funnel cluster lain", "S2_HP_FUNNEL_LAIN", "Standar Review Strand"),
+    (r"^HP_DI_BOUNDARY_CLUSTER_LAIN", 2, "HP masuk BOUNDARY cluster saudara", "S2_HP_BOUNDARY_CLUSTER_LAIN",
+     "Standar Review Strand: satu rumah satu cluster; lebih dari toleransi GPS ponsel 10 m (GPS.gov; PLOS ONE 2019)"),
+    (r"^INFO_HP_TEPI_BOUNDARY_CLUSTER_LAIN", 2, "HP di tepi BOUNDARY cluster saudara (dalam toleransi GPS)",
+     "I2_HP_TEPI_BOUNDARY_CLUSTER_LAIN", "toleransi GPS ponsel 10 m (GPS.gov 4,9 m; PLOS ONE 2019 7-13 m urban)"),
+    (r"^WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", 2, "BOUNDARY tumpang tindih dengan cluster saudara",
+     "W2_BOUNDARY_BERIRISAN", "Standar Review Strand: satu rumah satu cluster"),
+    (r"^INFO_BOUNDARY_BERIRISAN_CLUSTER_LAIN", 2, "Irisan tipis BOUNDARY dengan cluster saudara",
+     "I2_BOUNDARY_BERIRISAN", "garis BOUNDARY digambar tangan"),
+    (r"^HP_DUPLIKAT_LABEL", 4, "HP duplikat: label survei / nomor rumah sama, titik bergeser", "S4_DUPLIKAT_LABEL",
+     "pola temuan tim QC (review Jambi 2026): label survei ?NNN unik per rumah; GPS ponsel 7-13 m urban (PLOS ONE 2019)"),
+    (r"^WARN_HP_LABEL_SAMA", 4, "Label survei sama berjauhan (duplikat atau salah label)", "W4_LABEL_SAMA",
+     "label survei unik per rumah; > 2x galat GPS urban"),
+    (r"^WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER", 4, "Mungkin duplikat lintas cluster (nama mirip / titik berimpit)",
+     "W4_MUNGKIN_DUPLIKAT_LINTAS", "pola temuan tim QC; salah ketik nama; satu bangunan dua titik"),
+    (r"^HP_DUPLIKAT_LINTAS_CLUSTER", 4, "HP duplikat lintas cluster (rumah sama di cluster saudara)",
+     "S4_DUPLIKAT_LINTAS_CLUSTER", "satu rumah satu homepass; GPS ponsel 4,9 m / 7-13 m urban (GPS.gov; PLOS ONE 2019)"),
+    (r"^INFO_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER", 4, "Kemungkinan duplikat lintas cluster (<= 5 m, no rumah kosong)",
+     "I4_MUNGKIN_DUPLIKAT_LINTAS", "GPS ponsel 4,9 m terbuka (GPS.gov)"),
+    (r"^WARN_ID_CLUSTER_GANDA", 4, "ID cluster dipakai cluster lain", "W4_ID_CLUSTER_GANDA", "ID cluster unik per cluster"),
+    (r"^INFO_ID_CLUSTER_SAMA_DI_CLUSTER_LAIN", 4, "ID cluster juga muncul di file cluster lain", "I4_ID_CLUSTER_SAMA",
+     "ID cluster unik per cluster"),
     (r"^ADMIN_", 3, "Wilayah HPDB beda dengan FINDIM", "S3_WILAYAH_FINDIM", "FINDIM"),
     (r"^HP_DUPLIKAT_KOORDINAT", 4, "HP duplikat: koordinat sama", "S4_DUPLIKAT_KOORDINAT", "satu rumah satu homepass"),
     (r"^HP_DUPLIKAT_ID", 4, "HP duplikat: ID operator sama", "S4_DUPLIKAT_ID", "satu rumah satu homepass"),
@@ -1511,6 +1534,7 @@ def qc_source(kind):
 
 QC_DASAR = [  # (pola kode, kategori dasar) untuk kolom dasar_src
     (r"^(RENTANG|WARN_RENTANG|INFO_RENTANG)", "INTERNAL+REGULASI"), (r"^INFO_KABEL_RENDAH", "REGULASI"),
+    (r"^(HP_DUPLIKAT_LINTAS|HP_DI_BOUNDARY_CLUSTER)", "INTERNAL+RISET"),
     (r"^(INFO_HP_MUNGKIN|INFO_HP_TEPI|HP_LUAR_FUNNEL|INFO_TIANG_BARU_DEKAT)", "RISET"),
     (r"^HP_LUAR_BOUNDARY", "INTERNAL+RISET"), (r"BELOKAN", "STANDAR"),
     (r"^ADMIN_", "DATA RESMI"), (r".", "INTERNAL")]
@@ -2274,6 +2298,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
     COLO_BASIS_OPTS = ["Garis lurus FDT ke tiang cluster terdekat (titik masuk)",
                        "Estimasi panjang kabel FDT ke HP terjauh (titik masuk + sepanjang jalur cluster)"]
     FUN_TOL = "FUN_TOL"
+    CROSS = "CROSS"
+    CROSS_DIR = "CROSS_DIR"
     NAMING_OPTS = ["Per wilayah: INPUT_<KODE>/<KODE>_HP.shp (aman untuk batch)",
                    "Standar SOP: INPUT/HP.shp, POLE.kmz, ROADS.shp"]
 
@@ -2312,8 +2338,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             "Bila kosong, Seranta mencari otomatis di sekitar folder cluster.</li>"
             "<li>Klik <b>Run</b>. Ringkasan QC (HTML) terbuka otomatis; file input desain otomatis ada di subfolder "
             "<code>INPUT_&lt;KODE&gt;</code>.</li></ol>"
-            "<p><b>Yang dicek (9 standar)</b>: 1 jarak HP-tiang &le; 50 m, 2 boundary/RFS lain, 3 wilayah sheet HP vs "
-            "FINDIM, 4 HPDB vs KMZ + HP duplikat (pasti &amp; kemungkinan &le; 3 m), 5 HP di luar Funnel, 6 status desain, "
+            "<p><b>Yang dicek (9 standar)</b>: 1 jarak HP-tiang &le; 50 m, 2 boundary/RFS/<b>BOUNDARY cluster saudara</b>, 3 wilayah sheet HP vs "
+            "FINDIM, 4 HPDB vs KMZ + HP duplikat (pasti &amp; kemungkinan &le; 5 m, <b>juga lintas cluster saudara</b>), 5 HP di luar Funnel, 6 status desain, "
             "7 colo FDT existing (jarak + sisa splitter + total HP FDT), 8 <b>pengingat BAKP</b>, 9 jarak tiang NP "
             "&le; 60 m <b>sepanjang jalur</b> (NP-NP &amp; NP-EP; EP-EP tidak dinilai; 50-60 m = info regulasi daerah).</p>"
             "<p><b>Temuan per kategori</b>: folder <code>QC</code> berisi satu shp per jenis temuan (rentang tiang berupa "
@@ -2398,6 +2424,12 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         self._adv(QgsProcessingParameterNumber(
             self.FUN_TOL, self.tr("HP di luar Funnel tapi <= jarak ini dari tepi = info 'tepi' (meter; 0 = ketat)"),
             type=NUM_DOUBLE, defaultValue=15.0, minValue=0))
+        self._adv(QgsProcessingParameterBoolean(
+            self.CROSS, self.tr("Cek lintas cluster: HP duplikat / masuk BOUNDARY cluster saudara (folder lain di folder induk)"),
+            defaultValue=True))
+        self._adv(QgsProcessingParameterFile(
+            self.CROSS_DIR, self.tr("Opsional: folder cluster pembanding lain (cluster tetangga/sudah diserahkan; folder cluster atau induknya)"),
+            behavior=FOLDER_BEHAVIOR, optional=True))
         self._adv(QgsProcessingParameterFile(
             self.BAKP_FILE, self.tr("Opsional: file BAKP bila namanya tidak memuat kata 'BAKP' (kosong = dicari otomatis)"),
             behavior=FILE_BEHAVIOR, optional=True, fileFilter="BAKP (*.pdf *.jpg *.jpeg *.png)"))
@@ -2568,7 +2600,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
 
     @staticmethod
     def _qc_word(qc, outp, inp, kode, cluster, std, judul, poles, names, kinds, hp_xy, segs, own_bnd, funnel_polys, feedback,
-                 max_img=80, hp_attrs=None, heights=None, hp_rows=None, src=None):
+                 max_img=80, hp_attrs=None, heights=None, hp_rows=None, src=None, others=None):
         """Gambar peta per temuan (folder QC_GAMBAR) dan laporan Word <KODE>_LAPORAN_QC.docx.
         Kembali (nama file Word, {F-0001: data URI})."""
         import math
@@ -2593,6 +2625,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             sc.add_poly(ring[0], "boundary", {"Jenis": "BOUNDARY cluster (KMZ)"})
         for poly in funnel_polys or []:
             sc.add_poly(poly[0], "funnel", {"Jenis": "Funnel"})
+        # cluster saudara (QC lintas cluster): BOUNDARY dan HP-nya ikut tergambar sebagai bukti
+        for poly, lbl in (others or {}).get("bnd", []):
+            sc.add_poly(poly[0], "boundary_other", {"Jenis": "BOUNDARY cluster saudara", "Cluster": lbl})
+        for x, y, hn, lbl in (others or {}).get("hp", []):
+            sc.add_point(x, y, "hp_other", "", {"Jenis": "HP cluster saudara", "Cluster": lbl, "No. rumah": hn or "-"})
         hp_attrs = hp_attrs or []
         for k_, (x, y, hid) in enumerate(hp_xy):
             sc.add_point(x, y, "hp", str(hid), hp_attrs[k_] if k_ < len(hp_attrs) else {"ID": hid})
@@ -2688,7 +2725,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                                             if self.QC_PROF in parameters else 0) == 1 else "APD_1X4")[0],
             "bakp": self.parameterAsEnum(parameters, self.BAKP, context) if self.BAKP in parameters else 0,
             "colo_basis": self.parameterAsEnum(parameters, self.COLO_BASIS, context) if self.COLO_BASIS in parameters else 0,
+            "cross": self.parameterAsBool(parameters, self.CROSS, context) if self.CROSS in parameters else True,
+            "cross_dir": self.parameterAsFile(parameters, self.CROSS_DIR, context) if self.CROSS_DIR in parameters else "",
         }
+        self._sib_cache = {}
         ref_dir = self.parameterAsFile(parameters, self.FUNNEL, context)
         st = QgsSettings()
         if ref_dir and os.path.isdir(ref_dir):
@@ -3206,6 +3246,31 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                             h1, h2 = _hn(r), _hn(data[k2][0])
                             if not h1 or not h2 or h1 == h2:
                                 near_dup.append((k, k2, d))
+        # label survei sama di dalam cluster ini (pola temuan tim QC): '?327' atau nama usaha muncul dua kali dengan
+        # koordinat bergeser = satu rumah dicatat dua kali. Nomor rumah biasa hanya <= 15 m (<= 30 m di jalan yang sama).
+        lbl_pairs = _lintas.same_label_pairs(
+            [{"x": p_.x(), "y": p_.y(), "hn": _hn(r_),
+              "adr": _lintas.norm_street(r_[i_adr[0]] if i_adr[0] is not None and i_adr[0] < len(r_) else "")}
+             for r_, p_ in data],
+            label_m=float(qcp("cross_label_match_m", 25.0)), name_m=float(qcp("cross_name_match_m", 15.0)),
+            street_m=float(qcp("same_street_match_m", 30.0)), label_warn_m=float(qcp("label_review_m", 50.0)))
+        lbl_pairs = [t for t in lbl_pairs if not (t[0] in used_k and t[1] in used_k)]
+        lbl_set = {(min(t[0], t[1]), max(t[0], t[1])) for t in lbl_pairs}
+        near_dup = [t for t in near_dup if (min(t[0], t[1]), max(t[0], t[1])) not in lbl_set]
+        for i_, j_, d_, n_, sure_ in lbl_pairs[:300]:
+            if sure_:
+                qc.append((data[j_][1], "HP_DUPLIKAT_LABEL",
+                           "%s dan %s memakai label/nomor rumah yang sama '%s' tetapi berjarak %.1f m: satu rumah tercatat dua "
+                           "kali (titik bergeser). Hapus salah satu, atau perbaiki label bila memang rumah berbeda"
+                           % (_hpname(i_), _hpname(j_), _hn(data[i_][0]), d_), [data[i_][1], data[j_][1]], round(d_, 1),
+                           float(qcp("cross_label_match_m", 25.0))))
+            else:
+                qc.append((data[j_][1], "WARN_HP_LABEL_SAMA",
+                           "%s dan %s memakai label survei yang sama '%s' dan berjarak %.1f m: rumah yang sama (titik bergeser "
+                           "jauh) atau salah ketik label. Cek citra; hapus salah satu atau beri label unik"
+                           % (_hpname(i_), _hpname(j_), _hn(data[i_][0]), d_), [data[i_][1], data[j_][1]], round(d_, 1),
+                           float(qcp("label_review_m", 50.0))))
+        dup_lbl = sum(1 for t in lbl_pairs if t[4])
         for k, k2, d in near_dup[:300]:
             qc.append((data[k2][1], "INFO_HP_MUNGKIN_DUPLIKAT",
                        "%s dan %s berjarak %.1f m (nomor rumah sama/kosong): cek apakah rumah yang sama"
@@ -3252,8 +3317,12 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         rep.append("HOMEPASS")
         rep.append("  Baris valid        : %d" % len(data))
         rep.append("  Baris dilewati     : %d (tanpa koordinat/di luar Indonesia)" % skipped)
-        rep.append("  HP duplikat        : %d koordinat sama, %d ID operator sama, %d alamat sama (info), "
-                   "%d pasang kemungkinan duplikat <= %.0f m (info)" % (dup, dup_id, dup_adr, len(near_dup), dup_near))
+        rep.append("  HP duplikat        : %d koordinat sama, %d label/no. rumah sama (bergeser), %d label sama berjauhan "
+                   "(WARNING), %d ID operator sama, %d alamat sama (info), %d pasang kemungkinan duplikat <= %.0f m (info)"
+                   % (dup, dup_lbl, len(lbl_pairs) - dup_lbl, dup_id, dup_adr, len(near_dup), dup_near))
+        for i_, j_, d_, n_, sure_ in lbl_pairs[:30]:
+            rep.append("    - label '%s': %s & %s berjarak %.1f m (%s)" % (
+                _hn(data[i_][0]), _hpname(i_), _hpname(j_), d_, "duplikat" if sure_ else "duplikat atau salah label"))
         if adr_generic:
             rep.append("    info: %d alamat dipakai lebih dari 3 HP (mis. '%s' untuk %d HP); alamat tidak setingkat rumah, "
                        "tidak dihitung duplikat" % (len(adr_generic), max(adr_generic, key=lambda a: a[1])[0],
@@ -3822,12 +3891,13 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 parts.append("info: nama file HPDB menyebut %s HP, isi HPDB %d baris valid" % (m_nhp.group(1), len(data)))
                 rep.append("  Info: nama file HPDB menyebut %s HP, isi HPDB %d baris valid (cek versi HPDB/TSSR)"
                            % (m_nhp.group(1), len(data)))
-            std[4] = (no_kmz == 0 and no_hpdb == 0 and n_geser == 0 and n_kmz == len(data) and not dup and not dup_id and not kmz_dup,
+            std[4] = (no_kmz == 0 and no_hpdb == 0 and n_geser == 0 and n_kmz == len(data) and not dup and not dup_id and not kmz_dup and not dup_lbl,
                       "; ".join(parts))
         else:
             rep.append("  Folder HP tidak ditemukan di KMZ cluster (cek dilewati)")
-            std[4] = ((False, "folder HP tidak ada di KMZ; HP duplikat di HPDB: %d koordinat, %d ID operator" % (dup, dup_id))
-                      if (dup or dup_id) else (None, "folder HP tidak ada di KMZ"))
+            std[4] = ((False, "folder HP tidak ada di KMZ; HP duplikat di HPDB: %d koordinat, %d label sama, %d ID operator"
+                       % (dup, dup_lbl, dup_id))
+                      if (dup or dup_id or dup_lbl) else (None, "folder HP tidak ada di KMZ"))
 
         # ===== 3c. HPDB vs HPDB attributes / FINDIM (standar no. 3) =====
         rep.append("")
@@ -4119,6 +4189,91 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             else:
                 std[5] = (None, "Funnel tidak dicek: " + why)
             getattr(feedback, "pushWarning", feedback.pushInfo)("FUNNEL TIDAK DICEK: %s" % why)
+
+        # ===== 4b. QC lintas cluster (cluster saudara di folder induk / folder pembanding) =====
+        # Sub-cluster satu wilayah (mis. RT 05 / RT 22 / RT 23 di dalam SATU Funnel induk) tidak bisa dibedakan oleh cek
+        # Funnel. Pembandingnya adalah HPDB + KMZ cluster saudara: rumah yang sama di dua cluster, HP yang masuk BOUNDARY
+        # cluster lain, BOUNDARY yang tumpang tindih dan ID cluster yang terpakai dua kali.
+        cross_scene = None
+        rep.append("")
+        if opt.get("cross", True):
+            feedback.setProgressText("Cek lintas cluster")
+            try:
+                helpers_ = {"find_hpdb": find_hpdb, "find_kmz": find_kmz, "read_xlsx": read_xlsx,
+                            "kode_wilayah": kode_wilayah, "cluster_label": cluster_label}
+                own_bb = (min(p_.x() for _r, p_ in data), min(p_.y() for _r, p_ in data),
+                          max(p_.x() for _r, p_ in data), max(p_.y() for _r, p_ in data))
+                sib_dirs = _lintas.sibling_dirs(outdir, lambda d_: bool(hpdb_candidates(d_)),
+                                                extra=[opt.get("cross_dir") or ""])
+                cache_ = getattr(self, "_sib_cache", None)
+                if cache_ is None:
+                    cache_ = self._sib_cache = {}
+                sibs_ = []
+                for d_ in sib_dirs:
+                    if feedback.isCanceled():
+                        break
+                    try:
+                        key_ = (os.path.normcase(os.path.abspath(d_)),
+                                tuple(sorted((f_, int(os.path.getmtime(os.path.join(d_, f_)))) for f_ in _files(d_))))
+                    except OSError:
+                        key_ = (d_, ())
+                    if key_ not in cache_:
+                        cache_[key_] = _lintas.load_cluster(d_, helpers_, near_bbox=own_bb)
+                    sibs_.append(cache_[key_])
+                kmz_doc_ = ""
+                if cluster_kmz:
+                    try:
+                        kmz_doc_ = _lintas.read_kmz(cluster_kmz).get("doc", "")
+                    except Exception:
+                        kmz_doc_ = ""
+                ids_h_ = _lintas.ids_in(hpdb)
+                own_c = {"label": cluster_label(outdir, hpdb), "kode": kode, "bbox": own_bb, "bnd": own_bnd or [],
+                         "poles": [(p_.x(), p_.y(), nm_) for p_, nm_ in zip(poles, names)],
+                         "ids_hpdb": ids_h_, "ids_other": _lintas.ids_in(cluster_kmz, kmz_doc_, outdir) - ids_h_,
+                         "hp": [{"x": p_.x(), "y": p_.y(), "hid": _hpname(k_), "row": meta[k_][0],
+                                 "adr": _lintas.norm_street(r_[i_adr[0]] if i_adr[0] is not None and i_adr[0] < len(r_) else ""),
+                                 "hn": (r_[hn_i].strip() if hn_i is not None and hn_i < len(r_) else "")}
+                                for k_, (r_, p_) in enumerate(data)]}
+                cres = _lintas.compare(own_c, sibs_, dup_near=dup_near, bnd_tol=bnd_tol,
+                                       name_m=float(qcp("cross_name_match_m", 15.0)),
+                                       label_m=float(qcp("cross_label_match_m", 25.0)),
+                                       label_warn_m=float(qcp("label_review_m", 50.0)),
+                                       street_m=float(qcp("same_street_match_m", 30.0)),
+                                       fuzzy_m=float(qcp("cross_fuzzy_match_m", 30.0)),
+                                       bldg_m=float(qcp("same_building_m", 2.0)))
+                rep.extend(cres["report"])
+                for f_ in cres["findings"]:
+                    ln_ = [QgsPointXY(a_, b_) for a_, b_ in f_["line"]] if f_.get("line") else None
+                    qc.append((QgsPointXY(f_["x"], f_["y"]), f_["kind"], f_["ket"], ln_, f_.get("val"), f_.get("lim")))
+                cross_scene = cres["scene"]
+                cn = cres["counts"]
+                n_err4 = cn["dup"] + sum(1 for f_ in cres["findings"] if f_["kind"] == "WARN_ID_CLUSTER_GANDA")
+                n_err2 = cn["in_bnd"] + sum(1 for f_ in cres["findings"] if f_["kind"] == "WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN")
+                if cres["used"]:
+                    ok4, t4 = std.get(4, (None, ""))
+                    std[4] = (False if n_err4 else ok4,
+                              (t4 + "; " if t4 else "") + "lintas cluster: %d HP duplikat dengan %d cluster saudara%s" % (
+                                  cn["dup"], len(cres["used"]),
+                                  ", %d ID cluster dipakai cluster lain" % cn["id"] if cn["id"] else ""))
+                    ok2, t2 = std.get(2, (None, ""))
+                    std[2] = (False if n_err2 else ok2,
+                              (t2 + "; " if t2 else "") + "lintas cluster: %d HP masuk BOUNDARY cluster saudara, "
+                              "%d BOUNDARY tumpang tindih" % (cn["in_bnd"], cn["overlap"]))
+                    feedback.pushInfo("Lintas cluster: %d cluster saudara dibandingkan; %d HP duplikat, %d HP masuk "
+                                      "BOUNDARY cluster lain, %d BOUNDARY tumpang tindih"
+                                      % (len(cres["used"]), cn["dup"], cn["in_bnd"], cn["overlap"]))
+                    if cn["dup"] or cn["in_bnd"]:
+                        getattr(feedback, "pushWarning", feedback.pushInfo)(
+                            "PERHATIAN: ada rumah yang juga tercatat / masuk BOUNDARY cluster saudara. Lihat LINTAS CLUSTER.")
+                else:
+                    feedback.pushInfo("Lintas cluster: tidak ada folder cluster saudara di dekat cluster ini")
+            except Exception as e:
+                rep.append("LINTAS CLUSTER")
+                rep.append("  ! Cek lintas cluster gagal: %s" % str(e)[:200])
+                feedback.reportError("Cek lintas cluster gagal (cek lain tetap jalan): %s" % e, fatalError=False)
+        else:
+            rep.append("LINTAS CLUSTER")
+            rep.append("  Cek lintas cluster dimatikan (Advanced)")
 
         # poligon funnel di sekitar untuk ditampilkan di peta
         # GeoPackage: menerima poligon apa pun (KMZ/LIBKML menolak sebagian poligon Funnel yang rumit)
@@ -4535,8 +4690,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                       long_n, span_max, lmax, max(long_list)[1], max(long_list)[2],
                       (" (kelebihan %.1f m < akurasi GPS +-%.0f m: verifikasi ukur lapangan)" % (lmax - span_max, hp_tol))
                       if lmax - span_max < hp_tol else ""))
-        judul = {1: "Jarak HP ke tiang (<= %.0f m)" % hp_max, 2: "Boundary RFS / funnel lain",
-                 3: "Wilayah HPDB vs FINDIM", 4: "HPDB vs KMZ + HP duplikat",
+        judul = {1: "Jarak HP ke tiang (<= %.0f m)" % hp_max, 2: "Boundary RFS / funnel / cluster lain",
+                 3: "Wilayah HPDB vs FINDIM", 4: "HPDB vs KMZ + HP duplikat (juga lintas cluster)",
                  5: "HP di luar boundary Funnel", 6: "Status desain cluster", 7: "Bisa colo FDT",
                  8: "BAKP (izin warga)", 9: "Jarak tiang ke tiang NP (<= %.0f m)" % span_max}
         summ = ["RINGKASAN STANDAR REVIEW STRAND"]
@@ -4619,7 +4774,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             word_name, snaps_uri, map_data = self._qc_word(
                 qc, outp, inp, kode, cluster_label(outdir, hpdb), std, judul, poles, names, kinds,
                 locals().get("hp_xy") or [], segs, own_bnd, [f["poly"] for f in (locals().get("own_f") or [])], feedback,
-                hp_attrs=hp_attrs, heights=heights, hp_rows=hp_rows, src=src_)
+                hp_attrs=hp_attrs, heights=heights, hp_rows=hp_rows, src=src_, others=cross_scene)
             from . import mapview as _mv
             map_html = _mv.block(map_data, "Peta temuan QC survei")
         except Exception as e:

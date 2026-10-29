@@ -1,5 +1,14 @@
 # Changelog
 
+## 3.5.9 – deteksi duplikat berdasarkan label survei
+- Pencocokan bertingkat berdasarkan koordinat, label survei, nama usaha, nomor rumah dan jalan, kemiripan nama, serta jarak antartitik.
+- Label survei yang sama diperiksa juga dalam satu cluster (HP_DUPLIKAT_LABEL); parameter toleransi tersedia di profil.
+- Versi aturan 2026.10-r7; kategori dasar INTERNAL+RISET dikenali oleh inti QC.
+
+## 3.5.8 – QC lintas cluster
+- Pemeriksaan duplikat homepass, homepass di boundary cluster saudara, boundary bertumpuk, dan kode cluster berulang.
+- Boundary dan homepass pembanding ditampilkan pada gambar temuan dan peta interaktif.
+
 ## 3.5.7 – bukti temuan langsung di laporan
 - Panel bukti bertab di setiap temuan HTML: Gambar (statis; salin/unduh PNG) · Aturan vs nilai (syarat, nilai, selisih, %) ·
   Data sumber (kutipan baris HPDB / atribut tiang, FAT/FDT, HP, kabel; kolom penentu disorot; nama berkas) · Jejak (audit).
