@@ -41,7 +41,7 @@ DUPF_RX = re.compile(r"duplikat|duplicate|\berror\b", re.IGNORECASE)
 BND_RX = re.compile(r"boundary|bondary|batas", re.IGNORECASE)
 POLE_RX = re.compile(r"\b(poles?|tiang|np|ep|t\d{1,2}|te)\b", re.IGNORECASE)
 ID_RX = re.compile(r"(?<!\d)(\d{9,12})(?!\d)")
-ZW_RX = re.compile(u"[​-‏⁠﻿]")
+ZW_RX = re.compile(u"[\u200b-\u200f\u2060\ufeff]")
 GENERIC_NAMES = {"", "HP", "HOMEPASS", "RUMAH", "UNTITLEDPLACEMARK", "TITIK", "POINT", "NA", "NONE", "NULL"}
 SKIP_DIR_RX = re.compile(r"^(INPUT|HASIL|QC_|_|~)", re.IGNORECASE)
 
