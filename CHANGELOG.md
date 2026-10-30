@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.6.1 – stabil dan sama hasilnya di semua wilayah
+- Jarak pendek di modul murni Python memakai jari-jari ellipsoid WGS84 di lintang setempat (`geodesi.py`), selaras pengukuran ellipsoid QGIS (galat 1,3e-8 terhadap Vincenty, 11 LS – 60 LU).
+- Grid pencarian tetangga berukuran meter (sel bujur diperlebar 1/cos lintang, indeks floor): pasangan di tepi radius tidak terlewat; toleransi snap jalur ke tiang dihitung di lintang cluster.
+- Urutan tetap: cluster saudara dibandingkan menurut kode/nama/folder, kecocokan setara dipilih menurut urutan baris, penelusuran folder diurutkan; temuan dan remarks tidak bergantung urutan folder, ZIP, atau hash seed Python.
+- Luas irisan BOUNDARY dibulatkan sesuai resolusi sampel; shapefile hasil yang tidak lengkap (file lama terkunci di Windows) dilaporkan sebagai gagal tulis.
+- Diuji: grup Minahasa dan Jambi dipindah ke 5 wilayah + urutan acak + ulang (0 beda); di QGIS 3.40.14 cluster 209/210/213 dijalankan dua kali dengan urutan terbalik, semua hasil identik. Versi aturan 2026.10-r9.
+
+## 3.6.0 – 1 PIC desain, cluster digabung, remarks otomatis
+- Deteksi cluster satu jaringan / satu PIC (tiang bersama, kabel tersambung, sub-folder KMZ cluster lain, BAKP identik, BOUNDARY berdampingan) dan cek grup sekaligus (REKAP_GRUP_1PIC_<ID>.txt/.csv).
+- BOUNDARY induk yang memuat cluster saudara (BOUNDARY_MEMUAT_CLUSTER_LAIN), cluster lain yang digabung ke satu HPDB/KMZ (CLUSTER_LAIN_DIGABUNG), folder cluster bertingkat, perbaikan cache batch.
+- Cek baru: tiang ganda di KMZ, sheet Pole HPDB vs KMZ, HP tanpa foto evidence, CLUSTER_NAME kosong, nomor rumah beda blok; BAKP dibaca semua halaman.
+- Remarks review otomatis (maks 255 karakter, Reject / Approve dgn catatan / Approve, nomor baris HPDB asli). Versi aturan 2026.10-r8.
+
 ## 3.5.9 – deteksi duplikat berdasarkan label survei
 - Pencocokan bertingkat berdasarkan koordinat, label survei, nama usaha, nomor rumah dan jalan, kemiripan nama, serta jarak antartitik.
 - Label survei yang sama diperiksa juga dalam satu cluster (HP_DUPLIKAT_LABEL); parameter toleransi tersedia di profil.

@@ -1,6 +1,6 @@
 {
  "profile_id": "APD_1X8",
- "rule_version": "2026.10-r7",
+ "rule_version": "2026.10-r9",
  "nama": "APD distribusi - FDT splitter 1x8",
  "keterangan": "Seperti APD_1X4, tetapi FDT 1:8 maks 8 splitter, FDT 480 premises, jarak HP ke FAT 130 m.",
  "params": {

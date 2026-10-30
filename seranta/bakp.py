@@ -31,7 +31,9 @@ except Exception:          # pragma: no cover - numpy ships with QGIS
 MODES = ["Ingatkan + cek otomatis offline + daftar periksa (disarankan)", "Lewati (tanpa pengingat BAKP)"]
 BAKP_RX = re.compile(r"BAKP|PERI[JZ]INAN|KESEPAKATAN|BA[\s_-]*KP", re.IGNORECASE)
 IMG_EXT = (".pdf", ".jpg", ".jpeg", ".png")
-MAX_PAGES = 6
+MAX_PAGES = 40          # dulu 6: BAKP gabungan beberapa RT (16 halaman, review Jambi 2026) tidak terbaca utuh
+SCAN_MAX_PAGES = 6      # batas halaman untuk MENGENALI kandidat BAKP dari isi file (bukan batas baca)
+SET_HASH_MAX = 50       # beda hash halaman (dari 256 bit) <= ini = templat halaman 1 BAKP yang sama (awal set baru)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -43,7 +45,7 @@ def find_bakp(folder):
     for root, dirs, files in os.walk(folder):
         rel = os.path.relpath(root, folder)
         depth = 0 if rel == "." else rel.count(os.sep) + 1
-        dirs[:] = [d for d in dirs if not d.upper().startswith(("INPUT", "HASIL_PASCA"))] if depth < 1 else []
+        dirs[:] = sorted(d for d in dirs if not d.upper().startswith(("INPUT", "HASIL_PASCA"))) if depth < 1 else []
         for f in sorted(files):
             if f.startswith("~$") or not f.lower().endswith(IMG_EXT):
                 continue
@@ -84,7 +86,7 @@ def find_candidates(folder, cluster_id=""):
                     score += 3
                     why.append("teks 'Berita Acara/Kesepakatan/Perijinan' di PDF")
                 n = len(re.findall(rb"/Type\s*/Page[^s]", head))
-                if 1 <= n <= MAX_PAGES and re.search(rb"/Subtype\s*/Image", head):
+                if 1 <= n <= SCAN_MAX_PAGES and re.search(rb"/Subtype\s*/Image", head):
                     score += 1
                     why.append("PDF hasil scan %d halaman" % n)
                 if re.search(rb"CamScanner|intsig|Scanner", head, re.IGNORECASE):
@@ -509,6 +511,20 @@ def ink_stats(a):
             "red_frac": float(red.mean()), "box": box}
 
 
+def page_sets(pages, max_diff=SET_HASH_MAX):
+    """[(hal_awal, hal_akhir)] set BAKP di dalam satu PDF. Halaman yang mirip halaman 1 (templat 'BERITA ACARA
+    KESEPAKATAN PERIJINAN') membuka set baru. Diuji pada BAKP gabungan 16 halaman (4 set): beda hash halaman awal set
+    11-38 bit, halaman lain >= 87 bit."""
+    pg = [p for p in pages if p.get("arr") is not None]
+    if len(pg) < 2:
+        return [(1, max(1, len(pages)))] if pages else []
+    hs = [(p.get("no", i + 1), ahash(shrink(p["arr"], 400))) for i, p in enumerate(pg)]
+    h1 = hs[0][1]
+    starts = [hs[0][0]] + [no for no, h in hs[1:] if int((h != h1).sum()) <= max_diff]
+    last = hs[-1][0]
+    return [(a, (starts[i + 1] - 1) if i + 1 < len(starts) else last) for i, a in enumerate(starts)]
+
+
 def ahash(a, n=16):
     """Hash rata-rata 16x16 (256 bit) untuk mengenali gambar yang sama walau dikompres ulang."""
     g = a.astype(np.float32).mean(axis=2)
@@ -559,6 +575,16 @@ def offline_check(doc):
     dup = [g for g in groups if len(g) >= 2]
     tempel = [ov for ov in doc["overlays"] if ov["smask"] or any(ov in g for g in dup)]
     info["overlay_pages"] = sorted({ov["page"] for ov in tempel})
+    # BAKP gabungan: satu PDF berisi beberapa set BAKP (satu per RT/lingkungan). Awal set = halaman yang templatnya
+    # sama dengan halaman 1 (hash visual halaman penuh). Temuan per halaman lalu bisa dikaitkan ke set-nya.
+    sets = page_sets(pages)
+    info["sets"] = sets
+
+    def set_of(pg):
+        for k_, (a_, b_) in enumerate(sets, 1):
+            if a_ <= pg <= b_:
+                return k_
+        return None
     ov_color = ""
     for ov in tempel:
         if ov.get("arr") is not None:
@@ -570,10 +596,15 @@ def offline_check(doc):
     if dup:
         n = max(len(g) for g in dup)
         hal = sorted({ov["page"] for g in dup for ov in g})
+        st_ = sorted({set_of(h_) for h_ in hal if set_of(h_)})
+        set_txt = ""
+        if len(sets) > 1 and st_:
+            set_txt = " (set %s dari %d: halaman %s; set lain hasil scan biasa - pastikan set mana milik cluster ini)" % (
+                ", ".join(map(str, st_)), len(sets), "; ".join("%d-%d" % sets[k_ - 1] for k_ in st_))
         items.append(("BAKP_STEMPEL_TTD_TEMPELAN_DIGITAL", False,
-                      "gambar stempel/tanda tangan%s yang sama ditempel digital %d kali (halaman %s) - minta BAKP "
+                      "gambar stempel/tanda tangan%s yang sama ditempel digital %d kali (halaman %s)%s - minta BAKP "
                       "dengan tanda tangan & stempel basah (hasil scan asli)" % (
-                          (" " + ov_color) if ov_color else "", n, ", ".join(map(str, hal)))))
+                          (" " + ov_color) if ov_color else "", n, ", ".join(map(str, hal)), set_txt)))
     elif tempel:
         items.append(("BAKP_ADA_GAMBAR_TEMPELAN", False,
                       "ada gambar tempelan transparan di halaman %s (kemungkinan stempel/ttd digital) - cek keaslian"
@@ -619,13 +650,18 @@ def checklist(exp):
     return [
         ("Cluster ID", exp.get("cluster_id") or "-", "tabel atas dan bagian bawah halaman 1 harus sama"),
         ("Homepass", hp, "tidak boleh kurang dari HP yang didesain"),
+    ] + ([("Homepass per RT/RW/lingkungan", exp["hp_groups"],
+           "tiap set BAKP / baris lampiran >= jumlah HP HPDB di RT/lingkungan itu")] if exp.get("hp_groups") else []) + [
         ("Kelurahan / Kecamatan / Kota", lok, "nama wilayah sesuai FINDIM"),
         ("RT/RW / nama cluster", exp.get("cluster_name") or "-", "nomor RT/RW sama dengan nama cluster"),
         ("Pilihan persetujuan", "menyetujui", "kata 'tidak menyetujui' harus dicoret"),
         ("Tanda tangan & stempel Ketua RT/RW", "ada, basah (bukan tempelan)", "nama & cap jelas"),
         ("Tanggal BAKP", "terisi, tidak di masa depan", "hari, tanggal, bulan, tahun"),
         ("Mitra / vendor", exp.get("vendor") or "-", "nama PT pelaksana"),
-        ("Lembar verifikasi warga (bila ada)", "permit approved", "catat bila ada kompensasi"),
+        ("Lembar verifikasi warga (bila ada)", "permit approved", "catat bila ada kompensasi; kotak 'Kompensasi' "
+                                                                   "dicentang bila catatan menyebut nominal"),
+        ("BAKP tingkat kelurahan (ttd Lurah)", "kolom Cluster ID/Homepass terisi, atau ada lampiran daftar Cluster ID + HP",
+         "tanpa ID & jumlah HP, BAKP tidak bisa dikaitkan ke cluster (review Minahasa 2026)"),
     ]
 
 
@@ -641,6 +677,16 @@ def evaluate(off, exp):
     elif want_id and want_id not in fid:
         items.append(("BAKP_NAMA_FILE_ID_BEDA", False,
                       "nama file BAKP memuat ID %s, sedangkan HPDB/KMZ %s" % (", ".join(fid), want_id)))
+    sets = off[0].get("sets") or []
+    if len(sets) > 1:
+        items.append(("INFO_BAKP_GABUNGAN", None,
+                      "BAKP gabungan: %d set dalam satu file (halaman %s). Cocokkan set untuk RT/lingkungan cluster ini; "
+                      "jumlah homepass tiap set harus >= HP HPDB di RT/lingkungan itu" % (
+                          len(sets), "; ".join("%d-%d" % ab for ab in sets))))
+    if exp.get("shared_with"):
+        items.append(("INFO_BAKP_DIPAKAI_CLUSTER_LAIN", None,
+                      "file BAKP yang sama dipakai juga oleh cluster %s - pastikan setiap cluster tercantum (ID & HP) di "
+                      "BAKP / lampiran daftar cluster" % ", ".join(exp["shared_with"][:4])))
     n = off[0].get("n_pages", 0)
     if n and n < 2:
         items.append(("INFO_BAKP_HALAMAN_SEDIKIT", None, "BAKP hanya %d halaman; format standar 2-4 halaman" % n))

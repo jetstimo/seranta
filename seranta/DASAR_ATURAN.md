@@ -126,9 +126,51 @@ Kasus 16 (COLO ke cluster DROP), 24 (jenis tiang vs strand), 26 (alokasi tube), 
 (tumpang tindih dengan existing) membutuhkan data Macro, splice plan, atau kelas jalan. Tanpa data tersebut kasus
 ini dilaporkan **UNVERIFIED**, bukan lolos. Kasus 23/26 dicek oleh alat 3 dari splice plan.
 
+
+## Tambahan 3.6.0 (review Jambi, Tegal, Minahasa — Oktober 2026)
+| Kode | Logika | Tingkat | Dasar |
+|---|---|---|---|
+| CLUSTER_LAIN_DIGABUNG | ≥ 5 HP (dan ≥ 10 % HP) di satu Funnel aktif milik cluster lain (bukan RFS, bukan reject). Dilaporkan sekali, HP itu tidak dilaporkan lagi sebagai HP_DI_FUNNEL_LAIN/HP_LUAR_FUNNEL | ERROR | Satu cluster satu ID/Funnel; FINDIM OLT CLUSTER |
+| BOUNDARY_MEMUAT_CLUSTER_LAIN | BOUNDARY KMZ cluster ini memuat ≥ 50 % (min. 5) HP cluster saudara = BOUNDARY induk/gabungan yang belum dipotong setelah split. Cluster saudara mendapat satu INFO_HP_DI_BOUNDARY_INDUK_CLUSTER_LAIN (bukan ERROR per HP) | ERROR | Satu rumah satu cluster; review Jambi 2026 (Bagan Pete RT 04 memuat 158/212 HP Pinang Merah, 85/93 HP Simpang Rimbo) |
+| INFO_SATU_PIC_DESAIN | Cluster saudara ≤ 2 km dengan: tiang sama koordinat (≤ 1 m), jalur kabel tersambung (≤ 1,5 m), atau sub-folder KMZ ber-ID cluster lain = satu jaringan; BAKP identik atau BOUNDARY ≤ 5 m (jarak ≤ 300 m) = kemungkinan 1 PIC | INFO | Review paket bersama |
+| WARN_TIANG_GANDA_LINTAS_CLUSTER | Tiang cluster ini ≤ 1 m dari tiang cluster saudara | WARNING (menghalangi Approve di remarks) | Satu tiang satu catatan BOQ |
+| INFO_HP_TEPI_FUNNEL_LAIN | HP ≤ toleransi Funnel (15 m) di dalam Funnel lain dan ≤ 15 m dari/di dalam Funnel sendiri | INFO | Galat GPS ponsel 4,9 m (GPS.gov), 7–13 m urban (PLOS ONE 2019) |
+| WARN_TIANG_DUPLIKAT_KMZ | Titik tiang di KMZ koordinat sama atau ≤ 1 m (dua folder) | WARNING | BOQ |
+| WARN_POLE_SHEET_BEDA_KMZ | Sheet tiang HPDB: tinggi beda, posisi > 5 m, baris koordinat ganda | WARNING | Konsistensi HPDB-KMZ |
+| WARN_HP_TANPA_EVIDENCE | HP tanpa foto ≤ 5 m atau berlabel sama ≤ 30 m (Evidence*.xlsx + folder EVIDENCE KMZ) | WARNING | Standar Review Strand |
+| WARN_CLUSTER_NAME_KOSONG | CLUSTER_NAME kosong/'-' | WARNING | Format HPDB |
+| WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR | ID tidak ada di OLT CLUSTER dan lebih besar dari ID terbesar berawalan 7 digit sama | WARNING | Data referensi tertinggal |
+| Duplikat label | Nomor rumah sama di blok berbeda (HOMEPASS_ADDRESS_BLOCK terisi keduanya) bukan duplikat | — | Alamat |
+| Tinggi tiang | 'NP-11' (tanda hubung) = nomor urut; NP+angka tanpa 'M' hanya 6/7/9 m | — | Review Jambi |
+| BAKP | Semua halaman (maks 40); set baru = halaman mirip halaman 1 (beda hash ≤ 50 dari 256 bit; uji: awal set 11–38, lainnya ≥ 87) | — | — |
+
+Remarks otomatis (remarks.py): status Reject bila ada ERROR atau WARNING penghalang (BOUNDARY tumpang tindih ber-HP, tiang
+dua cluster, ID ganda); temuan berselisih ≤ 1 m dari batas (rentang, jarak HP-tiang) dan FINDIM yang tertinggal hanya menjadi
+catatan; stempel tempelan di BAKP gabungan yang hanya ada di sebagian set dicantumkan sebagai "cek", bukan otomatis reject;
+belokan tepat di batas sudut (≤ batas + 1°) dengan tiang ≤ 25 m dari belokan hanya catatan. Pasangan label survei sama dan
+irisan BOUNDARY ditulis dengan nomor baris HPDB asli (baris HP cluster saudara disebut dengan ID cluster-nya).
+
+Cek grup 1 PIC (grup.py): anggota grup = cluster yang terhubung sinyal INFO_SATU_PIC_DESAIN secara berantai (A-B dan
+B-C = satu grup). Status grup Reject bila salah satu anggota Reject; Belum lengkap bila ada anggota yang folder-nya tidak
+ada; total HP grup menentukan kebutuhan splitter/FDT bersama; tiang yang tercatat di dua KMZ dihitung sekali.
+
+Mode batch: hasil "cluster jauh" (> 2 km, HPDB tidak dibaca) disimpan bersama kotak batasnya dan dihitung ulang untuk
+cluster berikutnya, sehingga cluster yang jauh dari cluster pertama tetap dibandingkan dengan tetangganya.
+
 ## Batasan
 - Dokumen operator asli tidak tersedia daring. Angka operator diambil dari salinan dan kutipan jurnal, dan nilainya bervariasi (drop 100–200 m).
 - Lampiran Kominfo 2018 masih berupa rancangan, dan Perwal hanya berlaku di kotanya masing-masing. Karena itu nilai 50 m dijadikan WARNING pada profil bawaan dan ERROR pada profil "Perwal ketat". Sebelum go-live, tim perizinan perlu memastikan Perda/Perwal di kota proyek.
 - Toleransi BOM (5 %) dan sudut belok (15°/30°) adalah parameter rekayasa (NOT_APPROVED). Keduanya harus dikalibrasi dengan desain nyata dan disahkan reviewer.
 - Arti kode CONNSTATUS desain otomatis belum terdokumentasi di handbook. Plugin hanya menandai nilai yang berbeda dari mayoritas.
 - Semua hasil adalah alat bantu. Keputusan desain dan pengecualian tetap berada pada desainer dan reviewer.
+
+## Tambahan 3.6.1 — stabilitas dan invariansi wilayah
+
+- **Jarak**: semua jarak pendek di modul murni Python (lintas cluster, sheet Pole, evidence, grup) memakai jari-jari kelengkungan ellipsoid WGS84 di lintang setempat (`geodesi.py`), sama dengan pengukuran ellipsoid QGIS. Galat maks 1,3e-8 terhadap Vincenty di 11 LS – 60 LU (sebelumnya konstanta ekuator, galat s.d. 0,04 %). Toleransi 0,5 m / 1 m / 5 m / 25 m bermakna sama di Aceh, Jawa, NTT maupun Papua.
+- **Grid pencarian tetangga** berukuran meter: sel bujur diperlebar 1/cos(lintang terjauh), indeks memakai floor; pasangan di tepi radius tidak pernah terlewat (240 kasus uji tepi radius, 0 terlewat).
+- **Toleransi snap jalur ke tiang** dikonversi ke derajat dari skala WGS84 di lintang cluster.
+- **Urutan tetap**: cluster saudara dibandingkan berurutan (kode, nama, folder); kecocokan setara dipilih berdasarkan urutan baris; penelusuran folder (referensi, BAKP, evidence) diurutkan. Temuan dan remarks tidak bergantung urutan folder di disk/ZIP maupun hash seed Python.
+- **Luas irisan BOUNDARY** dibulatkan sesuai resolusi sampel (1 / 5 / 10 / 100 m²) agar tidak menampilkan ketelitian semu.
+- **Penulisan hasil**: shapefile hasil yang .shx/.dbf-nya tidak terbentuk (file lama masih dipegang koneksi OGR di Windows) dilaporkan sebagai gagal tulis, tidak lolos diam-diam.
+- **Uji di QGIS 3.40.14**: 209 (+210 lewat grup), 213, 210 dijalankan dua kali dengan urutan terbalik → semua QC_TEMUAN, layer QC/*, REMARKS, LAPORAN_INPUT dan REKAP_GRUP identik.
+- **Uji**: grup Minahasa (209/210, 211/213) dan Jambi (Pinang Merah, Simpang Rimbo, Bagan Pete) dipindah ke Aceh, Papua, NTT, Kalimantan, Jakarta + 5 urutan acak + ulang + 4 hash seed → 33 + 4 run, 0 beda temuan dan remarks.
