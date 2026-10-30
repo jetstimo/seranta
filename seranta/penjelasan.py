@@ -355,6 +355,32 @@ TOOL1_STD = {
 
 # Tool 1 - arti jenis temuan (cocokkan dengan awalan kode, urutan penting)
 TOOL1_KIND = [
+    # --- 3.6.0 (review Jambi, Tegal, Minahasa Oktober 2026) ---
+    ("BOUNDARY_MEMUAT_CLUSTER_LAIN", "BOUNDARY di KMZ cluster ini memuat sebagian besar rumah cluster lain: BOUNDARY masih "
+     "BOUNDARY induk/gabungan dari sebelum cluster dipecah.",
+     "Gambar ulang BOUNDARY cluster ini hanya di sekitar rumah cluster ini."),
+    ("INFO_HP_DI_BOUNDARY_INDUK_CLUSTER_LAIN", "Rumah cluster ini berada di dalam BOUNDARY cluster lain yang masih BOUNDARY "
+     "induk/gabungan; kesalahannya ada di cluster lain itu.", "Cukup dicatat; perbaikan BOUNDARY dilakukan di cluster lain."),
+    ("CLUSTER_LAIN_DIGABUNG", "Sekelompok rumah di HPDB/KMZ ini berada di Funnel milik cluster lain (sering ID-nya ada di "
+     "FINDIM dan KMZ memuat sub-folder cluster itu): dua cluster digabung menjadi satu pengajuan.",
+     "Pisahkan rumah-rumah itu ke cluster pemiliknya (HPDB, KMZ, evidence, BAKP sendiri), atau lampirkan persetujuan "
+     "penggabungan."),
+    ("INFO_HP_TEPI_FUNNEL_LAIN", "Rumah tepat di garis batas Funnel cluster ini dan Funnel cluster lain (hanya beberapa meter, "
+     "masih dalam galat GPS ponsel).", "Cukup dicatat; tidak perlu dipindah."),
+    ("WARN_TIANG_GANDA_LINTAS_CLUSTER", "Tiang yang sama (koordinat sama) tercatat di KMZ dua cluster: BOQ tiang terhitung dua "
+     "kali.", "Tentukan cluster pemilik tiang; di cluster lain jadikan tiang existing/bersama."),
+    ("INFO_SATU_PIC_DESAIN", "Cluster ini didesain sebagai satu jaringan / satu PIC dengan cluster lain (tiang bersama, kabel "
+     "tersambung, BAKP sama, atau BOUNDARY berdampingan).",
+     "Review sebagai satu paket: tiang bersama dihitung sekali, HP tidak ganda, BOUNDARY tidak saling masuk, satu rencana FDT."),
+    ("WARN_TIANG_DUPLIKAT_KMZ", "Satu titik tiang digambar dua kali di KMZ (koordinat sama atau berjarak <= 1 m), kadang "
+     "dengan tinggi berbeda.", "Hapus salinannya dan samakan tinggi tiang."),
+    ("WARN_POLE_SHEET_BEDA_KMZ", "Sheet daftar tiang di HPDB tidak sama dengan tiang di KMZ (tinggi, posisi, atau baris ganda).",
+     "Samakan sheet tiang dengan KMZ."),
+    ("WARN_HP_TANPA_EVIDENCE", "Ada rumah di HPDB yang tidak punya foto survei (evidence) di laporan evidence maupun di KMZ.",
+     "Lengkapi foto rumah tersebut."),
+    ("WARN_CLUSTER_NAME_KOSONG", "Kolom CLUSTER_NAME di HPDB kosong.", "Isi nama cluster sesuai FINDIM / Funnel."),
+    ("WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR", "ID cluster belum ada di FINDIM, tetapi lebih baru dari semua ID di file FINDIM "
+     "yang dipakai: kemungkinan cluster baru yang belum terdaftar.", "Minta FINDIM terbaru sebelum menolak karena ID."),
     ("HP_JAUH_DARI_TIANG", "Rumah terlalu jauh dari tiang terdekat.", "Tambahkan tiang di dekat rumah atau periksa koordinat rumah."),
     ("HP_DUPLIKAT_LINTAS_CLUSTER", "Rumah yang sama juga tercatat di cluster saudara (koordinat sama, atau nomor rumah/nama "
      "sama dalam jarak galat GPS). Satu rumah akan dihitung dua kali bila kedua cluster didesain.",

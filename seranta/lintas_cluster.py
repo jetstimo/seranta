@@ -29,17 +29,24 @@ import re
 import zipfile
 
 try:
+    from . import geodesi as _geo
+except ImportError:          # diuji tanpa paket
+    import geodesi as _geo
+
+try:
     import defusedxml.ElementTree as ET
 except ImportError:  # pragma: no cover
     import xml.etree.ElementTree as ET  # nosec B405
 
-RULE_VERSION = "2026.10-r7"
+RULE_VERSION = "2026.10-r9"
 
 HP_RX = re.compile(r"\b(hp|homepass|home ?pass|rumah)\b", re.IGNORECASE)
 EVID_RX = re.compile(r"evid[ae]n[cs]e|evident|foto|photo|dokumentasi", re.IGNORECASE)
 DUPF_RX = re.compile(r"duplikat|duplicate|\berror\b", re.IGNORECASE)
-BND_RX = re.compile(r"boundary|bondary|batas", re.IGNORECASE)
-POLE_RX = re.compile(r"\b(poles?|tiang|np|ep|t\d{1,2}|te)\b", re.IGNORECASE)
+BND_RX = re.compile(r"boundary|boundry|boundari|bondary|batas", re.IGNORECASE)
+# NP6M / EP9M / TIANG7 / T6: kata tiang boleh menempel angka (nama folder vendor)
+POLE_RX = re.compile(r"(?<![a-z])(poles?|tiang|np|ep|te)(?![a-z])|\bt\d{1,2}m?\b", re.IGNORECASE)
+ROUTE_RX = re.compile(r"(?<![a-z])(routes?|cables?|kabel|jalur)(?![a-z])", re.IGNORECASE)
 ID_RX = re.compile(r"(?<!\d)(\d{9,12})(?!\d)")
 ZW_RX = re.compile(u"[\u200b-\u200f\u2060\ufeff]")
 GENERIC_NAMES = {"", "HP", "HOMEPASS", "RUMAH", "UNTITLEDPLACEMARK", "TITIK", "POINT", "NA", "NONE", "NULL"}
@@ -48,8 +55,7 @@ SKIP_DIR_RX = re.compile(r"^(INPUT|HASIL|QC_|_|~)", re.IGNORECASE)
 
 # ----------------------------------------------------------------------------------------- geometri
 def dist_m(x1, y1, x2, y2):
-    kx = math.cos(math.radians((y1 + y2) / 2.0)) * 111320.0
-    return math.hypot((x2 - x1) * kx, (y2 - y1) * 110574.0)
+    return _geo.dist_m(x1, y1, x2, y2)
 
 
 def _pip(x, y, ring):
@@ -69,7 +75,7 @@ def in_poly(x, y, poly):
 
 
 def edge_dist_m(x, y, poly):
-    kx, ky = math.cos(math.radians(y)) * 111320.0, 110574.0
+    kx, ky = _geo.m_per_deg(y)
     best = 1e9
     for r in [poly[0]] + list(poly[1]):
         for i in range(len(r)):
@@ -110,8 +116,16 @@ def _bbox_gap_m(a, b):
         return 1e12
     dx = max(0.0, max(a[0], b[0]) - min(a[2], b[2]))
     dy = max(0.0, max(a[1], b[1]) - min(a[3], b[3]))
-    lat = (a[1] + a[3]) / 2.0
-    return math.hypot(dx * math.cos(math.radians(lat)) * 111320.0, dy * 110574.0)
+    kx, ky = _geo.m_per_deg((a[1] + a[3]) / 2.0)
+    return math.hypot(dx * kx, dy * ky)
+
+
+def round_area(a):
+    """Luas hasil sampel grid dibulatkan sesuai resolusinya (galat sampel ~0,5-1 %): tampilan tidak memberi
+    ketelitian semu dan tidak berubah karena pergeseran sampel sub-meter (uji stabilitas antar-wilayah)."""
+    a = float(a or 0.0)
+    step = 1.0 if a < 100 else 5.0 if a < 1000 else 10.0 if a < 10000 else 100.0
+    return int(round(a / step) * step)
 
 
 def overlap_area(polys_a, polys_b, max_samples=40000):
@@ -124,8 +138,8 @@ def overlap_area(polys_a, polys_b, max_samples=40000):
     x0, y0, x1, y1 = max(ba[0], bb[0]), max(ba[1], bb[1]), min(ba[2], bb[2]), min(ba[3], bb[3])
     if x0 >= x1 or y0 >= y1:
         return 0.0, None, []
-    kx = math.cos(math.radians((y0 + y1) / 2.0)) * 111320.0
-    w, h = (x1 - x0) * kx, (y1 - y0) * 110574.0
+    kx, ky = _geo.m_per_deg((y0 + y1) / 2.0)
+    w, h = (x1 - x0) * kx, (y1 - y0) * ky
     step = max(1.0, math.sqrt(w * h / float(max_samples)))
     nx, ny = max(1, int(w / step)), max(1, int(h / step))
     sx, sy = (x1 - x0) / nx, (y1 - y0) / ny
@@ -138,7 +152,7 @@ def overlap_area(polys_a, polys_b, max_samples=40000):
                 hits.append((x, y))
     if not hits:
         return 0.0, None, []
-    area = len(hits) * (sx * kx) * (sy * 110574.0)
+    area = len(hits) * (sx * kx) * (sy * ky)
     cx = sum(p[0] for p in hits) / len(hits)
     cy = sum(p[1] for p in hits) / len(hits)
     # titik tengah harus di dalam irisan (irisan bisa berbentuk L): ambil sampel terdekat ke rata-rata
@@ -173,6 +187,20 @@ def norm_street(v):
     t = re.sub(r"\b(JL|JLN|JALAN|GG|GANG|LRG|LORONG)\b\.?", " ", t)
     t = re.sub(r"[^A-Z0-9]", "", t)
     return "" if t in ("", "0", "NA") else t
+
+
+def norm_block(v):
+    """Blok alamat dinormalkan: 'Blok C' = 'C', '-' -> ''. Dua rumah bernomor sama di blok berbeda = dua rumah."""
+    t = ZW_RX.sub("", str(v or "")).upper()
+    t = re.sub(r"\b(BLOK|BLOCK|BLK)\b\.?", " ", t)
+    t = re.sub(r"[^A-Z0-9]", "", t)
+    return "" if t in ("", "0", "NA") else t
+
+
+def blocks_differ(a, b):
+    """True bila kedua titik punya blok terisi dan berbeda (nomor rumah sama di blok lain bukan duplikat)."""
+    a, b = a or "", b or ""
+    return bool(a) and bool(b) and a != b
 
 
 def label_kind(n):
@@ -253,6 +281,8 @@ def same_label_pairs(pts, label_m=25.0, name_m=15.0, dup_exact=0.5, street_m=30.
         for a in range(len(ix)):
             for b in range(a + 1, len(ix)):
                 i, j = ix[a], ix[b]
+                if blocks_differ(pts[i].get("blk"), pts[j].get("blk")):
+                    continue                     # nomor rumah sama di blok berbeda: dua rumah, bukan duplikat
                 sa, sb = pts[i].get("adr", ""), pts[j].get("adr", "")
                 strong = label_kind(n) in ("seq", "name")
                 lim = label_m if strong else (street_m if sa and sa == sb else name_m)
@@ -305,7 +335,8 @@ def _ring(el):
 
 def read_kmz(path):
     """HP (titik di folder HP, tanpa folder bukti foto/duplikat), BOUNDARY (poligon di folder BOUNDARY), tiang."""
-    res = {"hp": [], "bnd": [], "poles": [], "doc": "", "hp_dupf": 0}
+    res = {"hp": [], "bnd": [], "poles": [], "doc": "", "hp_dupf": 0, "lines": [], "pole_dirs": [], "hp_dirs": [],
+           "folder_ids": {}}
     data = _kml_bytes(path)
     if not data:
         return res
@@ -343,11 +374,22 @@ def read_kmz(path):
                                 holes.append(r)
                         if outer:
                             res["bnd"].append((outer, holes))
+                    elif gt == "LineString" and any(ROUTE_RX.search(f) for f in folders) \
+                            and not any(BND_RX.search(f) for f in folders):
+                        r = _ring(g)
+                        if len(r) >= 2 and r[0] == r[-1] and len(r) > 3:
+                            r = r[:-1]                   # _ring menutup cincin; garis kabel tidak ditutup
+                        if len(r) >= 2:
+                            res["lines"].append(r)
                     elif gt == "Point":
                         r = _ring(g)
                         if not r:
                             continue
                         x, y = r[0]
+                        for f in folders:              # ID cluster lain yang tersisip sebagai sub-folder KMZ
+                            for m_ in ID_RX.finditer(f):
+                                res["folder_ids"].setdefault(m_.group(1), {"hp": 0, "pole": 0, "folder": f})
+                        fid_ = [m_.group(1) for f in folders for m_ in ID_RX.finditer(f)]
                         if any(HP_RX.search(f) for f in folders):
                             if any(EVID_RX.search(f) for f in folders):
                                 continue
@@ -355,8 +397,14 @@ def read_kmz(path):
                                 res["hp_dupf"] += 1      # sudah ditandai surveyor sebagai duplikat
                                 continue
                             res["hp"].append((x, y, pname))
+                            res["hp_dirs"].append(" / ".join(folders))
+                            if fid_:
+                                res["folder_ids"][fid_[-1]]["hp"] += 1
                         elif any(POLE_RX.search(f) for f in folders):
                             res["poles"].append((x, y, pname))
+                            res["pole_dirs"].append(" / ".join(folders))
+                            if fid_:
+                                res["folder_ids"][fid_[-1]]["pole"] += 1
     walk(root, [])
     return res
 
@@ -395,6 +443,7 @@ def hpdb_points(sheets):
     ihn = col(["HOMEPASSHOUSENUMBER"], "HOUSENUMBER")
     ipid = col(["HOMEPASSIDPARTNER"], "IDPARTNER")
     iadr = col(["HOMEPASSADDRESS"])
+    iblk = col(["HOMEPASSADDRESSBLOCK"], "ADDRESSBLOCK")
     out = []
     for j, r in enumerate(rows[h + 1:], start=h + 2):
         if not r or not any(str(v).strip() for v in r if v is not None):
@@ -412,7 +461,8 @@ def hpdb_points(sheets):
         if not (-11.5 <= lat <= 6.5 and 94 <= lon <= 141.5):
             continue
         out.append({"x": lon, "y": lat, "hn": str(g(ihn) if g(ihn) is not None else "").strip(),
-                    "pid": str(g(ipid) or "").strip(), "row": j, "adr": norm_street(g(iadr))})
+                    "pid": str(g(ipid) or "").strip(), "row": j, "adr": norm_street(g(iadr)),
+                    "blk": norm_block(g(iblk))})
     return out
 
 
@@ -446,7 +496,7 @@ def load_cluster(cdir, helpers, hpdb=None, kmz=None, near_bbox=None, near_km=2.0
         kmz = kmz or helpers["find_kmz"](cdir)
     except Exception as e:
         kmz, _ = None, note.append("KMZ tidak dipilih: %s" % str(e)[:120])
-    pts, k = [], {"hp": [], "bnd": [], "poles": [], "doc": "", "hp_dupf": 0}
+    pts, k = [], {"hp": [], "bnd": [], "poles": [], "doc": "", "hp_dupf": 0, "lines": [], "folder_ids": {}}
     if kmz:
         try:
             k = read_kmz(kmz)
@@ -454,7 +504,10 @@ def load_cluster(cdir, helpers, hpdb=None, kmz=None, near_bbox=None, near_km=2.0
             note.append("KMZ gagal dibaca: %s" % str(e)[:120])
     kbb = _bbox_union(_bbox_pts([(x, y) for x, y, _n in k["hp"]]), *[_bbox_pts(b[0]) for b in k["bnd"]])
     if near_bbox and kbb and _bbox_gap_m(near_bbox, kbb) > near_km * 1000.0:
-        return {"far": True, "dir": cdir}          # cluster jauh: HPDB tidak perlu dibaca
+        # cluster jauh: HPDB tidak perlu dibaca. bbox ikut disimpan: hasil ini di-cache per folder dalam mode batch,
+        # dan cluster yang jauh dari cluster A bisa bertetangga dengan cluster B (review Minahasa 2026: 2547640213 dibaca
+        # 'jauh' saat memproses 2547640209 lalu ikut dianggap jauh saat memproses 2547640211 yang bersebelahan).
+        return {"far": True, "dir": cdir, "bbox": kbb}
     if hpdb:
         try:
             ext = os.path.splitext(hpdb)[1].lower()
@@ -469,8 +522,15 @@ def load_cluster(cdir, helpers, hpdb=None, kmz=None, near_bbox=None, near_km=2.0
     if not pts and not k["bnd"]:
         return None
     label = helpers["cluster_label"](cdir, hpdb or "")
+    bsha = ""
+    if helpers.get("bakp_sha"):
+        try:
+            bsha = helpers["bakp_sha"](cdir) or ""
+        except Exception:
+            bsha = ""
     return {"dir": cdir, "label": label, "kode": helpers["kode_wilayah"](cdir, hpdb or ""),
             "hpdb": hpdb, "kmz": kmz, "hp": pts, "hp_src": src, "bnd": k["bnd"], "poles": k["poles"],
+            "lines": k.get("lines", []), "folder_ids": k.get("folder_ids", {}), "bakp_sha": bsha,
             "doc": k["doc"], "note": note,
             "ids_hpdb": ids_in(hpdb), "ids_other": ids_in(kmz, k["doc"], cdir) - ids_in(hpdb),
             "bbox": _bbox_union(_bbox_pts([(p["x"], p["y"]) for p in pts]),
@@ -506,33 +566,50 @@ def sibling_dirs(outdir, has_hpdb, extra=(), max_dirs=120):
             return True
         return False
 
-    roots = [os.path.dirname(os.path.abspath(outdir))]
+    parent = os.path.dirname(os.path.abspath(outdir))
+    roots = [parent]
     for e in extra or []:
         if e and os.path.isdir(e):
             if ok(e):
                 add(e)                       # folder pembanding = satu folder cluster
             else:
                 roots.append(e)              # folder pembanding = folder induk
-    for r in roots:
+
+    def scan(r):
         for d in subdirs(r):
             if len(out) >= max_dirs:
-                return out
+                return
             if not add(d):
                 for d2 in subdirs(d)[:20]:   # ZIP bertingkat: FOLDER/FOLDER/<file>
                     add(d2)
+    for r in roots:
+        scan(r)
+    # Folder cluster bertingkat (mis. MINAHASA/<ID>_..._78HP_RPS/<ID> - ... (78HP)/HPDB.xlsx): folder induk langsung
+    # hanya berisi cluster ini sendiri, jadi cluster saudara ada satu tingkat di atasnya. Naik maks 2 tingkat selama
+    # belum ada saudara dan folder induk tidak berisi HPDB sendiri.
+    up = parent
+    for _lvl in range(2):
+        if out or len(out) >= max_dirs:
+            break
+        gp = os.path.dirname(up)
+        if not gp or gp == up or ok(up):
+            break
+        scan(gp)
+        up = gp
     return out
 
 
 # ----------------------------------------------------------------------------------------- pembanding
-def _grid(pts, cell_deg):
+def _grid(pts, cell):
+    """cell: (derajat bujur, derajat lintang) dari geodesi.cell_deg."""
     g = {}
     for i, p in enumerate(pts):
-        g.setdefault((int(math.floor(p["x"] / cell_deg)), int(math.floor(p["y"] / cell_deg))), []).append(i)
+        g.setdefault(_geo.cell_of(p["x"], p["y"], cell), []).append(i)
     return g
 
 
-def _near(g, cell_deg, x, y):
-    cx, cy = int(math.floor(x / cell_deg)), int(math.floor(y / cell_deg))
+def _near(g, cell, x, y):
+    cx, cy = _geo.cell_of(x, y, cell)
     for dx in (-1, 0, 1):
         for dy in (-1, 0, 1):
             for i in g.get((cx + dx, cy + dy), ()):
@@ -545,17 +622,91 @@ def _nearest_pole(x, y, poles):
     return min(dist_m(x, y, px, py) for px, py, _n in poles)
 
 
+def _bnd_gap_m(A, B):
+    """Jarak terdekat (m) antara dua himpunan poligon BOUNDARY (0 bila beririsan/bersinggungan); pendekatan titik
+    sudut ke tepi, cukup untuk memutuskan 'berdampingan' (<= beberapa meter)."""
+    if not A or not B:
+        return None
+    best = 1e12
+    for P, Q in ((A, B), (B, A)):
+        for poly in P:
+            for x, y in poly[0][::max(1, len(poly[0]) // 400)]:
+                if any(in_poly(x, y, q) for q in Q):
+                    return 0.0
+                best = min(best, min(edge_dist_m(x, y, q) for q in Q))
+    return best
+
+
+def _pt_seg_m(x, y, a, b):
+    kx, ky = _geo.m_per_deg(y)
+    ax, ay = (a[0] - x) * kx, (a[1] - y) * ky
+    bx, by = (b[0] - x) * kx, (b[1] - y) * ky
+    dx, dy = bx - ax, by - ay
+    t = max(0.0, min(1.0, -(ax * dx + ay * dy) / ((dx * dx + dy * dy) or 1e-12)))
+    return math.hypot(ax + t * dx, ay + t * dy)
+
+
+def shared_poles(own_poles, sib_poles, same_m=1.0):
+    """Tiang yang tercatat di dua cluster (koordinat <= same_m). -> [(x, y, nama_sendiri, nama_saudara, jarak)]"""
+    out = []
+    if not own_poles or not sib_poles:
+        return out
+    cell = _geo.cell_deg(max(same_m, 1.0), [p[1] for p in own_poles] + [p[1] for p in sib_poles])
+    g = {}
+    for j, (x, y, _n) in enumerate(sib_poles):
+        g.setdefault(_geo.cell_of(x, y, cell), []).append(j)
+    used = set()
+    for x, y, n in own_poles:
+        cx, cy = _geo.cell_of(x, y, cell)
+        best = None
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for j in g.get((cx + dx, cy + dy), ()):
+                    if j in used:
+                        continue
+                    d = dist_m(x, y, sib_poles[j][0], sib_poles[j][1])
+                    if d <= same_m and (best is None or d < best[0]):
+                        best = (d, j)
+        if best:
+            used.add(best[1])
+            out.append((x, y, n, sib_poles[best[1]][2], best[0]))
+    return out
+
+
+def lines_connected(own_lines, sib_lines, own_poles=(), sib_poles=(), tol_m=1.5):
+    """True bila jalur kabel dua cluster tersambung: ujung/titik jalur satu cluster <= tol_m dari jalur cluster lain."""
+    if not own_lines or not sib_lines:
+        return False
+    bb = _bbox_union(*[_bbox_pts(l) for l in sib_lines])
+    pad = tol_m / 90000.0
+    for line in own_lines:
+        for x, y in line:
+            if bb and not (bb[0] - pad <= x <= bb[2] + pad and bb[1] - pad <= y <= bb[3] + pad):
+                continue
+            for sl in sib_lines:
+                for i in range(1, len(sl)):
+                    if _pt_seg_m(x, y, sl[i - 1], sl[i]) <= tol_m:
+                        return True
+    return False
+
+
 def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, near_km=2.0, same_frac=0.6,
-            label_m=25.0, fuzzy_m=30.0, fuzzy=0.85, bldg_m=2.0, street_m=30.0, label_warn_m=50.0):
+            label_m=25.0, fuzzy_m=30.0, fuzzy=0.85, bldg_m=2.0, street_m=30.0, label_warn_m=50.0,
+            pole_same_m=1.0, pic_gap_m=300.0, hp_per_spl=32, fdt_cap=384, ratio=4, induk_frac=0.5):
     """own: dict(label, kode, hp=[dict(x, y, hn, hid)], bnd, poles=[(x, y, nama)], ids_hpdb, ids_other, bbox).
     sibs: hasil load_cluster. Kembali dict(findings, report, counts, used, skipped, scene)."""
-    res = {"findings": [], "report": [], "used": [], "skipped": [], "counts": {}, "scene": {"bnd": [], "hp": []}}
+    res = {"findings": [], "report": [], "used": [], "skipped": [], "counts": {}, "scene": {"bnd": [], "hp": []},
+           "pic": []}
     F, R = res["findings"], res["report"]
     own_bb = own.get("bbox") or _bbox_pts([(p["x"], p["y"]) for p in own["hp"]])
-    cell = max(name_m, label_m, fuzzy_m, street_m, label_warn_m) / 111000.0
     reach = max(name_m, label_m, fuzzy_m, street_m, label_warn_m)
-    n_dup = n_maybe = n_warn = n_in = n_edge = n_ov = n_id = 0
+    cell = _geo.cell_deg(reach, [p["y"] for p in own["hp"]] +
+                         [q["y"] for x in sibs if x and not x.get("far") for q in (x.get("hp") or [])])
+    n_dup = n_maybe = n_warn = n_in = n_edge = n_ov = n_id = n_induk = n_induk_info = 0
     dup_pairs = []
+    # urutan saudara tetap (kode, label, folder): hasil & remarks tidak bergantung urutan folder di disk/zip
+    sibs = sorted((x for x in sibs if x is not None),
+                  key=lambda x: (str(x.get("kode") or ""), str(x.get("label") or ""), str(x.get("dir") or "")))
     for s in sibs:
         if s is None or s.get("far"):
             continue
@@ -576,12 +727,15 @@ def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, n
                 if d > reach:
                     continue
                 sa, sb = h.get("adr", ""), q.get("adr", "")
-                m = match_rank(d, norm_name(h["hn"]), norm_name(q["hn"]), dup_exact, dup_near, name_m, label_m,
+                na, nb = norm_name(h["hn"]), norm_name(q["hn"])
+                if na and na == nb and blocks_differ(h.get("blk"), q.get("blk")):
+                    nb = nb + "#BLOK" + q.get("blk", "")   # nomor sama, blok beda -> bukan label yang sama
+                m = match_rank(d, na, nb, dup_exact, dup_near, name_m, label_m,
                                fuzzy_m, fuzzy, bldg_m, bool(sa) and sa == sb, street_m, label_warn_m)
                 if m is None:
                     continue
                 rank = m[0]
-                if best is None or (RANK_ORDER[rank], d) < (RANK_ORDER[best[0]], best[1]):
+                if best is None or (RANK_ORDER[rank], d, j) < (RANK_ORDER[best[0]], best[1], best[2]):
                     best = (rank, d, j, m[1])
             if best is not None:
                 matched.append((h, best))
@@ -621,7 +775,24 @@ def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, n
                       "line": [(h["x"], h["y"]), (q["x"], q["y"])] if d > 0.05 else None,
                       "other": s["label"], "other_row": q.get("row"), "other_file": s.get("hpdb") or s.get("kmz")})
         # ---- 2. HP cluster ini di dalam BOUNDARY cluster saudara ----
-        if s["bnd"]:
+        # BOUNDARY induk/gabungan (review Jambi 2026: KMZ Bagan Pete RT 04 masih memuat BOUNDARY 390 HP sebelum dipecah,
+        # sehingga 158 HP Pinang Merah dan 85 HP Simpang Rimbo 'masuk BOUNDARY cluster saudara'). Bila BOUNDARY satu
+        # cluster menelan sebagian besar HP cluster lain, akar masalahnya satu: BOUNDARY itu belum dipotong. Kesalahan
+        # dilaporkan sekali di cluster pemilik BOUNDARY besar (ERROR), di cluster lain cukup satu catatan.
+        own_in_s = [h for h in own["hp"] if s["bnd"] and in_poly_any(h["x"], h["y"], s["bnd"])]
+        s_in_own = [q for q in s["hp"] if own["bnd"] and in_poly_any(q["x"], q["y"], own["bnd"])]
+        sib_induk = bool(s["bnd"]) and len(own_in_s) >= max(5, induk_frac * len(own["hp"]))
+        own_induk = bool(own["bnd"]) and len(s_in_own) >= max(5, induk_frac * len(s["hp"]))
+        if sib_induk:
+            n_induk_info += 1
+            c0 = own_in_s[len(own_in_s) // 2]
+            F.append({"x": c0["x"], "y": c0["y"], "kind": "INFO_HP_DI_BOUNDARY_INDUK_CLUSTER_LAIN",
+                      "ket": "%d dari %d HP cluster ini%s berada di dalam BOUNDARY cluster %s, yang ternyata memuat sebagian "
+                             "besar cluster ini: BOUNDARY %s kemungkinan masih BOUNDARY induk/gabungan sebelum dipecah. "
+                             "Perbaiki BOUNDARY di cluster %s; di cluster ini cukup dicatat (bukan HP salah cluster)."
+                             % (len(own_in_s), len(own["hp"]), _rows_txt(own_in_s), s["label"], s["label"], s["label"]),
+                      "val": len(own_in_s), "lim": None, "line": None, "other": s["label"], "unit": "HP"})
+        if s["bnd"] and not sib_induk:
             for h in own["hp"]:
                 if id(h) in dup_own:
                     continue                             # satu akar masalah, satu temuan (sudah di duplikat)
@@ -645,8 +816,25 @@ def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, n
                                      % (h["hid"], h["hn"] or "-", dep, s["label"], bnd_tol),
                               "val": round(dep, 1), "lim": bnd_tol, "line": None, "other": s["label"]})
         # ---- 3. BOUNDARY tumpang tindih ----
-        if own["bnd"] and s["bnd"]:
+        if own["bnd"] and s["bnd"] and own_induk:
+            n_ov += 1
+            n_induk += 1
+            c0 = s_in_own[len(s_in_own) // 2]
+            F.append({"x": c0["x"], "y": c0["y"], "kind": "BOUNDARY_MEMUAT_CLUSTER_LAIN",
+                      "ket": "BOUNDARY cluster ini memuat %d dari %d HP cluster %s%s: BOUNDARY masih BOUNDARY induk/gabungan "
+                             "(belum dipotong sesuai HP cluster ini). Gambar ulang BOUNDARY hanya di sekitar HP cluster ini."
+                             % (len(s_in_own), len(s["hp"]), s["label"], _rows_txt(s_in_own)),
+                      "val": len(s_in_own), "lim": None, "line": None, "other": s["label"], "unit": "HP"})
+        elif own["bnd"] and s["bnd"] and sib_induk:
+            n_ov += 1
+            c0 = own_in_s[len(own_in_s) // 2]
+            F.append({"x": c0["x"], "y": c0["y"], "kind": "INFO_BOUNDARY_BERIRISAN_CLUSTER_LAIN",
+                      "ket": "BOUNDARY cluster ini berada di dalam BOUNDARY induk/gabungan cluster %s (lihat catatan BOUNDARY "
+                             "induk); perbaikan ada di cluster %s." % (s["label"], s["label"]),
+                      "val": None, "lim": None, "line": None, "other": s["label"]})
+        elif own["bnd"] and s["bnd"]:
             area, c, samples = overlap_area(own["bnd"], s["bnd"])
+            area = round_area(area)
             if area > 0 and c:
                 deep_own = [h for h in own["hp"] if in_poly_any(h["x"], h["y"], s["bnd"]) and in_poly_any(h["x"], h["y"], own["bnd"])]
                 deep_sib = [q for q in s["hp"] if in_poly_any(q["x"], q["y"], s["bnd"]) and in_poly_any(q["x"], q["y"], own["bnd"])]
@@ -657,8 +845,9 @@ def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, n
                 F.append({"x": c[0], "y": c[1],
                           "kind": "WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN" if serious else "INFO_BOUNDARY_BERIRISAN_CLUSTER_LAIN",
                           "ket": "BOUNDARY cluster ini tumpang tindih dengan BOUNDARY cluster %s: luas irisan +-%.0f m2, "
-                                 "lebar maks +-%.0f m; di dalam irisan ada %d HP cluster ini dan %d HP cluster %s. %s"
-                                 % (s["label"], area, width, len(deep_own), len(deep_sib), s["label"],
+                                 "lebar maks +-%.0f m; di dalam irisan ada %d HP cluster ini%s dan %d HP cluster %s%s. %s"
+                                 % (s["label"], area, width, len(deep_own), _rows_txt(deep_own), len(deep_sib), s["label"],
+                                    _rows_txt(deep_sib),
                                     "Rapikan garis BOUNDARY agar satu rumah hanya masuk satu cluster." if serious else
                                     "Irisan tipis di garis batas bersama (wajar untuk garis yang digambar tangan)."),
                           "val": round(area, 0), "lim": None, "line": None, "other": s["label"], "unit": "m2"})
@@ -687,7 +876,63 @@ def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, n
                       "ket": lead + " Pastikan setiap cluster memakai ID-nya sendiri di HPDB, KMZ dan BAKP; bila ini ID "
                                     "induk Funnel yang memang dipakai bersama, cukup dicatat.",
                       "val": None, "lim": None, "line": None, "other": s["label"]})
-    res["counts"] = {"dup": n_dup, "warn": n_warn, "maybe": n_maybe, "in_bnd": n_in, "edge": n_edge, "overlap": n_ov, "id": n_id}
+        # ---- 5. Satu PIC desain / jaringan bersama (temuan review Jambi & Minahasa 2026) ----
+        # Beberapa cluster sering didesain satu PIC sebagai SATU jaringan: tiang dipakai bersama (tercatat di dua KMZ),
+        # kabel tersambung, satu cluster tersisip sebagai sub-folder KMZ cluster lain, BAKP yang sama, BOUNDARY
+        # berdampingan/tumpang tindih. Per cluster semua itu tidak terlihat; di sini dikumpulkan sebagai sinyal.
+        sp = shared_poles(own.get("poles") or [], s.get("poles") or [], pole_same_m)
+        conn = lines_connected(own.get("lines") or [], s.get("lines") or [])
+        gap_b = _bnd_gap_m(own.get("bnd") or [], s.get("bnd") or [])
+        same_bakp = bool(own.get("bakp_sha")) and own.get("bakp_sha") == s.get("bakp_sha")
+        sib_ids = s.get("ids_hpdb") or set()
+        own_ids = own.get("ids_hpdb") or set()
+        emb_in_own = sorted(i_ for i_ in (own.get("folder_ids") or {}) if i_ in sib_ids)
+        emb_in_sib = sorted(i_ for i_ in (s.get("folder_ids") or {}) if i_ in own_ids)
+        sig = []
+        if sp:
+            sig.append("%d tiang sama koordinat" % len(sp))
+        if conn:
+            sig.append("jalur kabel tersambung")
+        if emb_in_own:
+            sig.append("KMZ cluster ini memuat folder cluster %s" % ", ".join(emb_in_own))
+        if emb_in_sib:
+            sig.append("KMZ %s memuat folder cluster ini" % s["label"])
+        if same_bakp:
+            sig.append("file BAKP identik")
+        if gap_b is not None and gap_b <= 5.0:
+            sig.append("BOUNDARY %s" % ("tumpang tindih/bersinggungan" if gap_b == 0 else "berdampingan %.0f m" % gap_b))
+        one_net = bool(sp or conn or emb_in_own or emb_in_sib)
+        maybe = (not one_net) and bool(same_bakp or (gap_b is not None and gap_b <= 5.0)) and gap <= pic_gap_m
+        if one_net or maybe:
+            res["pic"].append({"label": s["label"], "kode": s["kode"], "n_hp": len(s["hp"]), "one_net": one_net,
+                               "signals": sig, "shared": sp, "ids": sorted(sib_ids), "dir": s.get("dir")})
+        if sp:
+            n_h = sum(1 for t in sp if t[4] > 0.05)
+            F.append({"x": sp[0][0], "y": sp[0][1], "kind": "WARN_TIANG_GANDA_LINTAS_CLUSTER",
+                      "ket": "%d tiang cluster ini juga tercatat di KMZ cluster %s (koordinat sama <= %.1f m): %s. Satu "
+                             "tiang fisik hanya boleh dihitung di satu cluster (BOQ tiang tidak boleh ganda); tentukan "
+                             "cluster pemiliknya, di cluster lain jadikan tiang existing/bersama."
+                             % (len(sp), s["label"], pole_same_m,
+                                "; ".join("%.6f, %.6f" % (t[1], t[0]) for t in sp[:4]) + (" ..." if len(sp) > 4 else "")),
+                      "val": len(sp), "lim": None, "line": None, "other": s["label"], "unit": "tiang",
+                      "pts": [(t[0], t[1]) for t in sp], "n_shift": n_h})
+    if res["pic"]:
+        tot = len(own["hp"]) + sum(g["n_hp"] for g in res["pic"])
+        spl = int(math.ceil(tot / float(hp_per_spl or 32)))
+        net = [g for g in res["pic"] if g["one_net"]]
+        x0, y0 = own["hp"][0]["x"], own["hp"][0]["y"]
+        F.append({"x": x0, "y": y0, "kind": "INFO_SATU_PIC_DESAIN",
+                  "ket": "Cluster ini %s dengan: %s. Total %d HP (butuh %d splitter 1x%d; %s). Review sebagai satu "
+                         "paket: tiang bersama dihitung sekali, BOUNDARY tidak saling masuk, HP tidak ganda, colo/FDT "
+                         "direncanakan bersama." % (
+                             "SATU JARINGAN (1 PIC desain)" if net else "kemungkinan satu PIC desain (jaringan terpisah)",
+                             "; ".join("%s [%s]" % (g["label"], ", ".join(g["signals"])) for g in res["pic"]),
+                             tot, spl, ratio,
+                             "muat 1 FDT %d HP" % fdt_cap if tot <= fdt_cap else "lebih dari 1 FDT %d HP" % fdt_cap),
+                  "val": tot, "lim": fdt_cap, "line": None, "other": ", ".join(g["label"] for g in res["pic"])})
+    res["counts"] = {"dup": n_dup, "warn": n_warn, "maybe": n_maybe, "in_bnd": n_in, "edge": n_edge, "overlap": n_ov, "id": n_id,
+                     "pole_shared": sum(len(g["shared"]) for g in res["pic"]), "pic": len(res["pic"]),
+                     "induk": n_induk, "induk_info": n_induk_info}
     # ---- laporan teks ----
     R.append("LINTAS CLUSTER (cluster saudara di folder yang sama / folder pembanding)")
     if not res["used"]:
@@ -711,9 +956,42 @@ def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, n
              "(<= %.0f m bila nama jalan sama)" % (dup_exact, label_m, name_m, street_m))
     R.append("  HP di dalam BOUNDARY cluster lain: %d (> %.0f m, ERROR); %d di tepi (info)" % (n_in, bnd_tol, n_edge))
     R.append("  BOUNDARY tumpang tindih       : %d cluster" % n_ov)
+    if n_induk:
+        R.append("  ! BOUNDARY cluster ini memuat sebagian besar HP %d cluster lain (BOUNDARY induk/gabungan): ERROR" % n_induk)
+    if n_induk_info:
+        R.append("  HP di BOUNDARY induk cluster lain: %d cluster (perbaikan di cluster pemilik BOUNDARY, info)" % n_induk_info)
     if n_id:
         R.append("  ID cluster dipakai cluster lain: %d" % n_id)
+    R.append("  Tiang tercatat di 2 cluster   : %d (WARNING; BOQ tiang tidak boleh ganda)" % res["counts"]["pole_shared"])
+    if res["pic"]:
+        tot = len(own["hp"]) + sum(g["n_hp"] for g in res["pic"])
+        R.append("  SATU PIC DESAIN / JARINGAN BERSAMA:")
+        for g in res["pic"]:
+            R.append("    - %-34s %s: %s" % (g["label"][:34], "SATU JARINGAN" if g["one_net"] else "kemungkinan 1 PIC",
+                                             "; ".join(g["signals"])))
+        R.append("    Total HP grup %d -> %d splitter 1x%d (%d HP/splitter), %s" % (
+            tot, int(math.ceil(tot / float(hp_per_spl or 32))), ratio, hp_per_spl,
+            "muat 1 FDT %d HP" % fdt_cap if tot <= fdt_cap else "lebih dari kapasitas 1 FDT %d HP" % fdt_cap))
+        R.append("    Saran review: periksa grup ini bersama (tiang bersama dihitung sekali, BOUNDARY tidak saling masuk, "
+                 "HP tidak ganda, satu rencana FDT).")
     return res
+
+
+def _rows_txt(pts, max_items=6):
+    """' (baris 80, 81)' dari daftar HP ber-'row' (nomor baris HPDB asli); '' bila tidak ada nomor baris."""
+    v = sorted({int(p["row"]) for p in pts if p.get("row")})
+    if not v:
+        return ""
+    parts, a, b = [], v[0], v[0]
+    for n in v[1:]:
+        if n == b + 1:
+            b = n
+            continue
+        parts.append((a, b))
+        a = b = n
+    parts.append((a, b))
+    t = ["%d" % a if a == b else ("%d, %d" % (a, b) if b == a + 1 else "%d-%d" % (a, b)) for a, b in parts]
+    return " (baris %s)" % (", ".join(t[:max_items]) + (" dst" if len(t) > max_items else ""))
 
 
 def in_poly_any(x, y, polys):
