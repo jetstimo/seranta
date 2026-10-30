@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.6.1"
+__version__ = "3.6.2"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"

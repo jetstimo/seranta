@@ -16,12 +16,9 @@ import base64
 import math
 import os
 
-try:
-    from qgis.PyQt.QtCore import QPointF, QRectF, Qt, QBuffer, QByteArray, QIODevice
-    from qgis.PyQt.QtGui import QImage, QPainter, QColor, QPen, QBrush, QFont, QPolygonF, QPainterPath
-except ImportError:  # uji unit di luar QGIS
-    from PyQt5.QtCore import QPointF, QRectF, Qt, QBuffer, QByteArray, QIODevice
-    from PyQt5.QtGui import QImage, QPainter, QColor, QPen, QBrush, QFont, QPolygonF, QPainterPath
+# hanya lewat qgis.PyQt (Qt5 di QGIS 3, Qt6 di QGIS 4); impor PyQt5 langsung tidak lolos cek Qt6 plugins.qgis.org
+from qgis.PyQt.QtCore import QPointF, QRectF, Qt, QBuffer, QByteArray, QIODevice
+from qgis.PyQt.QtGui import QImage, QPainter, QColor, QPen, QBrush, QFont, QPolygonF, QPainterPath
 
 
 def _e(*cands):
