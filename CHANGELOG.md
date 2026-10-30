@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.6.2 – siap Qt6 / QGIS 4
+- Modul gambar peta (`snapshot.py`) mengimpor Qt hanya lewat `qgis.PyQt`; impor cadangan PyQt5 langsung dihapus sehingga cek Qt6 plugins.qgis.org lulus.
+- Tidak ada perubahan aturan atau hasil QC (versi aturan tetap 2026.10-r9).
+
 ## 3.6.1 – stabil dan sama hasilnya di semua wilayah
 - Jarak pendek di modul murni Python memakai jari-jari ellipsoid WGS84 di lintang setempat (`geodesi.py`), selaras pengukuran ellipsoid QGIS (galat 1,3e-8 terhadap Vincenty, 11 LS – 60 LU).
 - Grid pencarian tetangga berukuran meter (sel bujur diperlebar 1/cos lintang, indeks floor): pasangan di tepi radius tidak terlewat; toleransi snap jalur ke tiang dihitung di lintang cluster.
