@@ -677,7 +677,7 @@ def lines_connected(own_lines, sib_lines, own_poles=(), sib_poles=(), tol_m=1.5)
     """True bila jalur kabel dua cluster tersambung: ujung/titik jalur satu cluster <= tol_m dari jalur cluster lain."""
     if not own_lines or not sib_lines:
         return False
-    bb = _bbox_union(*[_bbox_pts(l) for l in sib_lines])
+    bb = _bbox_union(*[_bbox_pts(ln_) for ln_ in sib_lines])
     pad = tol_m / 90000.0
     for line in own_lines:
         for x, y in line:

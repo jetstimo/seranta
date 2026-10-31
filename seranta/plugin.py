@@ -8,8 +8,7 @@ except ImportError:  # dijalankan sebagai modul lepas (uji unit)
 import os
 
 from qgis.core import QgsApplication, QgsSettings
-from qgis.PyQt.QtCore import QUrl
-from qgis.PyQt.QtGui import QDesktopServices, QIcon
+from qgis.PyQt.QtGui import QIcon
 
 try:                                    # Qt6 / QGIS 4
     from qgis.PyQt.QtGui import QAction
@@ -21,14 +20,14 @@ from .provider import SerantaProvider
 MENU = "&Seranta"
 HERE = os.path.dirname(__file__)
 TOOLS = [
-    ("seranta:buat_input_desain_apd", "1. Siapkan Input Desain Otomatis + QC Survei",
-     "HPDB + KMZ survei -> input desain otomatis (HP, tiang, jalur) dan QC 9 standar, satu klik, bisa banyak cluster"),
-    ("seranta:alokasi_fdt_fat", "2. Alokasi FDT & FAT (estimasi kebutuhan)",
-     "Jumlah FAT, pemakaian FDT existing (COLO) dalam radius, usulan FDT baru, dan link budget"),
-    ("seranta:pasca_desain_fdt_fat_code", "3. Pasca-Desain: Kode FDT-FAT, Tabel Closure + QC",
-     "Ekspor desain otomatis -> tabel kode FDT-FAT, tabel core closure berwarna, dan QC pasca-desain"),
-    ("seranta:qc_apd_pasca_desain", "4. QC APD Pasca-Desain (aturan paket APD + kualitas jaringan)",
-     "Ekspor desain / KMZ APD -> 22 aturan QC dengan laporan HTML yang menjelaskan setiap temuan"),
+    ("seranta:buat_input_desain_apd", "1. Survey QC && Design Input",
+     "Pick a survey folder (homepass spreadsheet + KMZ): checks the survey and prepares the auto-design input"),
+    ("seranta:alokasi_fdt_fat", "2. FDT && FAT Allocation",
+     "Pick a checked cluster folder: estimates FATs, reuse of existing FDTs and new FDTs, with a link budget"),
+    ("seranta:pasca_desain_fdt_fat_code", "3. Post-Design Tables",
+     "Pick the auto-design output folder: FDT-FAT code table, colour-coded closure tables and post-design checks"),
+    ("seranta:qc_apd_pasca_desain", "4. Design Package QC",
+     "Pick the final design folder or KMZ: rule-based QC with a plain-language report"),
 ]
 
 
@@ -58,8 +57,8 @@ class SerantaPlugin:
         self.initProcessing()
         for i, (alg, label, tip) in enumerate(TOOLS):
             self._add(label, tip, lambda checked=False, a=alg: self.run(a), toolbar=(i == 0))
-        self._add("Navigator QC (temuan interaktif)",
-                  "Daftar temuan per kategori; klik untuk langsung menuju lokasi masalah di peta", self.show_nav,
+        self._add("QC Findings Navigator",
+                  "Browse findings by category and zoom to each one on the map", self.show_nav,
                   toolbar=True, icon=QIcon(os.path.join(HERE, "icon_nav.png")))
         try:
             from .qc_navigator import QcNavigator, RIGHT_DOCK
@@ -69,8 +68,7 @@ class SerantaPlugin:
             self.nav.hide()
         except Exception:
             self.nav = None
-        self._add("Handbook Seranta", "Panduan lengkap: arti setiap isian, data yang dibutuhkan, hasil, dan arti tiap temuan", self.guide)
-        self._add("Tentang dan lisensi", "Versi, pencipta, dan lisensi", self.about)
+        self._add("About Seranta", "Version, author and licence", self.about)
         self._welcome()
 
     def _welcome(self):
@@ -82,7 +80,7 @@ class SerantaPlugin:
         try:
             self.iface.messageBar().pushInfo(
                 "Seranta",
-                "Terpasang. Buka menu Vector > Seranta > Handbook untuk mulai, atau klik ikon Seranta di toolbar.")
+                "Installed. Open Vector > Seranta and pick a tool; each tool only needs a folder.")
         except Exception as _e:
             _log.note(_e)
 
@@ -130,17 +128,14 @@ class SerantaPlugin:
         import processing
         processing.execAlgorithmDialog(alg, {})
 
-    def guide(self):
-        QDesktopServices.openUrl(QUrl.fromLocalFile(os.path.join(HERE, "help", "handbook.html")))
-
     def about(self):
         from qgis.PyQt.QtWidgets import QMessageBox
         from .buat_input_desain import __version__, __author__, integrity_status
         QMessageBox.about(
             self.iface.mainWindow(), "Seranta",
-            "<b>Seranta&trade; - FTTH Design Assistant</b> v%s<br>Pencipta: %s<br>Integritas file: %s<br><br>"
-            "Menyiapkan input desain otomatis, QC desain FTTH per kategori (homepass, tiang, jalur, boundary, FINDIM, colo, "
-            "BAKP), navigator temuan interaktif, dan estimasi alokasi FDT/FAT.<br><br>Lisensi GNU GPL v2 atau lebih baru. Hak cipta tetap pada pencipta; "
-            "salinan dan modifikasi wajib mencantumkan nama pencipta dan lisensi yang sama. "
-            "Seranta&trade; adalah merek milik Joseph Edward Timothy Siahaan."
-            % (__version__, __author__, integrity_status()))
+            "<b>Seranta&trade; - FTTH Design Assistant</b> v%s<br>Author: %s<br>File integrity: %s<br><br>"
+            "Four one-folder tools for FTTH/GPON access networks: survey QC and design input, FDT/FAT allocation, "
+            "post-design tables, and design package QC. Reports are written in Indonesian.<br><br>"
+            "Licence: GNU GPL v2 or later. Copies and modifications must keep the author's name and the same licence. "
+            "Seranta&trade; is a trademark of Joseph Edward Timothy Siahaan."
+            % (__version__, __author__, integrity_status(en=True)))

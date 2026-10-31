@@ -34,7 +34,7 @@ from . import qc_core as Q
 from . import qc_paket as P
 
 _E = _h.escape
-STATUS_OPTS = ["AUTO (dari nama/atribut: COLO/EXISTING atau NEW)", "COLO", "NEW", "UNKNOWN (belum diputuskan)"]
+STATUS_OPTS = ["AUTO (from names/attributes: COLO/EXISTING or NEW)", "COLO", "NEW", "UNKNOWN (not decided yet)"]
 STATUS_VAL = ["AUTO", "COLO", "NEW", "UNKNOWN"]
 
 
@@ -48,7 +48,7 @@ def layer_records(path_or_layer, feedback=None):
     lyr = path_or_layer if isinstance(path_or_layer, QgsVectorLayer) else QgsVectorLayer(path_or_layer, "x", "ogr")
     if not lyr.isValid():
         if feedback:
-            feedback.reportError("Layer tidak terbaca: %s" % path_or_layer, fatalError=False)
+            feedback.reportError("Layer not readable: %s" % path_or_layer, fatalError=False)
         return []
     wgs = QgsCoordinateReferenceSystem("EPSG:4326")
     ct = None
@@ -112,7 +112,7 @@ def read_package(path, label, feedback=None):
                         Q.read_layer_records(net, kinds[gt], sub, p)
         except Exception as e:
             if feedback:
-                feedback.reportError("Paket %s: %s tidak terbaca (%s)" % (label, os.path.basename(p), e), fatalError=False)
+                feedback.reportError("%s package: %s not readable (%s)" % (label, os.path.basename(p), e), fatalError=False)
     return net
 
 
@@ -205,7 +205,7 @@ def read_points_any(path, feedback=None):
             pts = [g for a, gt, g in layer_records(path, feedback) if gt == "point"]
     except Exception as e:
         if feedback:
-            feedback.reportError("Tiang referensi tidak terbaca (%s): %s" % (os.path.basename(path), e), fatalError=False)
+            feedback.reportError("Reference poles not readable (%s): %s" % (os.path.basename(path), e), fatalError=False)
     return pts
 
 
@@ -263,7 +263,7 @@ class QcApdStyle(B.QgsProcessingLayerPostProcessorInterface):
             layer.triggerRepaint()
         except Exception as e:
             if feedback:
-                feedback.reportError("Gaya QC APD tidak diterapkan: %s" % e, fatalError=False)
+                feedback.reportError("QC layer style not applied: %s" % e, fatalError=False)
 
 
 class QcApd(QgsProcessingAlgorithm):
@@ -281,13 +281,13 @@ class QcApd(QgsProcessingAlgorithm):
         return "qc_apd_pasca_desain"
 
     def displayName(self):
-        return self.tr("4. QC APD Pasca-Desain (aturan paket APD + kualitas jaringan)")
+        return self.tr("4. Design Package QC")
 
     def group(self):
-        return ""
+        return self.tr("FTTH Design")
 
     def groupId(self):
-        return ""
+        return "ftth_design"
 
     def icon(self):
         try:
@@ -298,48 +298,53 @@ class QcApd(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         return self.tr(
-            "<p><b>QC desain APD setelah desain otomatis</b> sesuai Handbook KMZ (34 kasus QC) dan spesifikasi pembaruan 16 poin.</p>"
-            "<p>Isi <b>folder output desain otomatis</b> (net_nodes, net_endpoints, net_cables, net_ServiceAreasVoronoi, "
-            "net_SpliceClosure) dan/atau <b>KMZ APD final</b>. Opsional: paket Feeder & Distribusi + status FDT "
-            "(COLO/NEW), BOM/Daily FTTH, layer rel/tol, profil standar (splitter 1x4 / 1x8 / regulasi ketat) atau file .sdproj.</p>"
-            "<p>Setiap aturan berstatus <b>PASS</b>, <b>ERROR</b> (wajib diperbaiki), <b>WARNING</b> (perlu ditinjau), "
-            "<b>INFO</b>, atau <b>UNVERIFIED</b> (data belum cukup - <u>tidak dihitung lolos</u>). Hasil: folder "
-            "<code>QC_APD</code> (shp per aturan, CSV, JSON, HTML) dan panel <b>Navigator QC</b> untuk menelusuri "
-            "dan memberi status review (verified / false positive / approved exception / resolved).</p>")
+            "<p><b>How to use</b>: pick the <b>design folder</b> (auto-design export net_*.shp and/or the final "
+            "design KMZ) and click <b>Run</b>. Code tables, splice plan and bill of materials in the folder are found "
+            "automatically.</p>"
+            "<p><b>Checks</b>: served status, FAT coverage, cable ends and loops, FDT/FAT hierarchy and capacity, "
+            "FAT-homepass distance, codes, devices on poles, spans, idle poles, slack, KMZ conventions and the design "
+            "package rules. Every rule reports <b>PASS</b>, <b>ERROR</b>, <b>WARNING</b>, <b>INFO</b> or "
+            "<b>UNVERIFIED</b> (not enough data; never counted as a pass).</p>"
+            "<p><b>Output</b> (subfolder <code>QC_APD</code>): one layer per rule, CSV, JSON and an HTML report "
+            "(in Indonesian); browse findings with <b>Vector &rsaquo; Seranta &rsaquo; QC Findings Navigator</b>.</p>"
+            "<p><b>Advanced</b> holds the optional inputs (design KMZ, standard profile, FDT status, feeder and "
+            "distribution packages, bill of materials, code tables, splice plan, reference poles).</p>")
 
     def initAlgorithm(self, config=None):
+        # Form utama hanya 1 isian (folder desain); sisanya di "Advanced".
         F, FO = B.FILE_BEHAVIOR, B.FOLDER_BEHAVIOR
-        self.addParameter(QgsProcessingParameterFile(self.AUTODESIGN, self.tr("1. Folder output desain otomatis (net_*.shp)"),
-                                                     behavior=FO, optional=True))
-        self.addParameter(QgsProcessingParameterFile(self.APD, self.tr("2. KMZ APD final (opsional bila 1 diisi)"),
-                                                     behavior=F, optional=True, fileFilter="KMZ/KML (*.kmz *.kml)"))
+        self.addParameter(QgsProcessingParameterFile(
+            self.AUTODESIGN, self.tr("Design folder (auto-design export net_*.shp and/or final design KMZ)"), behavior=FO))
         profs = Q.load_profiles()
         self._pids = list(profs)
-        self.addParameter(QgsProcessingParameterEnum(self.PROFILE, self.tr("3. Profil standar QC"),
-                                                     options=["%s - %s" % (k, v.get("nama", "")) for k, v in profs.items()],
-                                                     defaultValue=0))
-        self.addParameter(QgsProcessingParameterEnum(self.STATUS, self.tr("4. Status FDT (COLO/NEW)"),
-                                                     options=STATUS_OPTS, defaultValue=0))
-        self.addParameter(QgsProcessingParameterFile(self.FEEDER, self.tr("5. Paket Feeder (KMZ atau folder; kosong = UNVERIFIED)"),
-                                                     behavior=F, optional=True, fileFilter="Data (*.kmz *.kml *.shp *.gpkg)"))
-        self.addParameter(QgsProcessingParameterFile(self.DIST, self.tr("6. Paket Distribusi (KMZ atau folder; kosong = pakai data 1/2)"),
-                                                     behavior=F, optional=True, fileFilter="Data (*.kmz *.kml *.shp *.gpkg)"))
-        self.addParameter(QgsProcessingParameterFile(self.BOM, self.tr("7. BOM / Daily FTTH (.xlsx/.csv; kosong = cari otomatis)"),
-                                                     behavior=F, optional=True, fileFilter="BOM (*.xlsx *.xlsm *.csv)"))
-        self.addParameter(QgsProcessingParameterFile(self.CODES, self.tr("8. Tabel kode FDT/FAT (.xlsx/.csv; kosong = cari otomatis)"),
-                                                     behavior=F, optional=True, fileFilter="Tabel (*.xlsx *.csv)"))
-        self.addParameter(QgsProcessingParameterFile(self.SPLICE, self.tr("9. Splice Plan (.xlsx; kosong = cari otomatis)"),
-                                                     behavior=F, optional=True, fileFilter="Spreadsheet (*.xlsx)"))
-        self.addParameter(QgsProcessingParameterFile(self.POLEREF, self.tr("10. Tiang existing referensi kota (KMZ/SHP/CSV; kosong = UNVERIFIED)"),
-                                                     behavior=F, optional=True, fileFilter="Data (*.kmz *.kml *.shp *.gpkg *.csv)"))
-        self.addParameter(QgsProcessingParameterFile(self.MASTER, self.tr("11. Rekap kode FDT / attributes (.xlsx/.csv; kosong = UNVERIFIED)"),
-                                                     behavior=F, optional=True, fileFilter="Tabel (*.xlsx *.csv)"))
-        self.addParameter(QgsProcessingParameterBoolean(self.OPEN, self.tr("Buka laporan HTML setelah selesai"), defaultValue=True))
-        adv = [QgsProcessingParameterFile(self.REF, self.tr("Folder data referensi (jaringan existing) untuk cek kode FDT dipakai proyek lain"),
-                                          behavior=FO, optional=True),QgsProcessingParameterVectorLayer(self.OBST, self.tr("Layer rel/tol/hambatan (crossing)"), optional=True),
-               QgsProcessingParameterFile(self.SDPROJ, self.tr("Config desain otomatis .sdproj (menimpa angka profil)"), behavior=F,
-                                          optional=True, fileFilter="desain otomatis (*.sdproj)"),
-               QgsProcessingParameterFile(self.OUTDIR, self.tr("Folder hasil (kosong = di folder data)"), behavior=FO, optional=True)]
+        adv = [QgsProcessingParameterFile(self.APD, self.tr("Final design KMZ (empty = found in the design folder)"),
+                                          behavior=F, optional=True, fileFilter="KMZ/KML (*.kmz *.kml)"),
+               QgsProcessingParameterEnum(self.PROFILE, self.tr("QC standard profile"),
+                                          options=["%s - %s" % (k, v.get("name_en") or v.get("nama", "")) for k, v in profs.items()],
+                                          defaultValue=0),
+               QgsProcessingParameterEnum(self.STATUS, self.tr("FDT status (colocated or new)"),
+                                          options=STATUS_OPTS, defaultValue=0),
+               QgsProcessingParameterFile(self.FEEDER, self.tr("Feeder package (KMZ or folder; empty = UNVERIFIED)"),
+                                          behavior=F, optional=True, fileFilter="Data (*.kmz *.kml *.shp *.gpkg)"),
+               QgsProcessingParameterFile(self.DIST, self.tr("Distribution package (KMZ or folder; empty = the design above)"),
+                                          behavior=F, optional=True, fileFilter="Data (*.kmz *.kml *.shp *.gpkg)"),
+               QgsProcessingParameterFile(self.BOM, self.tr("Bill of materials (.xlsx/.csv; empty = found automatically)"),
+                                          behavior=F, optional=True, fileFilter="BOM (*.xlsx *.xlsm *.csv)"),
+               QgsProcessingParameterFile(self.CODES, self.tr("FDT/FAT code table (.xlsx/.csv; empty = found automatically)"),
+                                          behavior=F, optional=True, fileFilter="Table (*.xlsx *.csv)"),
+               QgsProcessingParameterFile(self.SPLICE, self.tr("Splice plan (.xlsx; empty = found automatically)"),
+                                          behavior=F, optional=True, fileFilter="Spreadsheet (*.xlsx)"),
+               QgsProcessingParameterFile(self.POLEREF, self.tr("Reference existing poles (KMZ/SHP/CSV; empty = UNVERIFIED)"),
+                                          behavior=F, optional=True, fileFilter="Data (*.kmz *.kml *.shp *.gpkg *.csv)"),
+               QgsProcessingParameterFile(self.MASTER, self.tr("FDT code register (.xlsx/.csv; empty = UNVERIFIED)"),
+                                          behavior=F, optional=True, fileFilter="Table (*.xlsx *.csv)"),
+               QgsProcessingParameterBoolean(self.OPEN, self.tr("Open the HTML report when finished"), defaultValue=True),
+               QgsProcessingParameterFile(self.REF, self.tr("Reference data folder (existing network) to check FDT codes used by other projects"),
+                                          behavior=FO, optional=True),
+               QgsProcessingParameterVectorLayer(self.OBST, self.tr("Railway/toll road/obstacle layer (crossings)"), optional=True),
+               QgsProcessingParameterFile(self.SDPROJ, self.tr("Auto-design .sdproj config (overrides profile values)"), behavior=F,
+                                          optional=True, fileFilter="Auto-design config (*.sdproj)"),
+               QgsProcessingParameterFile(self.OUTDIR, self.tr("Output folder (empty = inside the design folder)"), behavior=FO, optional=True)]
         for p in adv:
             try:
                 p.setFlags(p.flags() | B.Qgis.ProcessingParameterFlag.Advanced)
@@ -363,12 +368,12 @@ class QcApd(QgsProcessingAlgorithm):
         autodesign = self.parameterAsFile(parameters, self.AUTODESIGN, context)
         apd = self.parameterAsFile(parameters, self.APD, context)
         if not autodesign and not apd:
-            raise QgsProcessingException("Isi folder output desain otomatis (1) atau KMZ APD final (2).")
+            raise QgsProcessingException("Pick the design folder (auto-design export or final design KMZ).")
         base = autodesign if autodesign and os.path.isdir(autodesign) else os.path.dirname(apd)
         if not apd and autodesign:
             apd = find_apd_kmz(autodesign)
             if apd:
-                feedback.pushInfo("KMZ APD ditemukan otomatis: %s" % os.path.basename(apd))
+                feedback.pushInfo("Design KMZ found automatically: %s" % os.path.basename(apd))
         profs = Q.load_profiles()
         pids = list(profs)
         pid = pids[min(self.parameterAsEnum(parameters, self.PROFILE, context), len(pids) - 1)]
@@ -379,36 +384,36 @@ class QcApd(QgsProcessingAlgorithm):
         if sd and os.path.isfile(sd):
             over = Q.sdproj_overrides(sd)
             prof = Q.apply_overrides(prof, over, os.path.basename(sd))
-            feedback.pushInfo("Profil ditimpa dari %s: %s" % (os.path.basename(sd), over))
+            feedback.pushInfo("Profile values overridden from %s: %s" % (os.path.basename(sd), over))
         status = STATUS_VAL[self.parameterAsEnum(parameters, self.STATUS, context)]
 
         # ---- data utama ----
         if not apd:
             apd = find_apd_kmz(base)
             if apd:
-                feedback.pushInfo("KMZ APD ditemukan otomatis: %s" % os.path.basename(apd))
+                feedback.pushInfo("Design KMZ found automatically: %s" % os.path.basename(apd))
         main = Q.Net(project_label(base))
         kn = None
         lay = Q.find_autodesign_layers(autodesign) if autodesign else {}
         for kind, pth in lay.items():
-            feedback.pushInfo("Ekspor desain %-9s: %s" % (kind, os.path.basename(pth)))
+            feedback.pushInfo("Design export %-9s: %s" % (kind, os.path.basename(pth)))
             Q.read_layer_records(main, kind, layer_records(pth, feedback), pth)
         if apd:
             kn = Q.read_kmz(apd, Q.Net("APD"))
-            feedback.pushInfo("KMZ APD: %d node, %d HP, %d kabel, %d coverage, %d tiang, %d closure, %d folder"
+            feedback.pushInfo("Design KMZ: %d nodes, %d HP, %d cables, %d coverage areas, %d poles, %d closures, %d folders"
                               % (len(kn.nodes), len(kn.endpoints), len(kn.cables), len(kn.polys), len(kn.poles),
                                  len(kn.closures), len(kn.folders)))
             pr0 = kn.proj()
             merged = P.unify_nodes(kn, Q.pv(prof, "fdt_same_m", 30.0), pr0)
             if merged:
-                feedback.pushInfo("Perangkat di folder Feeder & Distribution digabung sebagai satu: %s" % ", ".join(sorted(set(merged))))
+                feedback.pushInfo("Devices in both Feeder and Distribution folders merged as one: %s" % ", ".join(sorted(set(merged))))
             autodesign_net = None
             if "nodes" in main.has:
                 autodesign_net = Q.Net("ekspor")
                 autodesign_net.nodes = [dict(n) for n in main.nodes]
                 n_code = P.enrich_codes(main, kn, pr0)
                 if n_code:
-                    feedback.pushInfo("Kode FDT/FAT dari KMZ dipasangkan ke %d node hasil ekspor (lokasi sama)" % n_code)
+                    feedback.pushInfo("FDT/FAT codes from the KMZ matched to %d exported nodes (same location)" % n_code)
             for k in ("nodes", "endpoints", "cables", "polys", "poles", "closures"):
                 if k not in main.has and getattr(kn, k):
                     setattr(main, k, getattr(kn, k))
@@ -420,7 +425,7 @@ class QcApd(QgsProcessingAlgorithm):
         if not main.poles:
             pole = self._find_pole(base)
             if pole:
-                feedback.pushInfo("Tiang dari hasil alat 1: %s" % os.path.basename(pole))
+                feedback.pushInfo("Poles from tool 1 output: %s" % os.path.basename(pole))
                 Q.read_kmz(pole, main)
         obst = self.parameterAsVectorLayer(parameters, self.OBST, context) if self.OBST in parameters else None
         if obst is not None:
@@ -430,14 +435,14 @@ class QcApd(QgsProcessingAlgorithm):
                 elif gt == "polygon":
                     main.markers.append({"kind": "obstacle", "pts": g[0], "name": str(a.get("name") or obst.name())})
         if not any(getattr(main, k) for k in ("nodes", "endpoints", "cables")):
-            raise QgsProcessingException("Tidak ada data jaringan (net_nodes/net_endpoints/net_cables atau isi KMZ APD) yang "
-                                         "terbaca di %s" % (autodesign or apd))
+            raise QgsProcessingException("No network data (net_nodes/net_endpoints/net_cables or design KMZ content) "
+                                         "readable in %s" % (autodesign or apd))
         fp = self.parameterAsFile(parameters, self.FEEDER, context)
         dp = self.parameterAsFile(parameters, self.DIST, context)
         feeder = read_package(fp, "Feeder", feedback) if fp else None
         dist = read_package(dp, "Distribusi", feedback) if dp else main
         if not dp:
-            feedback.pushInfo("Paket Distribusi = data APD/desain otomatis yang diperiksa (isian 6 kosong)")
+            feedback.pushInfo("Distribution package = the checked design data (no separate package given)")
         bom = self.parameterAsFile(parameters, self.BOM, context) or find_bom(base)
         if bom:
             feedback.pushInfo("BOM: %s" % os.path.basename(bom))
@@ -465,8 +470,8 @@ class QcApd(QgsProcessingAlgorithm):
         if locked:
             # file masih dibuka aplikasi lain (mis. jendela QGIS kedua): jangan menulis setengah-setengah
             new_dir = out_dir + "_" + _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
-            feedback.reportError("%d file di %s masih terkunci aplikasi lain (mis. QGIS lain yang membuka layer QC "
-                                 "ini); hasil ditulis ke %s" % (len(locked), out_dir, new_dir), fatalError=False)
+            feedback.reportError("%d files in %s are locked by another application (e.g. another QGIS with these QC layers "
+                                 "open); results written to %s" % (len(locked), out_dir, new_dir), fatalError=False)
             os.makedirs(new_dir, exist_ok=True)
             out_dir = new_dir
         loads = self._write_layers(results, out_dir, context, feedback)
@@ -484,28 +489,28 @@ class QcApd(QgsProcessingAlgorithm):
             write_xlsx(xlsx, results, prof, meta)
         except OSError as e:          # mis. masih terbuka di aplikasi spreadsheet
             alt = os.path.join(out_dir, "QC_APD_TEMUAN_%s.xlsx" % _dt.datetime.now().strftime("%H%M%S"))
-            feedback.reportError("QC_APD_TEMUAN.xlsx sedang dibuka aplikasi lain (%s); daftar kerja ditulis ke %s"
+            feedback.reportError("QC_APD_TEMUAN.xlsx is open in another application (%s); worklist written to %s"
                                  % (e, os.path.basename(alt)), fatalError=False)
             write_xlsx(alt, results, prof, meta)
         html = os.path.join(out_dir, "QC_APD.html")
         try:
-            feedback.setProgressText("Gambar peta temuan dan laporan Word")
+            feedback.setProgressText("Finding map pictures and Word report")
             meta["word"], meta["snaps"] = write_word(os.path.join(out_dir, "QC_APD_LAPORAN.docx"), results, prof, meta, main,
                                                      out_dir)
-            feedback.pushInfo("Laporan Word: %s (gambar peta %d)" % (meta["word"], len(meta["snaps"])))
+            feedback.pushInfo("Word report: %s (%d map pictures)" % (meta["word"], len(meta["snaps"])))
         except Exception as e:
-            feedback.reportError("Gambar temuan / laporan Word tidak dibuat: %s" % e, fatalError=False)
+            feedback.reportError("Finding pictures / Word report not created: %s" % e, fatalError=False)
         self._html(html, results, prof, meta, main)
         ov = Q.overall(results)
         feedback.pushInfo("")
-        feedback.pushInfo("STATUS KESELURUHAN: %s  (profil %s, versi aturan %s)" % (ov, prof["profile_id"], prof["rule_version"]))
+        feedback.pushInfo("OVERALL STATUS: %s  (profile %s, rule version %s)" % (ov, prof["profile_id"], prof["rule_version"]))
         for r in results:
             c = r.counts()
             feedback.pushInfo("  %-11s %-14s %s%s" % (r.status, r.rule_id, ", ".join("%s %d" % kv for kv in sorted(c.items())),
                                                     (" | " + r.unverified) if r.unverified else ""))
         if n_keep:
-            feedback.pushInfo("%d status review dari run sebelumnya dipertahankan" % n_keep)
-        feedback.pushInfo("Hasil: %s" % out_dir)
+            feedback.pushInfo("%d review statuses kept from the previous run" % n_keep)
+        feedback.pushInfo("Output: %s" % out_dir)
         for k, (pth, nm) in enumerate(loads):
             try:
                 det = QgsProcessingContext.LayerDetails(nm, context.project(), nm)
@@ -519,7 +524,7 @@ class QcApd(QgsProcessingAlgorithm):
                 det.setPostProcessor(pp)
                 context.addLayerToLoadOnCompletion(pth, det)
             except Exception as e:
-                feedback.reportError("Layer %s tidak dimuat: %s" % (nm, e), fatalError=False)
+                feedback.reportError("Layer %s not loaded: %s" % (nm, e), fatalError=False)
         self._open = html if (self.parameterAsBool(parameters, self.OPEN, context) if self.OPEN in parameters else False) else None
         return {"STATUS": ov, "OUTPUT": out_dir}
 
@@ -561,21 +566,21 @@ class QcApd(QgsProcessingAlgorithm):
         if codes_p:
             pk["codes"], nts = P.read_code_table(codes_p, B.read_xlsx)
             for t in nts:
-                feedback.pushInfo("Tabel kode : " + t)
+                feedback.pushInfo("Code table : " + t)
             if not pk["codes"]:
                 pk["codes"] = None
         else:
-            feedback.pushInfo("Tabel kode FDT/FAT tidak ditemukan (QC-03 UNVERIFIED)")
+            feedback.pushInfo("FDT/FAT code table not found (QC-03 UNVERIFIED)")
         if splice_p:
             pk["splice"], nts = P.read_splice_plan(splice_p, B.read_xlsx)
             for t in nts:
                 feedback.pushInfo("Splice Plan: " + t)
         if master_p:
             pk["master"], pk["master_src"] = P.read_code_master(master_p, B.read_xlsx), os.path.basename(master_p)
-            feedback.pushInfo("Rekap kode : %d kode FDT di %s" % (len(pk["master"]), pk["master_src"]))
+            feedback.pushInfo("Code register: %d FDT codes in %s" % (len(pk["master"]), pk["master_src"]))
         if ref_p:
             pk["ref_pts"], pk["ref_src"] = read_points_any(ref_p, feedback), os.path.basename(ref_p)
-            feedback.pushInfo("Tiang referensi: %d titik dari %s" % (len(pk["ref_pts"]), pk["ref_src"]))
+            feedback.pushInfo("Reference poles: %d points from %s" % (len(pk["ref_pts"]), pk["ref_src"]))
         ref_dir = par(self.REF)
         if not ref_dir:
             try:
@@ -596,9 +601,9 @@ class QcApd(QgsProcessingAlgorithm):
                             dl.setdefault(str(e["code"]).strip().upper(), []).append((e["x"], e["y"]))
                 pk["dl_codes"] = dl
                 pk["_src"]["designlite"] = ", ".join(os.path.basename(x) for x in dl_files) or ref_dir
-                feedback.pushInfo("Kode FDT jaringan existing di sekitar: %d" % len(dl))
+                feedback.pushInfo("Existing-network FDT codes nearby: %d" % len(dl))
             except Exception as e:
-                feedback.reportError("Data jaringan existing tidak terbaca: %s" % e, fatalError=False)
+                feedback.reportError("Existing-network data not readable: %s" % e, fatalError=False)
         return pk
 
     @staticmethod
@@ -670,7 +675,7 @@ class QcApd(QgsProcessingAlgorithm):
                                      f.get("scope", ""), B._short(f.get("evidence", ""), 254), B._short(f.get("source_file", ""), 80)])
                 loads.append((path, "Temuan non-spasial (BOM/KMZ/data) (%d)" % len(nogeo)))
             except OSError as e:
-                feedback.reportError("Tabel temuan non-spasial tidak ditulis: %s" % e, fatalError=False)
+                feedback.reportError("Non-spatial findings table not written: %s" % e, fatalError=False)
         for r in results:
             by = {}
             for f in r.findings:
@@ -715,7 +720,7 @@ class QcApd(QgsProcessingAlgorithm):
                         _log.note(_e)
                     loads.append((path, "%s %s (%d)" % (sev, rid, len(lst))))
                 except Exception as e:
-                    feedback.reportError("%s tidak ditulis: %s" % (fn, e), fatalError=False)
+                    feedback.reportError("%s not written: %s" % (fn, e), fatalError=False)
         return loads
 
     def _html(self, path, results, prof, meta, net):

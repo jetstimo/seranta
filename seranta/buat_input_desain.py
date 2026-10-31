@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.6.2"
+__version__ = "3.7.0"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -112,14 +112,16 @@ OVERWRITE_LAYER = _enum("QgsVectorFileWriter.ActionOnExistingFile.CreateOrOverwr
 
 
 # ---------- Identitas & integritas (jejak pencipta di setiap laporan) ----------
-def integrity_status():
-    """'ASLI' bila isi file sama dengan sidik jari rilis (integrity.json), 'DIMODIFIKASI' bila berbeda."""
+def integrity_status(en=False):
+    """'ASLI' bila isi file sama dengan sidik jari rilis (integrity.json), 'DIMODIFIKASI' bila berbeda.
+    en=True: teks Inggris untuk dialog About (laporan tetap berbahasa Indonesia)."""
     import hashlib
     import json
     here = os.path.dirname(os.path.abspath(__file__))
     meta = os.path.join(here, "integrity.json")
     if not os.path.exists(meta):
-        return "paket rilis (keaslian dijamin repositori plugin QGIS)"
+        return ("release package (authenticity guaranteed by the QGIS plugin repository)" if en
+                else "paket rilis (keaslian dijamin repositori plugin QGIS)")
     try:
         with open(meta, encoding="utf-8") as fh:
             exp = json.load(fh)
@@ -130,9 +132,11 @@ def integrity_status():
             with open(os.path.join(here, fn), "rb") as fh:
                 if hashlib.sha256(fh.read().replace(b"\r\n", b"\n")).hexdigest() != h:
                     bad.append(fn)
+        if en:
+            return "original" if not bad else "modified (%s)" % ", ".join(bad)
         return "ASLI" if not bad else "DIMODIFIKASI (%s)" % ", ".join(bad)
     except Exception as e:
-        return "tidak diverifikasi (%s)" % e
+        return ("not verified (%s)" if en else "tidak diverifikasi (%s)") % e
 
 
 # ---------- Pembaca KMZ/KML tanpa GDAL: membaca struktur folder lengkap ----------
@@ -165,7 +169,7 @@ def kml_root(path):
         with zipfile.ZipFile(path) as z:
             names = [n for n in z.namelist() if n.lower().endswith(".kml")]
             if not names:
-                raise QgsProcessingException("Tidak ada file .kml di dalam %s" % path)
+                raise QgsProcessingException("No .kml file inside %s" % path)
             name = "doc.kml" if "doc.kml" in names else names[0]
             data = z.read(name)
     else:
@@ -368,12 +372,12 @@ _DERIVED = re.compile(r"^(poles?|tiang|cables?|routes?|route ?cable|roads?|jalur
 
 def _choose(folder, cands, keyword, kind):
     if not cands:
-        raise QgsProcessingException("Tidak ada file %s di folder cluster: %s" % (kind, folder))
+        raise QgsProcessingException("No %s file in the cluster folder: %s" % (kind, folder))
     pref = [f for f in cands if keyword and keyword in f.upper()]
     pick = pref if pref else cands
     if len(pick) > 1:
         raise QgsProcessingException(
-            "Ada lebih dari satu file %s di folder cluster: %s. Pilih salah satu di isian opsional %s."
+            "More than one %s file in the cluster folder: %s. Choose one under Advanced (%s)."
             % (kind, ", ".join(sorted(pick)), kind))
     return os.path.join(folder, pick[0])
 
@@ -668,7 +672,7 @@ def read_funnel(paths, extent, feedback=None):
     out = []
     for path in paths:
         if feedback:
-            feedback.pushInfo("Membaca Funnel: %s" % os.path.basename(path))
+            feedback.pushInfo("Reading service boundaries: %s" % os.path.basename(path))
         with _kml_stream(path) as src:
             stack = []
             for ev, el in ET.iterparse(src, events=("start", "end")):  # nosec B314
@@ -834,7 +838,7 @@ def read_design_lite(paths, extent, feedback=None):
     out = []
     for path in paths:
         if feedback:
-            feedback.pushInfo("Membaca Design Lite: %s" % os.path.basename(path))
+            feedback.pushInfo("Reading existing network: %s" % os.path.basename(path))
         with _kml_stream(path) as src:
             stack = []
             for ev, el in ET.iterparse(src, events=("start", "end")):  # nosec B314
@@ -946,7 +950,7 @@ def resolve_profile(idx, ref_dir, feedback=None):
                 prof["src"] = os.path.basename(pth)
             except Exception as e:
                 if feedback:
-                    feedback.reportError("Config desain otomatis %s tidak terbaca: %s" % (os.path.basename(cands[-1]), e), fatalError=False)
+                    feedback.reportError("Auto-design config %s not readable: %s" % (os.path.basename(cands[-1]), e), fatalError=False)
     prof["max_spl"] = min(prof["max_spl"], max(1, prof["fdt_cap"] // prof["hp_per_spl"])) if prof["key"] != "P480" else prof["max_spl"]
     return prof
 
@@ -1040,7 +1044,7 @@ def cached_read(kind, path, extent, parser, feedback=None):
         idx = os.path.join(d, "index.json")
         if not os.path.exists(idx):
             if feedback:
-                feedback.pushInfo("Membuat cache %s (sekali per versi file, berikutnya jauh lebih cepat): %s"
+                feedback.pushInfo("Building %s cache (once per file version; later runs are much faster): %s"
                                   % (kind, os.path.basename(path)))
             recs = parser([path], _WORLD, feedback)
             tiles = {}
@@ -1074,7 +1078,7 @@ def cached_read(kind, path, extent, parser, feedback=None):
         return out
     except Exception as e:
         if feedback:
-            feedback.reportError("Cache %s tidak dipakai (%s); membaca langsung." % (kind, e), fatalError=False)
+            feedback.reportError("%s cache not used (%s); reading the file directly." % (kind, e), fatalError=False)
         return parser([path], extent, feedback)
 
 
@@ -1083,7 +1087,7 @@ def read_feeder(paths, extent, feedback=None):
     out = []
     for path in paths:
         if feedback:
-            feedback.pushInfo("Membaca Feeder: %s" % os.path.basename(path))
+            feedback.pushInfo("Reading feeder: %s" % os.path.basename(path))
         with _kml_stream(path) as src:
             stack = []
             for ev, el in ET.iterparse(src, events=("start", "end")):  # nosec B314
@@ -1986,7 +1990,7 @@ def load_attributes(path, feedback=None):
     fnd.sort(key=lambda n: -yr(n))
     pick = set(fnd[:1]) | {n for n in names if re.search(r"olt\s*cluster", n, re.IGNORECASE)}
     if feedback:
-        feedback.pushInfo("Membaca HPDB attributes (%s): %s" % (os.path.basename(path), ", ".join(sorted(pick))))
+        feedback.pushInfo("Reading area register (%s): %s" % (os.path.basename(path), ", ".join(sorted(pick))))
     sheets = dict(read_xlsx(path, want=lambda n: n in pick, max_empty=500))
     att = {"findim": [], "olt": {}, "sheets": sorted(pick)}
     for n in fnd[:1]:
@@ -2148,7 +2152,7 @@ class FunnelStyler(QgsProcessingLayerPostProcessorInterface):
             layer.triggerRepaint()
         except Exception as e:
             if feedback:
-                feedback.reportError("Gaya Funnel tidak diterapkan: %s" % e, fatalError=False)
+                feedback.reportError("Service boundary style not applied: %s" % e, fatalError=False)
 
 
 class FdtStyler(QgsProcessingLayerPostProcessorInterface):
@@ -2183,7 +2187,7 @@ class FdtStyler(QgsProcessingLayerPostProcessorInterface):
             layer.triggerRepaint()
         except Exception as e:
             if feedback:
-                feedback.reportError("Gaya FDT tidak diterapkan: %s" % e, fatalError=False)
+                feedback.reportError("FDT style not applied: %s" % e, fatalError=False)
 
 
 def style_qc_layer(layer):
@@ -2280,7 +2284,7 @@ class QcStyler(QgsProcessingLayerPostProcessorInterface):
             layer.triggerRepaint()
         except Exception as e:
             if feedback:
-                feedback.reportError("Gaya QC_TEMUAN tidak diterapkan: %s" % e, fatalError=False)
+                feedback.reportError("QC_TEMUAN style not applied: %s" % e, fatalError=False)
         try:
             root = QgsProject.instance().layerTreeRoot()
             node = root.findLayer(layer.id())
@@ -2337,7 +2341,7 @@ class PoleStyler(QgsProcessingLayerPostProcessorInterface):
             layer.triggerRepaint()
         except Exception as e:
             if feedback:
-                feedback.reportError("Gaya POLE tidak diterapkan: %s" % e, fatalError=False)
+                feedback.reportError("POLE style not applied: %s" % e, fatalError=False)
 
 
 class BuatInputDesain(QgsProcessingAlgorithm):
@@ -2359,22 +2363,22 @@ class BuatInputDesain(QgsProcessingAlgorithm):
     NAMING = "NAMING"
     EXIST_SPAN = "EXIST_SPAN"          # lama (<= 3.1.x), tidak dipakai lagi
     SPAN_SCOPE = "SPAN_SCOPE"
-    SPAN_SCOPE_OPTS = ["NP-NP dan NP-EP (disarankan: posisi NP bisa digeser desainer)", "Hanya NP-NP"]
+    SPAN_SCOPE_OPTS = ["NP-NP and NP-EP (recommended: the designer can move NP poles)", "NP-NP only"]
     HP_TOL = "HP_TOL"
     BAKP = "BAKP"
     BAKP_FILE = "BAKP_FILE"
     QC_PROF = "QC_PROF"
-    QC_PROF_OPTS = ["Handbook internal: rentang > 60 m ERROR, 50-60 m WARNING regulasi daerah (disarankan)",
-                    "Perwal ketat: rentang > 50 m ERROR, ruang bebas kabel 6 m (mis. Pekalongan, Yogyakarta)"]
+    QC_PROF_OPTS = ["Internal rule: span > 60 m ERROR, 50-60 m WARNING for local regulation (recommended)",
+                    "Strict local regulation: span > 50 m ERROR, 6 m cable clearance"]
     COLO_BASIS = "COLO_BASIS"
-    COLO_BASIS_OPTS = ["Garis lurus FDT ke tiang cluster terdekat (titik masuk)",
-                       "Estimasi panjang kabel FDT ke HP terjauh (titik masuk + sepanjang jalur cluster)"]
+    COLO_BASIS_OPTS = ["Straight line from the FDT to the nearest cluster pole (entry point)",
+                       "Estimated cable length from the FDT to the farthest homepass (entry point + along the route)"]
     FUN_TOL = "FUN_TOL"
     CROSS = "CROSS"
     CROSS_DIR = "CROSS_DIR"
     GROUP = "GROUP"
-    NAMING_OPTS = ["Per wilayah: INPUT_<KODE>/<KODE>_HP.shp (aman untuk batch)",
-                   "Standar SOP: INPUT/HP.shp, POLE.kmz, ROADS.shp"]
+    NAMING_OPTS = ["Per cluster: INPUT_<CODE>/<CODE>_HP.shp (safe for batches)",
+                   "Fixed names: INPUT/HP.shp, POLE.kmz, ROADS.shp"]
 
     # ---------- metadata ----------
     def tr(self, s):
@@ -2387,7 +2391,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         return "buat_input_desain_apd"
 
     def displayName(self):
-        return self.tr("1. Siapkan Input Desain Otomatis + QC Survei")
+        return self.tr("1. Survey QC & Design Input")
 
     def group(self):
         return self.tr("FTTH Design")
@@ -2396,37 +2400,23 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         return "ftth_design"
 
     def shortDescription(self):
-        return self.tr("HPDB + KMZ vendor -> HP.shp, POLE.kmz, ROADS.shp untuk desain otomatis, plus QC 9 standar.")
+        return self.tr("Survey folder (homepass spreadsheet + KMZ) -> survey QC and auto-design input (HP, poles, roads).")
 
     def shortHelpString(self):
         return self.tr(
             "<p><b>%s</b> v%s &copy; %s</p>"
-            "<p><b>Cara pakai (3 langkah)</b></p><ol>"
-            "<li><b>Folder cluster</b>: pilih folder yang berisi file HPDB (*.xlsx) dan KMZ vendor. "
-            "Untuk banyak cluster sekaligus, pilih folder induknya.</li>"
-            "<li><b>Folder data referensi</b> (sekali saja, diingat): boundary/Funnel layanan (*FUNNEL*.kmz), "
-            "jaringan existing (DESIGN LITE*.kmz), HPDB attributes/FINDIM (*attributes*.xlsx), dan bila ada "
-            "config desain otomatis (*.sdproj); .kmz/.kml, boleh di subfolder. File terbaru dipilih otomatis. "
-            "Data ini milik tim, <b>tidak ikut di dalam plugin</b>: tiap pengguna perlu salinannya. "
-            "Bila kosong, Seranta mencari otomatis di sekitar folder cluster.</li>"
-            "<li>Klik <b>Run</b>. Ringkasan QC (HTML) terbuka otomatis; file input desain otomatis ada di subfolder "
-            "<code>INPUT_&lt;KODE&gt;</code>.</li></ol>"
-            "<p><b>Yang dicek (9 standar)</b>: 1 jarak HP-tiang &le; 50 m, 2 boundary/RFS/<b>BOUNDARY cluster saudara</b>, 3 wilayah sheet HP vs "
-            "FINDIM, 4 HPDB vs KMZ + HP duplikat (pasti &amp; kemungkinan &le; 5 m, <b>juga lintas cluster saudara</b>), 5 HP di luar Funnel, 6 status desain, "
-            "7 colo FDT existing (jarak + sisa splitter + total HP FDT), 8 <b>pengingat BAKP</b>, 9 jarak tiang NP "
-            "&le; 60 m <b>sepanjang jalur</b> (NP-NP &amp; NP-EP; EP-EP tidak dinilai; 50-60 m = info regulasi daerah).</p>"
-            "<p><b>Temuan per kategori</b>: folder <code>QC</code> berisi satu shp per jenis temuan (rentang tiang berupa "
-            "garis mengikuti jalur). Buka <b>Vector &rsaquo; Seranta &rsaquo; Navigator QC</b> lalu klik temuan untuk langsung "
-            "menuju lokasinya. Setelah itu jalankan <b>2. Alokasi FDT &amp; FAT</b> untuk estimasi FAT (HP/16) dan FDT.</p>"
-            "<p>Juga: tinggi kabel tengah bentang, tiang yang bisa dihapus, ujung jalur tanpa HP. Dasar teknis tiap "
-            "aturan ada di DASAR_ATURAN.md.</p>"
-            "<p>Pengaturan lain (penamaan, batas jarak, colo) ada di bagian <b>Advanced</b>; nilai bawaan sudah "
-            "sesuai praktik umum. Arti setiap isian dijelaskan di <b>Vector &gt; Seranta &gt; Handbook Seranta</b>.</p>"
+            "<p><b>How to use</b>: pick the <b>survey folder</b> (homepass spreadsheet + KMZ) and click <b>Run</b>. "
+            "Pick a parent folder to check many clusters at once. Everything else is found automatically.</p>"
+            "<p><b>Output</b> (subfolder <code>INPUT_&lt;CODE&gt;</code>): HP.shp, POLE.kmz and ROADS.shp for the "
+            "auto-design software, a QC summary (HTML, Word), review remarks (REMARKS.txt) and one finding layer per "
+            "category (open them with <b>Vector &rsaquo; Seranta &rsaquo; QC Findings Navigator</b>).</p>"
+            "<p><b>Checks</b>: homepass-to-pole distance, pole spans along the route, mid-span cable clearance, "
+            "homepass spreadsheet vs KMZ and duplicates (also across neighbouring clusters), service and cluster "
+            "boundaries, administrative area, colocation on existing FDTs, pole sheet, survey photos and the community "
+            "permit document.</p>"
+            "<p><b>Advanced</b> holds the optional settings (reference data folder, limits, naming); the defaults "
+            "follow common practice. Reports and remarks are written in Indonesian.</p>"
             % (__product__, __version__, __author__))
-
-    def helpUrl(self):
-        from qgis.PyQt.QtCore import QUrl
-        return QUrl.fromLocalFile(os.path.join(os.path.dirname(__file__), "help", "handbook.html")).toString()
 
     # ---------- parameters ----------
     def _adv(self, prm):
@@ -2435,9 +2425,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         self.addParameter(prm)
 
     def initAlgorithm(self, config=None):
-        # Form utama hanya 5 isian; sisanya di "Advanced" dengan nilai bawaan yang aman.
+        # Form utama hanya 1 isian (folder); sisanya di "Advanced" dengan nilai bawaan yang aman.
         self.addParameter(QgsProcessingParameterFile(
-            self.OUTDIR, self.tr("1. Folder cluster (berisi HPDB + KMZ) atau folder induk untuk banyak cluster"),
+            self.OUTDIR, self.tr("Survey folder (homepass spreadsheet + KMZ), or a parent folder for many clusters"),
             behavior=FOLDER_BEHAVIOR))
         try:                     # isi otomatis dengan folder referensi terakhir (juga dari versi lama)
             st_ = QgsSettings()
@@ -2446,80 +2436,81 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             last_ref = last_ref if last_ref and os.path.isdir(last_ref) else None
         except Exception:
             last_ref = None
-        self.addParameter(QgsProcessingParameterFile(
-            self.FUNNEL, self.tr("2. Folder data referensi tim: *FUNNEL*, DESIGN LITE, attributes (diingat; kosong = cari otomatis)"),
-            behavior=FOLDER_BEHAVIOR, optional=True, defaultValue=last_ref))
-        self.addParameter(QgsProcessingParameterEnum(
-            self.PROFILE, self.tr("3. Profil proyek (otomatis dari config desain otomatis .sdproj bila ada)"),
-            options=[pp["name"] for pp in PROFILES], defaultValue=0))
-        self.addParameter(QgsProcessingParameterEnum(
-            self.QC_PROF, self.tr("4. Standar aturan tiang (regulasi daerah)"), options=self.QC_PROF_OPTS, defaultValue=0))
-        self.addParameter(QgsProcessingParameterEnum(
-            self.BAKP, self.tr("Pengingat BAKP (izin warga)"), options=_bakp.MODES, defaultValue=0))
-        self.addParameter(QgsProcessingParameterBoolean(
-            self.OPEN_REPORT, self.tr("Buka ringkasan QC setelah selesai"), defaultValue=True))
-        self._adv(QgsProcessingParameterEnum(
-            self.NAMING, self.tr("Penamaan hasil"), options=self.NAMING_OPTS, defaultValue=0))
         self._adv(QgsProcessingParameterFile(
-            self.WORKDIR, self.tr("Salin juga ke folder kerja desain otomatis (tiap cluster punya subfolder sendiri)"),
+            self.FUNNEL, self.tr("Reference data folder: service boundaries, existing network, area register "
+                                 "(remembered; empty = search automatically)"),
+            behavior=FOLDER_BEHAVIOR, optional=True, defaultValue=last_ref))
+        self._adv(QgsProcessingParameterEnum(
+            self.PROFILE, self.tr("Design profile (taken from the auto-design .sdproj config when present)"),
+            options=[pp["name"] for pp in PROFILES], defaultValue=0))
+        self._adv(QgsProcessingParameterEnum(
+            self.QC_PROF, self.tr("Pole span rule"), options=self.QC_PROF_OPTS, defaultValue=0))
+        self._adv(QgsProcessingParameterEnum(
+            self.BAKP, self.tr("Community permit document check"), options=_bakp.MODES, defaultValue=0))
+        self._adv(QgsProcessingParameterBoolean(
+            self.OPEN_REPORT, self.tr("Open the QC summary when finished"), defaultValue=True))
+        self._adv(QgsProcessingParameterEnum(
+            self.NAMING, self.tr("Output file names"), options=self.NAMING_OPTS, defaultValue=0))
+        self._adv(QgsProcessingParameterFile(
+            self.WORKDIR, self.tr("Also copy to the auto-design working folder (one subfolder per cluster)"),
             behavior=FOLDER_BEHAVIOR, optional=True))
         self._adv(QgsProcessingParameterFile(
-            self.HPDB, self.tr("Opsional: file HPDB (kosongkan = dicari otomatis)"),
+            self.HPDB, self.tr("Homepass spreadsheet (empty = found automatically)"),
             behavior=FILE_BEHAVIOR, optional=True,
-            fileFilter="HPDB (*.xlsx *.xls *.csv)"))
+            fileFilter="Spreadsheet (*.xlsx *.xls *.csv)"))
         self._adv(QgsProcessingParameterFile(
-            self.CLUSTER_KMZ, self.tr("Opsional: KMZ cluster (kosongkan = dicari otomatis)"),
-            behavior=FILE_BEHAVIOR, optional=True,
-            fileFilter="KMZ/KML (*.kmz *.kml)"))
-        self._adv(QgsProcessingParameterFile(
-            self.POLE, self.tr("Lanjutan: KMZ tiang terpisah (menggantikan KMZ cluster)"),
+            self.CLUSTER_KMZ, self.tr("Cluster KMZ (empty = found automatically)"),
             behavior=FILE_BEHAVIOR, optional=True,
             fileFilter="KMZ/KML (*.kmz *.kml)"))
         self._adv(QgsProcessingParameterFile(
-            self.ROADS, self.tr("Lanjutan: KMZ jalur terpisah (menggantikan KMZ cluster)"),
+            self.POLE, self.tr("Separate pole KMZ (replaces the cluster KMZ)"),
+            behavior=FILE_BEHAVIOR, optional=True,
+            fileFilter="KMZ/KML (*.kmz *.kml)"))
+        self._adv(QgsProcessingParameterFile(
+            self.ROADS, self.tr("Separate route KMZ (replaces the cluster KMZ)"),
             behavior=FILE_BEHAVIOR, optional=True,
             fileFilter="KMZ/KML (*.kmz *.kml)"))
         self._adv(QgsProcessingParameterNumber(
-            self.SNAP, self.tr("Toleransi snap jalur ke tiang (meter)"),
+            self.SNAP, self.tr("Route-to-pole snap tolerance (m)"),
             type=NUM_DOUBLE, defaultValue=10.0, minValue=0.1))
         self._adv(QgsProcessingParameterNumber(
-            self.SPAN, self.tr("Batas jarak tiang ke tiang (meter)"),
+            self.SPAN, self.tr("Maximum pole-to-pole span (m)"),
             type=NUM_DOUBLE, defaultValue=60.0, minValue=1))
         self._adv(QgsProcessingParameterNumber(
-            self.HPPOLE, self.tr("Batas jarak homepass ke tiang terdekat (meter)"),
+            self.HPPOLE, self.tr("Maximum homepass-to-nearest-pole distance (m)"),
             type=NUM_DOUBLE, defaultValue=50.0, minValue=1))
         self._adv(QgsProcessingParameterBoolean(
-            self.REFILL, self.tr("Isi ulang kolom Homepass_ID_Partner dengan H00001, H00002, ..."),
+            self.REFILL, self.tr("Renumber the partner homepass ID column as H00001, H00002, ..."),
             defaultValue=True))
         self._adv(QgsProcessingParameterEnum(
-            self.SPAN_SCOPE, self.tr("Rentang yang dinilai jaraknya (EP-EP tiang pihak lain tidak dinilai)"),
+            self.SPAN_SCOPE, self.tr("Spans to check (EP-EP spans on third-party poles are never checked)"),
             options=self.SPAN_SCOPE_OPTS, defaultValue=0))
         self._adv(QgsProcessingParameterNumber(
-            self.FUN_TOL, self.tr("HP di luar Funnel tapi <= jarak ini dari tepi = info 'tepi' (meter; 0 = ketat)"),
+            self.FUN_TOL, self.tr("Homepass outside the service boundary but within this distance = edge note (m; 0 = strict)"),
             type=NUM_DOUBLE, defaultValue=15.0, minValue=0))
         self._adv(QgsProcessingParameterBoolean(
-            self.CROSS, self.tr("Cek lintas cluster: HP duplikat / masuk BOUNDARY cluster saudara (folder lain di folder induk)"),
+            self.CROSS, self.tr("Cross-cluster check: duplicate homepasses and homepasses inside a neighbouring cluster boundary"),
             defaultValue=True))
         self._adv(QgsProcessingParameterBoolean(
-            self.GROUP, self.tr("Cek grup 1 PIC sekaligus: cluster yang satu jaringan / 1 PIC dengan cluster ini ikut dicek "
-                                "dan dibuat REKAP_GRUP_1PIC"), defaultValue=True))
+            self.GROUP, self.tr("Group check: also check clusters designed as one network with this one "
+                                "(writes REKAP_GRUP_1PIC)"), defaultValue=True))
         self._adv(QgsProcessingParameterFile(
-            self.CROSS_DIR, self.tr("Opsional: folder cluster pembanding lain (cluster tetangga/sudah diserahkan; folder cluster atau induknya)"),
+            self.CROSS_DIR, self.tr("Extra folder of neighbouring clusters to compare with"),
             behavior=FOLDER_BEHAVIOR, optional=True))
         self._adv(QgsProcessingParameterFile(
-            self.BAKP_FILE, self.tr("Opsional: file BAKP bila namanya tidak memuat kata 'BAKP' (kosong = dicari otomatis)"),
-            behavior=FILE_BEHAVIOR, optional=True, fileFilter="BAKP (*.pdf *.jpg *.jpeg *.png)"))
+            self.BAKP_FILE, self.tr("Community permit file when its name has no 'BAKP' (empty = found automatically)"),
+            behavior=FILE_BEHAVIOR, optional=True, fileFilter="Permit (*.pdf *.jpg *.jpeg *.png)"))
         self._adv(QgsProcessingParameterNumber(
-            self.HP_TOL, self.tr("Toleransi cocok HP di HPDB vs HP di KMZ (meter)"),
+            self.HP_TOL, self.tr("Homepass match tolerance, spreadsheet vs KMZ (m)"),
             type=NUM_DOUBLE, defaultValue=5.0, minValue=0.1))
         self._adv(QgsProcessingParameterNumber(
-            self.COLO_MAX, self.tr("Colo: batas jarak FDT existing ke cluster (meter)"),
+            self.COLO_MAX, self.tr("Colocation: maximum distance from an existing FDT to the cluster (m)"),
             type=NUM_DOUBLE, defaultValue=1000.0, minValue=50))
         self._adv(QgsProcessingParameterEnum(
-            self.COLO_BASIS, self.tr("Colo: dasar jarak yang dibandingkan dengan batas jarak"),
+            self.COLO_BASIS, self.tr("Colocation: distance compared with the limit"),
             options=self.COLO_BASIS_OPTS, defaultValue=0))
         self._adv(QgsProcessingParameterBoolean(
-            self.COLO_LOG, self.tr("Colo: catat rencana colo cluster ini ke COLO_RENCANA.csv (cegah rebutan FDT)"),
+            self.COLO_LOG, self.tr("Colocation: record this cluster's planned FDT in COLO_RENCANA.csv (avoids double booking)"),
             defaultValue=True))
 
     # ---------- helpers ----------
@@ -2554,7 +2545,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             try:
                 sheets = read_xlsx(path)
             except Exception as e:
-                raise QgsProcessingException("HPDB tidak bisa dibaca (%s): %s" % (type(e).__name__, e))
+                raise QgsProcessingException("Homepass spreadsheet not readable (%s): %s" % (type(e).__name__, e))
         else:
             sheets = []
             saved = {}
@@ -2568,7 +2559,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 else:
                     ds = gdal.OpenEx(path, gdal.OF_VECTOR)
                 if ds is None:
-                    raise QgsProcessingException("HPDB tidak bisa dibuka: %s" % path)
+                    raise QgsProcessingException("Homepass spreadsheet cannot be opened: %s" % path)
                 for li in range(ds.GetLayerCount()):
                     lyr = ds.GetLayer(li)
                     rows, empty = [], 0
@@ -2588,9 +2579,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         best = self._pick_sheet(sheets)
         if best is None:
             raise QgsProcessingException(
-                "Tidak menemukan baris header berisi kolom LATITUDE dan LONGITUDE di HPDB.")
+                "No header row with LATITUDE and LONGITUDE columns in the homepass spreadsheet.")
         self._hp_sheet = best[1]
-        feedback.pushInfo("Sheet HPDB: %s, header di baris %d" % (best[1], best[3] + 1))
+        feedback.pushInfo("Homepass sheet: %s, header on row %d" % (best[1], best[3] + 1))
         return best[2], best[3]
 
     def _find_header(self, rows):
@@ -2640,7 +2631,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
     def _read_kml(self, path):
         ds = ogr.Open(path)
         if ds is None:
-            raise QgsProcessingException("KMZ/KML tidak bisa dibuka: %s" % path)
+            raise QgsProcessingException("KMZ/KML cannot be opened: %s" % path)
         pts, lines, names, nlayers = [], [], [], ds.GetLayerCount()
         for li in range(nlayers):
             lyr = ds.GetLayer(li)
@@ -2667,9 +2658,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             if os.path.exists(path) or re.search(r"not a directory|permission|denied|being used|locked|sharing", msg, re.I):
                 # GDAL di Windows melapor 'is not a directory' / 'Permission denied' bila file lama masih dipegang
                 # aplikasi lain (layer masih terbuka di QGIS lain, Explorer pratinjau, OneDrive sinkron)
-                msg += (" -> file lama kemungkinan TERKUNCI: tutup QGIS/aplikasi lain yang membuka file ini (atau hapus "
-                        "layer-nya dari proyek), tunggu sinkron OneDrive selesai, lalu jalankan ulang")
-            raise QgsProcessingException("Gagal menulis %s: %s" % (path, msg))
+                msg += (" -> the old file is probably LOCKED: close the other QGIS/application that has it open (or remove "
+                        "the layer from the project), wait for cloud sync to finish, then run again")
+            raise QgsProcessingException("Cannot write %s: %s" % (path, msg))
         if driver == "ESRI Shapefile":
             # Windows: file lama yang masih dipegang koneksi OGR bisa 'terhapus tertunda' sehingga GDAL melapor sukses
             # tetapi .shx/.dbf tidak terbentuk -> layer rusak. Diperiksa agar tidak pernah lolos diam-diam.
@@ -2677,8 +2668,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             miss_ = [e for e in (".shp", ".shx", ".dbf") if not os.path.exists(base_ + e)]
             if miss_:
                 raise QgsProcessingException(
-                    "Gagal menulis %s: %s tidak terbentuk -> file lama kemungkinan TERKUNCI (layer masih terbuka di QGIS "
-                    "lain/skrip, pratinjau Explorer, sinkron OneDrive). Tutup aplikasi tersebut lalu jalankan ulang"
+                    "Cannot write %s: %s was not created -> the old file is probably LOCKED (layer still open in another "
+                    "QGIS/script, Explorer preview, cloud sync). Close that application and run again"
                     % (path, ", ".join(miss_)))
 
     # ---------- main ----------
@@ -2687,7 +2678,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         if root and os.path.isdir(root):
             n = release_old_outputs(root)
             if n:
-                feedback.pushInfo(f"{n} layer hasil run sebelumnya dilepas dari proyek agar file bisa ditimpa.")
+                feedback.pushInfo(f"{n} layers from the previous run were removed from the project so the files can be overwritten.")
         return True
 
     @staticmethod
@@ -2756,7 +2747,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         for r in pick[:max_img]:
             shots.append(dict(r, title="%s: %s" % (r["title"], r["arti"])))
         imgs = _snap.render_many(sc, shots, out_dir=os.path.join(inp, "QC_GAMBAR"), max_n=max_img)
-        feedback.pushInfo("Gambar peta temuan: %d (folder QC_GAMBAR)" % len(imgs))
+        feedback.pushInfo("Finding map pictures: %d (folder QC_GAMBAR)" % len(imgs))
         # ringkasan per standar
         sev_rank = dict(zip(("ERROR", "WARNING", "UNVERIFIED", "INFO", "PASS"), range(5)))
         by_no = {}
@@ -2784,7 +2775,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         rows, word, {k: v[0] for k, v in imgs.items()},
                         footer="%s v%s - hasil QC adalah alat bantu; keputusan tetap pada desainer dan reviewer" % (
                             __product__, __version__))
-        feedback.pushInfo("Laporan Word: %s" % path)
+        feedback.pushInfo("Word report: %s" % path)
         from . import mapview as _mv
         map_data = _mv.data_from_scene(sc, recs)
         map_data["EV"] = _qc_evidence(recs, hp_rows or {}, poles, names, kinds, heights or [], src or {})
@@ -2793,7 +2784,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
     def processAlgorithm(self, parameters, context, feedback):
         outdir = self.parameterAsFile(parameters, self.OUTDIR, context)
         if not outdir or not os.path.isdir(outdir):
-            raise QgsProcessingException("Pilih folder cluster (atau folder induk) yang sudah ada.")
+            raise QgsProcessingException("Pick an existing survey folder (or parent folder).")
         o = {
             "hpdb": self.parameterAsFile(parameters, self.HPDB, context),
             "cluster_kmz": self.parameterAsFile(parameters, self.CLUSTER_KMZ, context),
@@ -2830,7 +2821,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             ref_dir = (st.value("seranta/ref_dir", "")
                        or st.value("seranta/funnel_dir", "") or "")
         if ref_dir and not os.path.isdir(ref_dir):
-            feedback.reportError("Folder referensi yang diingat tidak ada di komputer ini: %s" % ref_dir, fatalError=False)
+            feedback.reportError("The remembered reference data folder does not exist on this computer: %s" % ref_dir, fatalError=False)
             ref_dir = ""
         if not ref_dir:
             # Pengguna baru (mis. pasang dari ZIP) belum pernah mengisi isian 2: cari otomatis di sekitar folder cluster.
@@ -2838,24 +2829,24 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             if auto:
                 ref_dir = auto
                 st.setValue("seranta/ref_dir", auto)
-                getattr(feedback, "pushWarning", feedback.pushInfo)("Folder data referensi ditemukan otomatis: %s (isi isian 2 bila salah)" % auto)
+                getattr(feedback, "pushWarning", feedback.pushInfo)("Reference data folder found automatically: %s (set it under Advanced if wrong)" % auto)
             else:
                 getattr(feedback, "pushWarning", feedback.pushInfo)(
-                    "DATA REFERENSI TIDAK ADA: isian 2 (folder referensi) kosong dan tidak ditemukan otomatis. "
-                    "Cek Funnel (standar 2 & 5), Design Lite/colo (6 & 7) dan FINDIM (3) DILEWATI. "
-                    "Salin folder referensi tim (berisi *FUNNEL*.kmz, DESIGN LITE*.kmz, *attributes*.xlsx) "
-                    "lalu pilih di isian 2.")
+                    "NO REFERENCE DATA: the reference data folder is empty and was not found automatically. "
+                    "Service boundary (checks 2 and 5), existing network/colocation (6 and 7) and area register (3) "
+                    "checks are SKIPPED. Copy your team's reference folder (*FUNNEL*.kmz, DESIGN LITE*.kmz, "
+                    "*attributes*.xlsx) and pick it under Advanced.")
         o["funnel_dir"] = ref_dir if ref_dir and os.path.isdir(ref_dir) else ""
         if o["funnel_dir"]:
-            feedback.pushInfo("Folder data referensi: %s" % o["funnel_dir"])
+            feedback.pushInfo("Reference data folder: %s" % o["funnel_dir"])
             for k, lab in REF_LABELS:
                 fl = ref_files(o["funnel_dir"], k)
                 feedback.pushInfo("  %s %-12s: %s" % ("OK " if fl else "-- ", lab,
                                   ", ".join(os.path.basename(x) for x in fl[:3]) + (" ..." if len(fl) > 3 else "")
-                                  if fl else "tidak ada"))
+                                  if fl else "none"))
         prof = resolve_profile(o["profile"], o["funnel_dir"], feedback)
         o.update(prof=prof, hp_per_spl=prof["hp_per_spl"], max_spl=prof["max_spl"])
-        feedback.pushInfo("Profil: %s | FDT maks %d HP, %d splitter 1x%d | FAT %d-%d HP, jarak maks %.0f m | sumber: %s" % (
+        feedback.pushInfo("Profile: %s | FDT max %d HP, %d splitters 1x%d | FAT %d-%d HP, max distance %.0f m | source: %s" % (
             prof["name"], prof["fdt_cap"], prof["max_spl"], prof["ratio"], prof["fat_min"], prof["fat_max"],
             prof["fat_dist"], prof["src"]))
         self._to_load = []
@@ -2884,10 +2875,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 sheets = [os.path.relpath(os.path.join(r, f), outdir) for r, _ds, fs in os.walk(outdir)
                           for f in fs if os.path.splitext(f)[1].lower() in (".xlsx", ".xls", ".csv")][:6]
                 raise QgsProcessingException(
-                    "Tidak ada file HPDB di folder ini maupun di subfoldernya: %s. Spreadsheet yang ada: %s. "
-                    "Nama file HPDB harus memuat HPDB (atau pilih file di isian opsional HPDB)."
-                    % (outdir, ", ".join(sheets) or "tidak ada"))
-            feedback.pushInfo("MODE BATCH: %d folder cluster ditemukan di %s" % (len(clusters), outdir))
+                    "No homepass spreadsheet (HPDB) in this folder or its subfolders: %s. Spreadsheets found: %s. "
+                    "The file name must contain HPDB (or choose the file under Advanced)."
+                    % (outdir, ", ".join(sheets) or "none"))
+            feedback.pushInfo("BATCH MODE: %d cluster folders found in %s" % (len(clusters), outdir))
         if len(clusters) == 1:
             res = self._run_cluster(clusters[0], o, context, feedback)
             if open_rep:
@@ -2909,11 +2900,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 res = self._run_cluster(cdir, oo, context, feedback)
                 k = res.get("kode", "")
                 if k in seen:
-                    feedback.reportError("PERINGATAN: kode %s sama dengan cluster %s" % (k, seen[k]), fatalError=False)
+                    feedback.reportError("WARNING: code %s is the same as cluster %s" % (k, seen[k]), fatalError=False)
                 seen[k] = cdir
                 rekap.append((os.path.basename(cdir), "OK", res))
             except Exception as e:
-                feedback.reportError("GAGAL %s: %s" % (os.path.basename(cdir), e), fatalError=False)
+                feedback.reportError("FAILED %s: %s" % (os.path.basename(cdir), e), fatalError=False)
                 rekap.append((os.path.basename(cdir), "GAGAL: %s" % str(e)[:200], {}))
         lines = ["REKAP BATCH INPUT AUTODESIGN - %s" % _dt.datetime.now().strftime("%d-%m-%Y %H:%M"),
                  "Folder induk: %s" % outdir, "",
@@ -2946,21 +2937,21 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                  rm_.get("length", ""), ", ".join(r.get("pic") or []), " | ".join(rm_.get("notes") or [])])
             lines.append("Remarks CSV: %s" % rcsv)
         except Exception as e:
-            feedback.reportError("REMARKS_BATCH.csv tidak ditulis: %s" % e, fatalError=False)
+            feedback.reportError("REMARKS_BATCH.csv not written: %s" % e, fatalError=False)
         try:
             grp_lines = self._group_reports([r for _n, _s, r in rekap if r], outdir, o, feedback)
             if grp_lines:
                 lines.append("")
                 lines.extend(grp_lines)
         except Exception as e:
-            feedback.reportError("Rekap grup 1 PIC tidak dibuat: %s" % e, fatalError=False)
+            feedback.reportError("One-PIC group summary not written: %s" % e, fatalError=False)
         rk = os.path.join(outdir, "REKAP_BATCH_%s.txt" % _dt.datetime.now().strftime("%Y%m%d_%H%M"))
         with open(rk, "w", encoding="utf-8") as fh:
             fh.write("\n".join(lines) + "\n")
         feedback.pushInfo("")
         for ln in lines:
             feedback.pushInfo(ln)
-        feedback.pushInfo("Rekap batch: %s" % rk)
+        feedback.pushInfo("Batch summary: %s" % rk)
         if open_rep:
             self._open_path = rk
         return {self.OUTDIR: outdir}
@@ -2977,14 +2968,14 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 continue
             feedback.pushInfo("")
             feedback.pushInfo("=" * 70)
-            feedback.pushInfo("GRUP 1 PIC: cluster %s ikut dicek (satu jaringan / 1 PIC dengan %s)"
+            feedback.pushInfo("ONE-PIC GROUP: cluster %s checked as well (one network / one designer with %s)"
                               % (os.path.basename(d_), os.path.basename(res0.get("dir") or "")))
             try:
                 r_ = self._run_cluster(d_, dict(o, hpdb="", cluster_kmz="", pole_path="", road_path=""), context, feedback)
                 done[k_] = r_
                 queue.extend(p_.get("dir") for p_ in r_.get("pic_info") or [] if p_.get("dir"))
             except Exception as e:
-                feedback.reportError("GRUP: %s gagal dicek: %s" % (os.path.basename(d_), e), fatalError=False)
+                feedback.reportError("GROUP: %s could not be checked: %s" % (os.path.basename(d_), e), fatalError=False)
         self._group_reports(list(done.values()), None, o, feedback)
 
     def _group_reports(self, results, outdir, o, feedback):
@@ -3002,11 +2993,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 try:
                     _grup.write_report(os.path.join(t_, name), g, sm, "%s v%s" % (__product__, __version__), when)
                 except Exception as e:
-                    feedback.reportError("REKAP grup tidak ditulis di %s: %s" % (t_, e), fatalError=False)
+                    feedback.reportError("Group summary not written in %s: %s" % (t_, e), fatalError=False)
             for ln_ in sm["lines"]:
                 feedback.pushInfo(ln_)
             if targets:
-                feedback.pushInfo("Rekap grup: %s (di folder INPUT tiap anggota%s)" % (name, " dan folder induk" if outdir else ""))
+                feedback.pushInfo("Group summary: %s (in every member's INPUT folder%s)" % (name, " and the parent folder" if outdir else ""))
             out.extend(sm["lines"])
         return out
 
@@ -3159,11 +3150,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         try:
             write_qc_kmz(outp("QC_TEMUAN.kmz"), "QC TEMUAN %s" % kode, qc)
         except Exception as e:
-            feedback.reportError("QC_TEMUAN.kmz tidak bisa ditulis: %s" % e, fatalError=False)
+            feedback.reportError("QC_TEMUAN.kmz cannot be written: %s" % e, fatalError=False)
         try:
             save(allq, qc_map, "QC_TEMUAN")
         except Exception as e:
-            feedback.reportError("QC_TEMUAN.shp tidak ditulis: %s" % e, fatalError=False)
+            feedback.reportError("QC_TEMUAN.shp not written: %s" % e, fatalError=False)
             qc_map = None
         # per kategori
         cats = {}
@@ -3186,10 +3177,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 save(lyr, path, name)
                 out.append((path, name, len(lst)))
             except Exception as e:
-                feedback.reportError("QC/%s.shp tidak ditulis: %s" % (slug, e), fatalError=False)
-        feedback.pushInfo("Temuan QC: %d titik/garis dalam %d kategori -> %s (satu shp per kategori), QC_TEMUAN.shp, "
+                feedback.reportError("QC/%s.shp not written: %s" % (slug, e), fatalError=False)
+        feedback.pushInfo("QC findings: %d points/lines in %d categories -> %s (one shapefile per category), QC_TEMUAN.shp, "
                           "QC_TEMUAN.kmz%s" % (len(qc), len(out), qdir,
-                                               "; %d status review dari run sebelumnya dipertahankan" % n_rev[0] if n_rev[0] else ""))
+                                               "; %d review statuses kept from the previous run" % n_rev[0] if n_rev[0] else ""))
         return qc_map, out
 
     def _write_funnel(self, polys, fun_path, context, feedback, rep):
@@ -3228,14 +3219,14 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         os.remove(base + ext)
                 self._write(fl, path, drv, context)
                 if not os.path.exists(path):
-                    raise IOError("file tidak terbentuk")
+                    raise IOError("file was not created")
                 rep.append("  Layer FUNNEL_SEKITAR         : %d poligon -> %s%s" % (
                     len(ff), os.path.basename(path), ", %d poligon rusak dilewati" % bad if bad else ""))
                 return kept, path
             except Exception as e:
                 errs.append("%s: %s" % (drv, str(e)[:200]))
         # Layer ini hanya tampilan; kegagalannya tidak boleh menghentikan Run.
-        feedback.reportError("Layer FUNNEL_SEKITAR tidak bisa ditulis (cek boundary tetap jalan): %s"
+        feedback.reportError("Layer FUNNEL_SEKITAR cannot be written (the boundary check still ran): %s"
                              % " | ".join(errs), fatalError=False)
         rep.append("  ! Layer FUNNEL_SEKITAR gagal ditulis: %s" % " | ".join(errs))
         return [], fun_path
@@ -3251,8 +3242,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             cluster_kmz = ""
         elif not cluster_kmz:
             cluster_kmz = find_kmz(outdir)
-        feedback.pushInfo("HPDB dipakai : %s" % hpdb)
-        feedback.pushInfo("KMZ dipakai  : %s" % (cluster_kmz or (pole_path + " + " + road_path)))
+        feedback.pushInfo("Homepass sheet: %s" % hpdb)
+        feedback.pushInfo("Cluster KMZ   : %s" % (cluster_kmz or (pole_path + " + " + road_path)))
         snap_m, span_max, hp_max = o["snap_m"], o["span_max"], o["hp_max"]
         refill, workdir, funnel_dir = o["refill"], o["workdir"], o["funnel_dir"]
         colo_max, hp_per_spl, max_spl, colo_log = o["colo_max"], o["hp_per_spl"], o["max_spl"], o["colo_log"]
@@ -3264,7 +3255,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             return _qc.pv(qprof, key, default)
         self._qprof = qprof
         if float(qcp("span_max_m", span_max)) < span_max:
-            feedback.pushInfo("Profil %s: batas rentang %.0f m (lebih ketat dari isian %.0f m) dipakai"
+            feedback.pushInfo("Profile %s: span limit %.0f m used (stricter than the %.0f m setting)"
                               % (qprof["profile_id"], qcp("span_max_m"), span_max))
             span_max = float(qcp("span_max_m"))
         sag_ratio = float(qcp("sag_pct", 2.0)) / 100.0
@@ -3283,7 +3274,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             room = max(14, 240 - base_len)
             if len(kode) > room:
                 kode = _short_code(kode, room)
-            feedback.pushInfo("Path folder panjang (batas 260 karakter Windows): hasil ditulis ke INPUT\\%s_*" % kode)
+            feedback.pushInfo("Long folder path (Windows 260-character limit): output written to INPUT\\%s_*" % kode)
         if o["naming"] == 0:
             inp = os.path.join(outdir, "INPUT" if short_dir else "INPUT_" + kode)
             pre = kode + "_"
@@ -3294,7 +3285,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         def outp(name):
             return os.path.join(inp, pre + name)
         os.makedirs(inp, exist_ok=True)
-        feedback.pushInfo("Kode wilayah : %s -> %s" % (kode, inp))
+        feedback.pushInfo("Area code    : %s -> %s" % (kode, inp))
         da = QgsDistanceArea()
         da.setSourceCrs(WGS84, context.transformContext())
         da.setEllipsoid("WGS84")
@@ -3304,7 +3295,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         ignored = {}       # temuan yang sengaja diabaikan sesuai aturan (untuk laporan)
 
         # ===== 1. HPDB -> HP.shp =====
-        feedback.setProgressText("1/3 Membaca HPDB")
+        feedback.setProgressText("1/3 Reading the homepass spreadsheet")
         rows, h = self._read_table(hpdb, feedback)
         headers = []
         for i, c in enumerate(rows[h]):
@@ -3339,7 +3330,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             data.append((r, QgsPointXY(lon, lat)))
             meta.append((j, (r[iid] if iid is not None else "").strip()))
         if not data:
-            raise QgsProcessingException("Tidak ada baris homepass dengan koordinat valid.")
+            raise QgsProcessingException("No homepass rows with valid coordinates.")
 
         if iid is not None and refill:
             for n, (r, _) in enumerate(data, 1):
@@ -3486,7 +3477,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     w_.writerow((list(r_) + [""] * len(headers))[:len(headers)])
         except Exception as e:
             hp_csv = None
-            feedback.reportError("HP.csv tidak ditulis: %s" % e, fatalError=False)
+            feedback.reportError("HP.csv not written: %s" % e, fatalError=False)
 
         # nama kolom setelah dipotong shapefile (maks 10 karakter)
         written = QgsVectorLayer(hp_path, "HP", "ogr")
@@ -3519,7 +3510,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         feedback.setProgress(33)
 
         # ===== 2. Tiang -> POLE.kmz =====
-        feedback.setProgressText("2/3 Menggabungkan tiang")
+        feedback.setProgressText("2/3 Merging poles")
         if cluster_kmz:
             feats = kml_features(cluster_kmz)
             ppts, pnames, pkinds, pheights, rlines, pdirs = [], [], [], [], [], []
@@ -3567,13 +3558,13 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 else:
                     other.add(label)
             pl, rl = len(pfold), len(rfold)
-            feedback.pushInfo("Folder tiang terdeteksi : %s" % (", ".join(sorted(pfold)) or "-"))
-            feedback.pushInfo("Folder jalur terdeteksi : %s" % (", ".join(sorted(rfold)) or "-"))
-            feedback.pushInfo("Folder lain (diabaikan) : %s" % (", ".join(sorted(other)) or "-"))
+            feedback.pushInfo("Pole folders found  : %s" % (", ".join(sorted(pfold)) or "-"))
+            feedback.pushInfo("Route folders found : %s" % (", ".join(sorted(rfold)) or "-"))
+            feedback.pushInfo("Other folders (ignored): %s" % (", ".join(sorted(other)) or "-"))
             if not ppts or not rlines:
                 raise QgsProcessingException(
-                    "Folder tiang atau jalur tidak ditemukan di KMZ cluster. Folder yang ada: %s. "
-                    "Ganti nama foldernya (mis. POLE / ROUTE CABLE) atau pakai isian KMZ terpisah."
+                    "No pole or route folder in the cluster KMZ. Folders found: %s. "
+                    "Rename the folders (e.g. POLE / ROUTE CABLE) or give separate KMZ files under Advanced."
                     % ", ".join(sorted(pfold | rfold | other)))
             pole_path = road_path = cluster_kmz
         else:
@@ -3616,7 +3607,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                                   first_[(round(poles[j_].x(), 7), round(poles[j_].y(), 7))][0],
                                                   heights[i_], heights[j_], d_))
         if not poles:
-            raise QgsProcessingException("Tidak ada titik tiang di file tiang.")
+            raise QgsProcessingException("No pole points in the pole file.")
         orig_names = list(names)
         names, n_renamed = tidy_pole_names(names, kinds)
         n_unk = sum(1 for kd in kinds if kd not in ("new", "existing"))
@@ -3643,7 +3634,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 os.remove(pole_map)
             self._write(pole, pole_map, "GPKG", context)
         except Exception as e:
-            feedback.reportError("Layer peta POLE tidak ditulis (POLE.kmz untuk desain otomatis tetap ada): %s" % e, fatalError=False)
+            feedback.reportError("POLE map layer not written (POLE.kmz for the auto-design is still there): %s" % e, fatalError=False)
             pole_map = None
         pidx = QgsSpatialIndex()
         for i, p in enumerate(poles):
@@ -3691,11 +3682,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             return i, da.measureLine(p, poles[i])
 
         # ===== 3. Jalur -> ROADS.shp =====
-        feedback.setProgressText("3/3 Snap dan explode jalur")
+        feedback.setProgressText("3/3 Snapping and splitting the route")
         if not cluster_kmz:
             _, rlines, _, rl = self._read_kml(road_path)
         if not rlines:
-            raise QgsProcessingException("Tidak ada garis jalur di file jalur.")
+            raise QgsProcessingException("No route lines in the route file.")
         road = QgsVectorLayer("LineString?crs=EPSG:4326", "ROADS_raw", "memory")
         rf = []
         for line in rlines:
@@ -4233,7 +4224,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 try:
                     att = load_attributes(pth, feedback)
                 except Exception as e:
-                    feedback.reportError("HPDB attributes tidak bisa dibaca: %s" % e, fatalError=False)
+                    feedback.reportError("Area register not readable: %s" % e, fatalError=False)
         if att and att["findim"]:
             def ci(*names):
                 return self._pick(headers, list(names), "\x00")
@@ -4396,7 +4387,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         std[5] = (len(out_own) == 0 if own_bnd else None, "%d HP di luar BOUNDARY KMZ (> %.0f m), %d di tepi"
                   % (len(out_own), bnd_tol, len(edge_own)))
         if funnel_files:
-            feedback.setProgressText("4/4 Cek boundary Funnel")
+            feedback.setProgressText("4/4 Checking service boundaries")
             xs = [h[0] for h in hp_xy]
             ys = [h[1] for h in hp_xy]
             m = 0.01  # +- 1 km
@@ -4407,7 +4398,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     near.extend(cached_read("funnel", fp, fext, read_funnel, feedback))
                 except Exception as e:      # file rusak / unduhan terpotong: jangan hentikan Run
                     fun_err.append("%s (%s)" % (os.path.basename(fp), str(e)[:120]))
-                    feedback.reportError("File Funnel tidak bisa dibaca, mungkin rusak/terpotong saat diunduh: %s"
+                    feedback.reportError("Service boundary file not readable, possibly damaged or incompletely downloaded: %s"
                                          % fun_err[-1], fatalError=False)
             hits, kpoly = {}, {}
             for x, y, hid in hp_xy:
@@ -4607,8 +4598,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         else:
             if not funnel_dir:
                 why = "folder referensi kosong (isian 2)"
+                why_en = "reference data folder is empty"
             else:
                 why = "tidak ada file *FUNNEL*.kmz/.kml di %s" % funnel_dir
+                why_en = "no *FUNNEL*.kmz/.kml file in %s" % funnel_dir
             rep.append("  Funnel/boundary layanan      : %s -> cek Funnel DILEWATI" % why)
             std[2] = (None, "Funnel tidak dicek: " + why)
             if own_bnd:
@@ -4616,7 +4609,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                           "%d HP di luar BOUNDARY KMZ; Funnel tidak dicek (%s)" % (len(out_own), why))
             else:
                 std[5] = (None, "Funnel tidak dicek: " + why)
-            getattr(feedback, "pushWarning", feedback.pushInfo)("FUNNEL TIDAK DICEK: %s" % why)
+            getattr(feedback, "pushWarning", feedback.pushInfo)("SERVICE BOUNDARY NOT CHECKED: %s" % why_en)
 
         # ===== 4b. QC lintas cluster (cluster saudara di folder induk / folder pembanding) =====
         # Sub-cluster satu wilayah (mis. RT 05 / RT 22 / RT 23 di dalam SATU Funnel induk) tidak bisa dibedakan oleh cek
@@ -4626,7 +4619,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         pic_group, bakp_shared = [], []
         rep.append("")
         if opt.get("cross", True):
-            feedback.setProgressText("Cek lintas cluster")
+            feedback.setProgressText("Cross-cluster check")
             try:
                 helpers_ = {"find_hpdb": find_hpdb, "find_kmz": find_kmz, "read_xlsx": read_xlsx,
                             "kode_wilayah": kode_wilayah, "cluster_label": cluster_label, "bakp_sha": bakp_sha}
@@ -4702,18 +4695,18 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                   cn["in_bnd"], cn["overlap"], cn.get("pole_shared", 0),
                                   ("; 1 PIC/jaringan bersama dengan " + ", ".join(g_["label"] for g_ in pic_group))
                                   if pic_group else ""))
-                    feedback.pushInfo("Lintas cluster: %d cluster saudara dibandingkan; %d HP duplikat, %d HP masuk "
-                                      "BOUNDARY cluster lain, %d BOUNDARY tumpang tindih"
+                    feedback.pushInfo("Cross-cluster: %d neighbouring clusters compared; %d duplicate homepasses, %d homepasses "
+                                      "inside another cluster boundary, %d overlapping boundaries"
                                       % (len(cres["used"]), cn["dup"], cn["in_bnd"], cn["overlap"]))
                     if cn["dup"] or cn["in_bnd"]:
                         getattr(feedback, "pushWarning", feedback.pushInfo)(
-                            "PERHATIAN: ada rumah yang juga tercatat / masuk BOUNDARY cluster saudara. Lihat LINTAS CLUSTER.")
+                            "ATTENTION: some houses are also recorded in / inside the boundary of a neighbouring cluster. See LINTAS CLUSTER in the report.")
                 else:
-                    feedback.pushInfo("Lintas cluster: tidak ada folder cluster saudara di dekat cluster ini")
+                    feedback.pushInfo("Cross-cluster: no neighbouring cluster folders near this cluster")
             except Exception as e:
                 rep.append("LINTAS CLUSTER")
                 rep.append("  ! Cek lintas cluster gagal: %s" % str(e)[:200])
-                feedback.reportError("Cek lintas cluster gagal (cek lain tetap jalan): %s" % e, fatalError=False)
+                feedback.reportError("Cross-cluster check failed (other checks still ran): %s" % e, fatalError=False)
         else:
             rep.append("LINTAS CLUSTER")
             rep.append("  Cek lintas cluster dimatikan (Advanced)")
@@ -4746,7 +4739,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         if not dl_files:
             rep.append("  Design Lite                  : tidak ada di folder Funnel (analisis colo dilewati)")
         else:
-            feedback.setProgressText("5/5 Analisis colo Design Lite")
+            feedback.setProgressText("5/5 Colocation analysis on the existing network")
             import math
             xs = [h[0] for h in hp_xy]
             ys = [h[1] for h in hp_xy]
@@ -4787,7 +4780,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 res_rows = read_reservations(res_path)
             except Exception as e:
                 res_rows = []
-                feedback.reportError("COLO_RENCANA.csv tidak bisa dibaca: %s" % e, fatalError=False)
+                feedback.reportError("COLO_RENCANA.csv not readable: %s" % e, fatalError=False)
             reserved = {}
             for r in res_rows:
                 if r[1] not in (cname, kode):
@@ -5000,7 +4993,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     write_reservations(res_path, keep)
                     rep.append("  Rencana dicatat di           : %s" % res_path)
                 except Exception as e:
-                    feedback.reportError("COLO_RENCANA.csv tidak bisa ditulis: %s" % e, fatalError=False)
+                    feedback.reportError("COLO_RENCANA.csv cannot be written: %s" % e, fatalError=False)
 
             # layer peta: FDT sekitar + garis colo
             try:
@@ -5042,7 +5035,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         raise QgsProcessingException(err[1])
                     colo_layers.append(("%s|layername=%s" % (colo_path, lyr.name()), lyr.name()))
             except Exception as e:
-                feedback.reportError("Layer COLO tidak bisa ditulis (laporan colo tetap ada): %s" % str(e)[:300],
+                feedback.reportError("COLO layer cannot be written (the colocation report is still there): %s" % str(e)[:300],
                                      fatalError=False)
                 colo_layers = []
 
@@ -5128,8 +5121,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 rep.extend(bres["lines"])
                 std[8] = (bres["ok"], bres["summary"])
                 warn = getattr(feedback, "pushWarning", feedback.pushInfo)
-                warn("PENGINGAT: jangan lupa cek BAKP (%s) - daftar periksa ada di laporan HTML."
-                     % (os.path.basename(bres["file"]) if bres["file"] else "file BAKP belum ada!"))
+                warn("REMINDER: check the community permit document (%s) - the checklist is in the HTML report."
+                     % (os.path.basename(bres["file"]) if bres["file"] else "no permit file yet!"))
                 anchor = data[0][1] if data else None
                 if anchor is not None:
                     for k_, o_, t_ in bres["items"]:
@@ -5138,7 +5131,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         elif o_ is None:
                             qc.append((anchor, k_ if k_.startswith(("INFO_", "UNV_")) else "INFO_" + k_, t_))
             except Exception as e:
-                feedback.reportError("Cek BAKP dilewati: %s" % e, fatalError=False)
+                feedback.reportError("Permit document check skipped: %s" % e, fatalError=False)
                 rep.append("")
                 rep.append("BAKP: cek otomatis dilewati (%s) - tetap cek BAKP secara manual!" % e)
                 std[8] = (None, "cek manual BAKP (otomatis gagal: %s)" % str(e)[:60])
@@ -5206,7 +5199,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 fh_.write("BAKP tetap WAJIB dicek manual (isian Cluster ID, homepass per RT/lingkungan, tanda tangan & "
                           "stempel basah, kompensasi).\nDibuat %s v%s.\n" % (__product__, __version__))
         except Exception as e:
-            feedback.reportError("Remarks otomatis tidak dibuat: %s" % e, fatalError=False)
+            feedback.reportError("Automatic remarks not created: %s" % e, fatalError=False)
         summ.append("")
 
         head = ["LAPORAN INPUT DESAIN OTOMATIS APD",
@@ -5223,13 +5216,13 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         try:
             man = self._write_manifest(outp("manifest_input.json"), kode, cl_id, hpdb, headers, (ilon, ilat, iid), data,
                                        hp_path, hp_csv, roads_path, pole_out, qprof, opt)
-            feedback.pushInfo("Manifest input: %s (%s)" % (os.path.basename(man[0]), man[1]))
+            feedback.pushInfo("Input manifest: %s (%s)" % (os.path.basename(man[0]), man[1]))
             rep.append("")
             rep.append("MANIFEST INPUT DESAIN OTOMATIS: %s -> %s" % (os.path.basename(man[0]), man[1]))
             for line_ in man[2]:
                 rep.append("  " + line_)
         except Exception as e:
-            feedback.reportError("manifest_input.json tidak ditulis: %s" % e, fatalError=False)
+            feedback.reportError("manifest_input.json not written: %s" % e, fatalError=False)
         qc_path = outp("QC_TEMUAN.kmz")
         refs = ref_summary(funnel_dir) if funnel_dir else []
         head.append("DATA REFERENSI : %s" % (funnel_dir or "TIDAK ADA (isian 2 kosong, tidak ditemukan otomatis)"))
@@ -5244,12 +5237,12 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         for line in head + summ + rep:
             feedback.pushInfo(line)
         feedback.pushInfo("")
-        feedback.pushInfo("Laporan disimpan di: %s" % lap)
+        feedback.pushInfo("Report saved in: %s" % lap)
         lap_html = outp("RINGKASAN_QC.html")
         fid_map, snaps_uri, word_name, map_html = {}, {}, None, ""
         try:
             fid_map = qc_fid_map(qc)
-            feedback.setProgressText("Gambar peta temuan dan laporan Word")
+            feedback.setProgressText("Finding map pictures and Word report")
             # atribut HP dari HPDB (kolom terisi saja) untuk panel detail peta interaktif
             hp_attrs = []
             pri_ = ("ID", "HOMEPASS_ID", "HOMEPASS_ADDRESS_PREFIX", "HOMEPASS_ADDRESS", "HOMEPASS_HOUSE_NUMBER", "HOMEPASS_ADDRESS_BLOCK",
@@ -5281,7 +5274,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             from . import mapview as _mv
             map_html = _mv.block(map_data, "Peta temuan QC survei")
         except Exception as e:
-            feedback.reportError("Gambar temuan / laporan Word / peta tidak dibuat: %s" % e, fatalError=False)
+            feedback.reportError("Finding pictures / Word report / map not created: %s" % e, fatalError=False)
         try:
             _report_html.build(
                 lap_html,
@@ -5305,9 +5298,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                  ("Laporan teks", os.path.basename(lap))]
                 + ([("Temuan QC (QGIS)", os.path.basename(qc_map))] if qc_map else []),
                 "\n".join(head + summ + rep))
-            feedback.pushInfo("Ringkasan HTML: %s" % lap_html)
+            feedback.pushInfo("HTML summary: %s" % lap_html)
         except Exception as e:
-            feedback.reportError("Ringkasan HTML tidak dibuat: %s" % e, fatalError=False)
+            feedback.reportError("HTML summary not created: %s" % e, fatalError=False)
             lap_html = lap
 
         if workdir:
@@ -5317,7 +5310,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             for fn in os.listdir(inp):
                 if os.path.isfile(os.path.join(inp, fn)):
                     shutil.copy2(os.path.join(inp, fn), os.path.join(dst, fn))
-            feedback.pushInfo("Disalin juga ke: %s" % dst)
+            feedback.pushInfo("Also copied to: %s" % dst)
 
         grp = kode if opt["naming"] == 0 else os.path.basename(outdir.rstrip("\\/"))
         loads = [(hp_path, "HP"), (roads_path, "ROADS"), (pole_map or pole_out, "POLE")]
@@ -5355,7 +5348,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     det.setPostProcessor(pp)
                 context.addLayerToLoadOnCompletion(pth, det)
             except Exception as e:
-                feedback.reportError("Layer %s tidak dimuat otomatis (file tetap ada): %s" % (nm, e), fatalError=False)
+                feedback.reportError("Layer %s not loaded automatically (the file is still there): %s" % (nm, e), fatalError=False)
             self._to_load.append((pth, nm, grp))
         feedback.setProgress(100)
         n_cek = sum(1 for it in qc if not it[1].startswith("INFO"))

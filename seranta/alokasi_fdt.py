@@ -255,7 +255,7 @@ class FdtStyle(QgsProcessingLayerPostProcessorInterface):
             layer.triggerRepaint()
         except Exception as e:
             if feedback:
-                feedback.reportError("Gaya layer alokasi tidak diterapkan: %s" % e, fatalError=False)
+                feedback.reportError("Allocation layer style not applied: %s" % e, fatalError=False)
 
 
 class AlokasiFdtFat(QgsProcessingAlgorithm):
@@ -272,8 +272,8 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
     MIN_COLO = "MIN_COLO"
     OPEN_REPORT = "OPEN_REPORT"
     MODE = "MODE"
-    MODE_OPTS = ["FDT terdekat diisi penuh dulu (sesedikit mungkin FDT, disarankan)",
-                 "Tiap FAT ke FDT terdekatnya (kabel distribusi terpendek, bisa banyak FDT)"]
+    MODE_OPTS = ["Fill the nearest FDT first (fewest FDTs, recommended)",
+                 "Each FAT to its nearest FDT (shortest distribution cable, may use more FDTs)"]
 
     def tr(self, s):
         return QCoreApplication.translate("Seranta", s)
@@ -285,13 +285,13 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
         return "alokasi_fdt_fat"
 
     def displayName(self):
-        return self.tr("2. Alokasi FDT & FAT (estimasi kebutuhan)")
+        return self.tr("2. FDT & FAT Allocation")
 
     def group(self):
-        return "Seranta"
+        return self.tr("FTTH Design")
 
     def groupId(self):
-        return "seranta"
+        return "ftth_design"
 
     def icon(self):
         from qgis.PyQt.QtGui import QIcon
@@ -299,23 +299,20 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
 
     def shortHelpString(self):
         return self.tr(
-            "<p><b>Estimasi kebutuhan FAT dan alokasi ke FDT</b> sebelum desain di desain otomatis.</p><ol>"
-            "<li><b>Jumlah FAT</b> = jumlah HP / 16 (dibulatkan ke atas). 16 HP = 2 splitter 1:8 per FAT.</li>"
-            "<li>HP dikelompokkan per FAT (maks 16, berdekatan); FAT ditaruh di <b>tiang</b> terdekat dari pusat "
-            "kelompok.</li>"
-            "<li>Setiap FDT maks <b>24 FAT</b> (= 384 HP, kebijakan internal). Sisa slot FDT existing = 24 - FAT "
-            "existing di Design Lite - FAT yang sudah dipesan di COLO_RENCANA.csv.</li>"
-            "<li>FAT dialokasikan ke FDT existing <b>terdekat dalam radius 1 km</b> yang masih punya slot; "
-            "sisanya menjadi usulan <b>FDT baru</b>.</li>"
-            "<li>Link budget tiap FAT dicek terhadap kelas optik OLT (B+ 28 dB / C+ 32 dB).</li></ol>"
-            "<p>Masukan: folder cluster yang sudah diproses <b>alat 1</b> (folder INPUT berisi HP.shp dan "
-            "POLE_PETA.gpkg), dan folder referensi (Design Lite). Hasil di subfolder <code>ALOKASI_FDT</code>: "
-            "FAT_ESTIMASI, HP_PER_FAT, GARIS_FAT_FDT, FDT_ALOKASI (shp) dan ringkasan HTML.</p>"
-            "<p>Hasil ini <b>estimasi awal</b> untuk keputusan colo/FDT baru; desain final tetap di desain otomatis.</p>")
+            "<p><b>How to use</b>: pick the cluster folder already processed by <b>tool 1</b> (or a parent folder "
+            "for many clusters) and click <b>Run</b>.</p>"
+            "<p><b>What it does</b>: groups homepasses into FATs on poles (16 HP per FAT by default), assigns FATs to "
+            "the nearest existing FDTs with free capacity within 1 km, proposes new FDTs for the rest and checks the "
+            "optical link budget of every FAT.</p>"
+            "<p><b>Output</b> (subfolder <code>ALOKASI_FDT</code>): FAT, homepass-per-FAT, FAT-FDT line and FDT layers "
+            "plus an HTML summary (in Indonesian). This is a first estimate for colocation and new-FDT decisions; the "
+            "final design is still made in the auto-design software.</p>"
+            "<p><b>Advanced</b> holds the optional settings (reference data folder, capacities, radius, OLT class).</p>")
 
     def initAlgorithm(self, config=None):
+        # Form utama hanya 1 isian (folder); sisanya di "Advanced" dengan nilai bawaan yang aman.
         self.addParameter(QgsProcessingParameterFile(
-            self.CLUSTER, self.tr("1. Folder cluster (sudah diproses alat 1) atau folder induk untuk banyak cluster"),
+            self.CLUSTER, self.tr("Cluster folder processed by tool 1, or a parent folder for many clusters"),
             behavior=B.FOLDER_BEHAVIOR))
         try:
             st_ = QgsSettings()
@@ -323,32 +320,32 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
             last_ref = last_ref if last_ref and os.path.isdir(last_ref) else None
         except Exception:
             last_ref = None
-        self.addParameter(QgsProcessingParameterFile(
-            self.REF, self.tr("2. Folder data referensi tim (DESIGN LITE; diingat; kosong = cari otomatis)"),
-            behavior=B.FOLDER_BEHAVIOR, optional=True, defaultValue=last_ref))
-        self.addParameter(QgsProcessingParameterNumber(
-            self.HP_PER_FAT, self.tr("HP per FAT (16 = 2 x splitter 1:8)"), type=B.NUM_DOUBLE, defaultValue=16, minValue=1))
-        self.addParameter(QgsProcessingParameterNumber(
-            self.FAT_PER_FDT, self.tr("FAT maksimum per FDT (default 24)"), type=B.NUM_DOUBLE, defaultValue=24, minValue=1))
-        self.addParameter(QgsProcessingParameterNumber(
-            self.RADIUS, self.tr("Radius FDT existing dari tiang cluster terdekat (meter)"), type=B.NUM_DOUBLE,
-            defaultValue=1000, minValue=50))
-        self.addParameter(QgsProcessingParameterEnum(
-            self.MODE, self.tr("Cara alokasi"), options=self.MODE_OPTS, defaultValue=0))
-        self.addParameter(QgsProcessingParameterBoolean(
-            self.OPEN_REPORT, self.tr("Buka ringkasan alokasi setelah selesai"), defaultValue=True))
         adv = [
-            QgsProcessingParameterNumber(self.FAT_DIST, self.tr("Jarak maks HP ke FAT (meter; umum 120-150)"), type=B.NUM_DOUBLE,
-                                         defaultValue=120, minValue=10),
-            QgsProcessingParameterEnum(self.OLT, self.tr("Kelas optik OLT (link budget, ITU-T G.984.2)"),
+            QgsProcessingParameterFile(
+                self.REF, self.tr("Reference data folder with the existing network (remembered; empty = search automatically)"),
+                behavior=B.FOLDER_BEHAVIOR, optional=True, defaultValue=last_ref),
+            QgsProcessingParameterNumber(
+                self.HP_PER_FAT, self.tr("Homepasses per FAT (16 = 2 x 1:8 splitter)"), type=B.NUM_DOUBLE, defaultValue=16, minValue=1),
+            QgsProcessingParameterNumber(
+                self.FAT_PER_FDT, self.tr("Maximum FATs per FDT"), type=B.NUM_DOUBLE, defaultValue=24, minValue=1),
+            QgsProcessingParameterNumber(
+                self.RADIUS, self.tr("Search radius for existing FDTs from the nearest cluster pole (m)"), type=B.NUM_DOUBLE,
+                defaultValue=1000, minValue=50),
+            QgsProcessingParameterEnum(
+                self.MODE, self.tr("Allocation method"), options=self.MODE_OPTS, defaultValue=0),
+            QgsProcessingParameterBoolean(
+                self.OPEN_REPORT, self.tr("Open the allocation summary when finished"), defaultValue=True),
+            QgsProcessingParameterNumber(self.FAT_DIST, self.tr("Maximum homepass-to-FAT distance (m; typically 120-150)"),
+                                         type=B.NUM_DOUBLE, defaultValue=120, minValue=10),
+            QgsProcessingParameterEnum(self.OLT, self.tr("OLT optical class (link budget, ITU-T G.984.2)"),
                                        options=[a for a, b in OLT_CLASS], defaultValue=0),
-            QgsProcessingParameterEnum(self.FDT_SPL, self.tr("Splitter di FDT"), options=[a for a, b in FDT_SPLIT],
+            QgsProcessingParameterEnum(self.FDT_SPL, self.tr("FDT splitter"), options=[a for a, b in FDT_SPLIT],
                                        defaultValue=0),
-            QgsProcessingParameterNumber(self.FEEDER_KM, self.tr("Perkiraan panjang feeder OLT ke FDT (km)"),
+            QgsProcessingParameterNumber(self.FEEDER_KM, self.tr("Estimated feeder length, OLT to FDT (km)"),
                                          type=B.NUM_DOUBLE, defaultValue=5.0, minValue=0),
-            QgsProcessingParameterNumber(self.MIN_COLO, self.tr("Minimum FAT yang dititipkan ke satu FDT existing (cegah cluster terpecah ke banyak FDT)"),
+            QgsProcessingParameterNumber(self.MIN_COLO, self.tr("Minimum FATs placed on one existing FDT (keeps a cluster on few FDTs)"),
                                          type=B.NUM_INT, defaultValue=4, minValue=1, maxValue=24),
-            QgsProcessingParameterNumber(self.ROUTE_FACTOR, self.tr("Faktor jalur kabel terhadap garis lurus FDT-FAT"),
+            QgsProcessingParameterNumber(self.ROUTE_FACTOR, self.tr("Cable route factor over the straight FDT-FAT line"),
                                          type=B.NUM_DOUBLE, defaultValue=1.3, minValue=1.0),
         ]
         for p in adv:
@@ -370,13 +367,13 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
         if root and os.path.isdir(root):
             n = B.release_old_outputs(root, markers=("ALOKASI_FDT",))
             if n:
-                feedback.pushInfo("%d layer alokasi run sebelumnya dilepas dari proyek agar file bisa ditimpa." % n)
+                feedback.pushInfo("%d allocation layers from the previous run were removed from the project so the files can be overwritten." % n)
         return True
 
     def processAlgorithm(self, parameters, context, feedback):
         root = self.parameterAsFile(parameters, self.CLUSTER, context)
         if not root or not os.path.isdir(root):
-            raise QgsProcessingException("Pilih folder cluster yang sudah ada.")
+            raise QgsProcessingException("Pick an existing cluster folder.")
         ref = self.parameterAsFile(parameters, self.REF, context)
         st = QgsSettings()
         if ref and os.path.isdir(ref):
@@ -400,20 +397,20 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
         }
         dl_files = [p for p, t, n in B.latest_per_kind(B.ref_files(ref, "designlite"))] if ref else []
         if not dl_files:
-            feedback.reportError("Design Lite tidak ditemukan di folder referensi: semua FAT akan diusulkan ke FDT baru.",
+            feedback.reportError("No existing-network file found in the reference folder: every FAT will be proposed on a new FDT.",
                                  fatalError=False)
         res_rows = B.read_reservations(os.path.join(ref, "COLO_RENCANA.csv")) if ref else []
         inputs = self._find_inputs(root)
         if not inputs:
             raise QgsProcessingException(
-                "Tidak ada folder INPUT hasil alat 1 (berisi HP.shp dan POLE_PETA.gpkg) di %s. "
-                "Jalankan '1. Siapkan Input Desain Otomatis + QC Strand' dulu untuk cluster ini." % root)
+                "No INPUT folder from tool 1 (with HP.shp and POLE_PETA.gpkg) in %s. "
+                "Run '1. Survey QC & Design Input' on this cluster first." % root)
         self._loads = []
         last = None
         for i, inp in enumerate(inputs):
             if feedback.isCanceled():
                 break
-            feedback.pushInfo("=== Alokasi %d/%d: %s ===" % (i + 1, len(inputs), inp))
+            feedback.pushInfo("=== Allocation %d/%d: %s ===" % (i + 1, len(inputs), inp))
             try:
                 last = self._run_one(inp, opt, dl_files, res_rows, context, feedback)
             except QgsProcessingException as e:
@@ -431,7 +428,7 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
                 det.setPostProcessor(pp)
                 context.addLayerToLoadOnCompletion(pth, det)
             except Exception as e:
-                feedback.reportError("Layer %s tidak dimuat: %s" % (nm, e), fatalError=False)
+                feedback.reportError("Layer %s not loaded: %s" % (nm, e), fatalError=False)
         self._open = last if (opt["open"] and last and len(inputs) == 1) else None
         return {self.CLUSTER: root}
 
@@ -507,7 +504,7 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
     def _read_points(self, path, fields):
         lyr = QgsVectorLayer(path, "x", "ogr")
         if not lyr.isValid():
-            raise QgsProcessingException("Tidak bisa membaca %s" % path)
+            raise QgsProcessingException("Cannot read %s" % path)
         names = [f.name() for f in lyr.fields()]
         out = []
         for f in lyr.getFeatures():
@@ -530,19 +527,19 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
         hps = self._read_points(hp_path, ["HOMEPASS_1", "HOMEPASS_I"])
         poles = self._read_points(pole_path, ["Name", "jenis"])
         if not hps or not poles:
-            raise QgsProcessingException("HP atau tiang kosong di %s" % inp)
+            raise QgsProcessingException("No homepasses or poles in %s" % inp)
         n_hp = len(hps)
         cap, fat_fdt = opt["hp_fat"], opt["fat_fdt"]
         n_fat = int(math.ceil(n_hp / float(cap)))
-        feedback.pushInfo("HP %d -> FAT dibutuhkan ceil(%d / %d) = %d; kapasitas 1 FDT = %d FAT = %d HP"
+        feedback.pushInfo("%d HP -> FATs needed ceil(%d / %d) = %d; one FDT holds %d FATs = %d HP"
                           % (n_hp, n_hp, cap, n_fat, fat_fdt, fat_fdt * cap))
         lat0 = sum(p.y() for p, a in hps) / n_hp
         kx, ky = math.cos(math.radians(lat0)) * 111320.0, 110574.0
         xy = [(p.x() * kx, p.y() * ky) for p, a in hps]
         groups, k0, n_viol = make_fat_groups(xy, cap, opt["fat_dist"] / opt["route_f"])
         if len(groups) > k0:
-            feedback.pushInfo("Sebaran HP: %d FAT minimum (HP/%d) membuat sebagian HP > %.0f m dari FAT; "
-                              "usulan realistis %d FAT" % (k0, cap, opt["fat_dist"], len(groups)))
+            feedback.pushInfo("Homepass spread: the minimum of %d FATs (HP/%d) leaves some homepasses > %.0f m from a FAT; "
+                              "realistic proposal %d FATs" % (k0, cap, opt["fat_dist"], len(groups)))
         pxy = [(p.x() * kx, p.y() * ky) for p, a in poles]
 
         def nearest_pole(x, y):
@@ -562,7 +559,7 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
                         lines.append([QgsPointXY(q.x(), q.y()) for q in part])
                 graph = RoadGraph(lines, da) if lines else None
         except Exception as e:
-            feedback.reportError("Jalur ROADS tidak terbaca, jarak HP-FAT memakai garis lurus x %.1f: %s"
+            feedback.reportError("Route layer ROADS not readable, homepass-FAT distance uses the straight line x %.1f: %s"
                                  % (opt["route_f"], e), fatalError=False)
             graph = None
         for i, (p, a) in enumerate(hps):
@@ -632,8 +629,8 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
             for fat_min in (8, 12):
                 placed = self._merge_small(placed, fat_min, cap, fd, poles, hp_pole, best_pole)
             if len(placed) > k0:
-                feedback.pushInfo("Sebaran HP sepanjang jalur: %d FAT minimum (HP/%d); agar setiap HP <= %.0f m "
-                                  "(drop + jalur) dibutuhkan %d FAT" % (k0, cap, fd, len(placed)))
+                feedback.pushInfo("Homepass spread along the route: minimum %d FATs (HP/%d); keeping every homepass <= %.0f m "
+                                  "(drop + route) needs %d FATs" % (k0, cap, fd, len(placed)))
         else:
             for g in groups:
                 med = _medoid(g, xy)
@@ -796,7 +793,7 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
             import datetime as _dt
             out_dir = out_dir + "_" + _dt.datetime.now().strftime("%Y%m%d_%H%M%S")
             os.makedirs(out_dir, exist_ok=True)
-            feedback.reportError("%d file ALOKASI_FDT lama masih terkunci aplikasi lain; hasil ditulis ke %s"
+            feedback.reportError("%d old ALOKASI_FDT files are locked by another application; results written to %s"
                                  % (len(locked), out_dir), fatalError=False)
         grp = kode
 
@@ -912,7 +909,7 @@ class AlokasiFdtFat(QgsProcessingAlgorithm):
         try:
             self._html(html, kode, n_hp, n_fat, cap, fat_fdt, opt, fats, fdts, new_fdts, n_far, n_bad_budget, olt_name)
         except Exception as e:
-            feedback.reportError("Ringkasan HTML alokasi tidak dibuat: %s" % e, fatalError=False)
+            feedback.reportError("Allocation HTML summary not written: %s" % e, fatalError=False)
             html = txt
         return html
 

@@ -1,5 +1,10 @@
 # Changelog
 
+## 3.7.0 – menu berbahasa Inggris, satu isian per alat
+- Menu, form, opsi, pesan proses dan panel Navigator QC berbahasa Inggris; laporan dan remarks tetap berbahasa Indonesia.
+- Setiap alat cukup satu isian (folder); pengaturan lain dipindah ke Advanced dengan nilai bawaan yang sama.
+- Handbook bawaan dihapus; deskripsi plugin dipersingkat; changelog di metadata hanya versi terbaru.
+
 ## 3.6.2 – siap Qt6 / QGIS 4
 - Modul gambar peta (`snapshot.py`) mengimpor Qt hanya lewat `qgis.PyQt`; impor cadangan PyQt5 langsung dihapus sehingga cek Qt6 plugins.qgis.org lulus.
 - Tidak ada perubahan aturan atau hasil QC (versi aturan tetap 2026.10-r9).
