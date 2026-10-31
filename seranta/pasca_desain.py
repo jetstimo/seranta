@@ -24,7 +24,7 @@ from qgis.core import (QgsProcessingAlgorithm, QgsProcessingException, QgsProces
                        QgsProcessingParameterEnum, QgsProcessingParameterFile, QgsProcessingParameterString,
                        QgsVectorLayer, QgsSettings)
 
-from .buat_input_desain import (kmz_add_icons, FOLDER_BEHAVIOR, FILE_BEHAVIOR, PROFILES, __author__, __product__, __version__,
+from .buat_input_desain import (kmz_add_icons, ADVANCED_FLAG, FOLDER_BEHAVIOR, FILE_BEHAVIOR, PROFILES, __author__, __product__, __version__,
                                 integrity_status, kml_features, release_old_outputs, read_xlsx, resolve_profile, classify, _int)
 
 # Warna serat TIA-598 (1 biru ... 12 aqua) seperti di spliceplan desain otomatis
@@ -170,7 +170,7 @@ def write_kmz(path, folders):
 def read_points(path, want=("ELEMENTID", "SUPPORT", "NAME", "PREMISES", "MAXPPDIST", "MODELNUM")):
     lyr = QgsVectorLayer(path, "n", "ogr")
     if not lyr.isValid():
-        raise QgsProcessingException("Tidak bisa membuka %s" % path)
+        raise QgsProcessingException("Cannot open %s" % path)
     names = [f.name() for f in lyr.fields()]
     idx = {w: next((i for i, n in enumerate(names) if _n(n) == _n(w)), None) for w in want}
     out = []
@@ -224,7 +224,7 @@ class PascaDesain(QgsProcessingAlgorithm):
         return "pasca_desain_fdt_fat_code"
 
     def displayName(self):
-        return "3. Pasca-Desain: Kode FDT-FAT, Tabel Closure + QC"
+        return "3. Post-Design Tables"
 
     def group(self):
         return "FTTH Design"
@@ -233,45 +233,48 @@ class PascaDesain(QgsProcessingAlgorithm):
         return "ftth_design"
 
     def shortDescription(self):
-        return "Output desain otomatis -> FDT FAT CODE.csv, tabel core closure di KMZ, dan QC APD."
+        return "Auto-design output folder -> FDT-FAT code table, colour-coded closure tables and post-design checks."
 
     def shortHelpString(self):
         return ("<p><b>%s</b> v%s &copy; %s</p>" % (__product__, __version__, __author__) +
-                "<p><b>Cara pakai</b></p><ol>"
-                "<li>Selesaikan desain di desain otomatis lalu export (net_nodes.shp, net_SpliceClosure.shp, splice plan .xlsx).</li>"
-                "<li>Pilih <b>folder output desain otomatis</b> tersebut. Isi kode FDT bila splice plan belum memuatnya.</li>"
-                "<li>Klik <b>Run</b>. Hasil ada di subfolder <code>HASIL_PASCA_DESAIN</code>.</li></ol>"
-                "<p><b>Hasil</b>: &lt;FDT&gt;_FDT_FAT_CODE.csv (ELEMENTID, FAT FDT CODE, PREMISES, SPLITTERS, LONG, LAT, "
-                "F, T, F, T, COLO), &lt;FDT&gt;_CLOSURE_TABLE.kmz/.html (tabel core/tube berwarna TIA-598 per closure) "
-                "dan &lt;FDT&gt;_QC_APD.txt (HP per FAT, jarak FAT-HP, format & urutan kode, premises FDT, jumlah FAT, "
-                "kapasitas splitter, tube penuh dulu, FAT di tiang).</p>")
+                "<p><b>How to use</b>: export the finished design from the auto-design software (net_nodes.shp, "
+                "net_SpliceClosure.shp, splice plan .xlsx), pick that <b>output folder</b> and click <b>Run</b>.</p>"
+                "<p><b>Output</b> (subfolder <code>HASIL_PASCA_DESAIN</code>): FDT-FAT code table (CSV), closure tables "
+                "with TIA-598 fibre/tube colours (KMZ, HTML) and a post-design check (homepasses per FAT, FAT-homepass "
+                "distance, code format and order, FDT premises, splitter capacity, tube fill, FAT on a pole).</p>"
+                "<p><b>Advanced</b>: FDT code (when the splice plan has none), design profile, pole KMZ, colocation note. "
+                "Reports are written in Indonesian.</p>")
 
     def initAlgorithm(self, config=None):
-        self.addParameter(QgsProcessingParameterFile(self.OUTDIR, "Folder output desain otomatis (berisi net_nodes.shp & splice plan .xlsx)",
+        # Form utama hanya 1 isian (folder); sisanya di "Advanced".
+        self.addParameter(QgsProcessingParameterFile(self.OUTDIR, "Auto-design output folder (net_nodes.shp + splice plan .xlsx)",
                                                      behavior=FOLDER_BEHAVIOR))
-        self.addParameter(QgsProcessingParameterString(self.FDT_CODE, "Kode FDT, mis. PLG1-KNI01-H01 (kosongkan bila sudah ada di spliceplan)",
-                                                       optional=True))
-        self.addParameter(QgsProcessingParameterEnum(self.PROFILE, "Profil proyek", options=[p["name"] for p in PROFILES],
-                                                     defaultValue=0))
-        self.addParameter(QgsProcessingParameterFile(self.POLES, "Opsional: KMZ tiang / KMZ cluster (cek FAT berada di tiang)",
-                                                     behavior=FILE_BEHAVIOR, optional=True,
-                                                     fileFilter="KMZ/KML (*.kmz *.kml)"))
-        self.addParameter(QgsProcessingParameterString(self.COLO, "Opsional: keterangan COLO (mis. COLO FDT 2184628226_...)",
-                                                       optional=True))
-        self.addParameter(QgsProcessingParameterBoolean(self.OPEN_REPORT, "Buka laporan otomatis", defaultValue=True))
+        for prm in (
+                QgsProcessingParameterString(self.FDT_CODE, "FDT code, e.g. ABC1-DEF01-H01 (empty = taken from the splice plan)",
+                                             optional=True),
+                QgsProcessingParameterEnum(self.PROFILE, "Design profile", options=[p["name"] for p in PROFILES],
+                                           defaultValue=0),
+                QgsProcessingParameterFile(self.POLES, "Pole or cluster KMZ (checks that every FAT sits on a pole)",
+                                           behavior=FILE_BEHAVIOR, optional=True,
+                                           fileFilter="KMZ/KML (*.kmz *.kml)"),
+                QgsProcessingParameterString(self.COLO, "Colocation note written in the code table (e.g. COLO FDT <cluster ID>)",
+                                             optional=True),
+                QgsProcessingParameterBoolean(self.OPEN_REPORT, "Open the report when finished", defaultValue=True)):
+            prm.setFlags(prm.flags() | ADVANCED_FLAG)
+            self.addParameter(prm)
 
     def prepareAlgorithm(self, parameters, context, feedback):
         root = self.parameterAsFile(parameters, self.OUTDIR, context)
         if root and os.path.isdir(root):
             n = release_old_outputs(root, ("HASIL_PASCA_DESAIN",))
             if n:
-                feedback.pushInfo(f"{n} layer hasil run sebelumnya dilepas dari proyek agar file bisa ditimpa.")
+                feedback.pushInfo(f"{n} layers from the previous run were removed from the project so the files can be overwritten.")
         return True
 
     def processAlgorithm(self, parameters, context, feedback):
         folder = self.parameterAsFile(parameters, self.OUTDIR, context)
         if not folder or not os.path.isdir(folder):
-            raise QgsProcessingException("Pilih folder output desain otomatis.")
+            raise QgsProcessingException("Pick the auto-design output folder.")
         fdt_code_in = (self.parameterAsString(parameters, self.FDT_CODE, context) or "").strip().upper()
         ref_dir = QgsSettings().value("seranta/funnel_dir", "") or ""
         prof = resolve_profile(self.parameterAsEnum(parameters, self.PROFILE, context), ref_dir, feedback)
@@ -282,15 +285,15 @@ class PascaDesain(QgsProcessingAlgorithm):
         feedback.pushInfo("closure     : %s" % clos_p)
         feedback.pushInfo("splice plan : %s" % plan_p)
         if not nodes_p:
-            raise QgsProcessingException("net_nodes.shp tidak ditemukan di %s (export Shapefile dari desain otomatis dulu)." % folder)
+            raise QgsProcessingException("net_nodes.shp not found in %s (export shapefiles from the auto-design software first)." % folder)
         if not plan_p:
-            raise QgsProcessingException("File splice plan (.xlsx) tidak ditemukan di %s." % folder)
+            raise QgsProcessingException("Splice plan (.xlsx) not found in %s." % folder)
 
         nodes = read_points(nodes_p)
         sheets = read_xlsx(plan_p, max_empty=50)
         rname, terms, order, fdt_eid = parse_route_sheet(sheets)
         if not terms:
-            raise QgsProcessingException("Sheet rute (kolom Terminal & Patch panel) tidak ditemukan di splice plan.")
+            raise QgsProcessingException("Route sheet (Terminal and Patch panel columns) not found in the splice plan.")
         closures = parse_closure_sheets(sheets)
         fdt_nodes = [n for n in nodes if _n(n["SUPPORT"]) == "FDT"]
         fat_nodes = [n for n in nodes if "FAT" in _n(n["SUPPORT"])]

@@ -105,7 +105,7 @@ def get_profile(pid=None, folder=None):
     """Profil menurut id. Id tak dikenal -> profil APD_1X4 + peringatan eksplisit (spesifikasi 14)."""
     profs = load_profiles(folder)
     if not profs:
-        raise ValueError("Folder profil standar kosong/rusak: %s" % (folder or profile_dir()))
+        raise ValueError("Standard profile folder empty or damaged: %s" % (folder or profile_dir()))
     if pid and pid in profs:
         return profs[pid], None
     first = next(iter(profs.values()))

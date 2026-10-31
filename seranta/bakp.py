@@ -28,7 +28,7 @@ try:
 except Exception:          # pragma: no cover - numpy ships with QGIS
     np = None
 
-MODES = ["Ingatkan + cek otomatis offline + daftar periksa (disarankan)", "Lewati (tanpa pengingat BAKP)"]
+MODES = ["Check automatically (offline) + checklist in the report (recommended)", "Skip"]
 BAKP_RX = re.compile(r"BAKP|PERI[JZ]INAN|KESEPAKATAN|BA[\s_-]*KP", re.IGNORECASE)
 IMG_EXT = (".pdf", ".jpg", ".jpeg", ".png")
 MAX_PAGES = 40          # dulu 6: BAKP gabungan beberapa RT (16 halaman, review Jambi 2026) tidak terbaca utuh

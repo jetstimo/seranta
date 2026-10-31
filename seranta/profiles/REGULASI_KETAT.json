@@ -2,6 +2,7 @@
  "profile_id": "REGULASI_KETAT",
  "rule_version": "2026.10-r9",
  "nama": "Regulasi daerah ketat (span 50 m ERROR, lendutan 6 m)",
+ "name_en": "Strict local regulation (span 50 m ERROR, 6 m clearance)",
  "keterangan": "Untuk kota yang Perwal-nya membatasi jarak tiang 50 m dan lendutan kabel >= 6 m (mis. Pekalongan 21/2024, Yogyakarta 13/2018).",
  "params": {
   "span_max_m": {

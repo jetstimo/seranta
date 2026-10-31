@@ -51,7 +51,7 @@ def is_qc_layer(layer):
 
 class QcNavigator(QDockWidget):
     def __init__(self, iface, parent=None):
-        super().__init__("Navigator QC Seranta", parent or iface.mainWindow())
+        super().__init__("Seranta QC Findings Navigator", parent or iface.mainWindow())
         self.iface = iface
         self.setObjectName("SerantaQcNavigator")
         self.setMinimumWidth(340)
@@ -59,27 +59,27 @@ class QcNavigator(QDockWidget):
         lay = QVBoxLayout(w)
         top = QHBoxLayout()
         self.search = QLineEdit()
-        self.search.setPlaceholderText("Cari (mis. H00172, NP6-145, rentang)")
+        self.search.setPlaceholderText("Search (e.g. H00172, NP6-145, span)")
         self.search.textChanged.connect(self.refresh)
-        self.only_cek = QCheckBox("Sembunyikan INFO")
-        self.only_cek.setToolTip("Sembunyikan temuan INFO (kuning)")
+        self.only_cek = QCheckBox("Hide INFO")
+        self.only_cek.setToolTip("Hide INFO findings (yellow)")
         self.only_cek.stateChanged.connect(self.refresh)
         self.sev = QComboBox()
-        self.sev.addItems(["Semua tingkat", "ERROR", "WARNING", "UNVERIFIED", "INFO"])
+        self.sev.addItems(["All levels", "ERROR", "WARNING", "UNVERIFIED", "INFO"])
         self.sev.currentIndexChanged.connect(self.refresh)
         self.rev_f = QComboBox()
-        self.rev_f.addItems(["Semua review", "Belum direview (OPEN)", "Sudah direview"])
+        self.rev_f.addItems(["All reviews", "Not reviewed (OPEN)", "Reviewed"])
         self.rev_f.currentIndexChanged.connect(self.refresh)
         self.rule_f = QComboBox()
-        self.rule_f.addItem("Semua aturan")
-        self.rule_f.setToolTip("Tampilkan temuan satu aturan saja (mis. QC05_RASIO atau SPAN_OVER_MAX)")
+        self.rule_f.addItem("All rules")
+        self.rule_f.setToolTip("Show the findings of one rule only (e.g. QC05_RASIO or SPAN_OVER_MAX)")
         self.rule_f.currentIndexChanged.connect(self.refresh)
         self.scope_f = QComboBox()
-        self.scope_f.addItems(["Semua lingkup", "DISTRIBUTION", "FEEDER", "Tanpa lingkup"])
-        self.scope_f.setToolTip("Lingkup jaringan temuan: paket Distribution, paket Feeder, atau tidak terikat paket")
+        self.scope_f.addItems(["All scopes", "DISTRIBUTION", "FEEDER", "No scope"])
+        self.scope_f.setToolTip("Network scope of the finding: Distribution package, Feeder package, or none")
         self.scope_f.currentIndexChanged.connect(self.refresh)
-        btn = QPushButton("Muat ulang")
-        btn.setToolTip("Baca ulang semua layer QC Seranta di proyek")
+        btn = QPushButton("Reload")
+        btn.setToolTip("Re-read all Seranta QC layers in the project")
         btn.clicked.connect(self.refresh)
         top.addWidget(self.search, 1)
         top.addWidget(self.only_cek)
@@ -94,13 +94,13 @@ class QcNavigator(QDockWidget):
         flt2.addWidget(self.scope_f)
         lay.addLayout(flt2)
         self.tree = QTreeWidget()
-        self.tree.setHeaderLabels(["Temuan", "Nilai"])
+        self.tree.setHeaderLabels(["Finding", "Value"])
         self.tree.setColumnWidth(0, 300)
         self.tree.itemClicked.connect(self.go)
         self.tree.itemActivated.connect(self.go)
         lay.addWidget(self.tree, 1)
         nav = QHBoxLayout()
-        prev_b, next_b = QPushButton("< Sebelumnya"), QPushButton("Berikutnya >")
+        prev_b, next_b = QPushButton("< Previous"), QPushButton("Next >")
         prev_b.clicked.connect(lambda: self.step(-1))
         next_b.clicked.connect(lambda: self.step(1))
         self.info = QLabel("")
@@ -111,26 +111,26 @@ class QcNavigator(QDockWidget):
         rv = QHBoxLayout()
         self.rev = QComboBox()
         self.rev.addItems(REVIEW)
-        self.rev.setToolTip("Status review temuan terpilih (spesifikasi 13): VERIFIED = benar masalah, FALSE_POSITIVE = "
-                            "bukan masalah, APPROVED_EXCEPTION = pengecualian disetujui (isi alasan/bukti), RESOLVED = sudah diperbaiki")
+        self.rev.setToolTip("Review status of the selected finding: VERIFIED = real problem, FALSE_POSITIVE = "
+                            "not a problem, APPROVED_EXCEPTION = approved exception (give reason/evidence), RESOLVED = fixed")
         self.note = QLineEdit()
-        self.note.setPlaceholderText("catatan / bukti / pemberi persetujuan")
-        save_b = QPushButton("Simpan review")
+        self.note.setPlaceholderText("note / evidence / approved by")
+        save_b = QPushButton("Save review")
         save_b.clicked.connect(self.save_review)
-        exp_b = QPushButton("Ekspor CSV")
-        exp_b.setToolTip("Ekspor semua temuan yang tampil (dengan status review) ke CSV")
+        exp_b = QPushButton("Export CSV")
+        exp_b.setToolTip("Export all shown findings (with review status) to CSV")
         exp_b.clicked.connect(self.export_csv)
         rv.addWidget(self.rev)
         rv.addWidget(self.note, 1)
         rv.addWidget(save_b)
         lay.addLayout(rv)
         out = QHBoxLayout()
-        shot_b = QPushButton("Salin gambar")
-        shot_b.setToolTip("Salin gambar peta temuan terpilih (dengan ID dan keterangan) ke clipboard: tempel langsung di Word (Ctrl+V)")
+        shot_b = QPushButton("Copy picture")
+        shot_b.setToolTip("Copy the map picture of the selected finding (with ID and description) to the clipboard; paste it into Word with Ctrl+V")
         shot_b.clicked.connect(self.copy_image)
-        word_b = QPushButton("Laporan Word")
-        word_b.setToolTip("Buat laporan Word (.docx) untuk semua temuan yang tampil sesuai filter, lengkap dengan gambar peta "
-                          "setiap temuan dari peta QGIS saat ini")
+        word_b = QPushButton("Word report")
+        word_b.setToolTip("Create a Word report (.docx) of all shown findings, with a map picture "
+                          "of every finding taken from the current QGIS map")
         word_b.clicked.connect(self.export_word)
         out.addWidget(shot_b)
         out.addWidget(word_b)
@@ -231,8 +231,8 @@ class QcNavigator(QDockWidget):
             for txt, st, nil, fid, rvv, scp, bk in rows:
                 it = QTreeWidgetItem([("[%s] " % rvv if rvv != "OPEN" else "") + txt,
                                       ("%.1f" % nil) if isinstance(nil, (int, float)) else ""])
-                it.setToolTip(0, "%s | review: %s%s\n%s%s" % (st, rvv, (" | lingkup: %s" % scp) if scp else "", txt,
-                                                              ("\nbukti: %s" % bk) if bk else ""))
+                it.setToolTip(0, "%s | review: %s%s\n%s%s" % (st, rvv, (" | scope: %s" % scp) if scp else "", txt,
+                                                              ("\nevidence: %s" % bk) if bk else ""))
                 it.setData(0, ROLE, (lyr.id(), fid))
                 if st in SEV_COL and st != "INFO":
                     it.setForeground(0, QBrush(QColor(SEV_COL[st])))
@@ -244,12 +244,12 @@ class QcNavigator(QDockWidget):
         cur = self.rule_f.currentText()
         self.rule_f.blockSignals(True)
         self.rule_f.clear()
-        self.rule_f.addItem("Semua aturan")
+        self.rule_f.addItem("All rules")
         self.rule_f.addItems(sorted(rules_seen))
         self.rule_f.setCurrentIndex(max(0, self.rule_f.findText(cur)))
         self.rule_f.blockSignals(False)
-        self.info.setText("%d temuan di %d layer. Klik temuan untuk menuju lokasinya." % (n_all, self.tree.topLevelItemCount())
-                          if n_all else "Belum ada layer QC Seranta di proyek. Jalankan alat 1 atau 3.")
+        self.info.setText("%d findings in %d layers. Click a finding to zoom to it." % (n_all, self.tree.topLevelItemCount())
+                          if n_all else "No Seranta QC layers in the project yet. Run tool 1, 3 or 4.")
 
     def step(self, d):
         if not self._leaves:
@@ -280,7 +280,7 @@ class QcNavigator(QDockWidget):
         f = lyr.getFeature(fid)
         g = f.geometry()
         if g is None or g.isEmpty():
-            self.info.setText("%s\n%s\n(temuan non-spasial: BOM/KMZ/data - tidak ada lokasi di peta, buka tabelnya)"
+            self.info.setText("%s\n%s\n(non-spatial finding: BOM/KMZ/data - no map location, open its table)"
                               % (lyr.name(), item.text(0)))
             try:
                 lyr.selectByIds([fid])
@@ -333,27 +333,27 @@ class QcNavigator(QDockWidget):
         """Tulis status review + catatan ke layer temuan (shp) - bertahan saat QC dijalankan ulang."""
         lyr, fid = self._current()
         if lyr is None:
-            self.info.setText("Pilih satu temuan dulu.")
+            self.info.setText("Select a finding first.")
             return
         ir, ic = lyr.fields().indexOf("review"), lyr.fields().indexOf("catatan")
         if ir < 0:
-            self.info.setText("Layer ini (versi lama) belum punya kolom review; jalankan ulang QC dengan Seranta terbaru.")
+            self.info.setText("This layer (older version) has no review column; run the QC again with the latest Seranta.")
             return
         st = self.rev.currentText()
         note = (self.note.text() or "").strip()
         if st == "APPROVED_EXCEPTION" and not note:
-            self.info.setText("APPROVED_EXCEPTION wajib diberi alasan/bukti dan nama pemberi persetujuan (spesifikasi X-04).")
+            self.info.setText("APPROVED_EXCEPTION needs a reason/evidence and the name of the approver.")
             return
         was = lyr.isEditable()
         if not was and not lyr.startEditing():
-            self.info.setText("Layer ini hanya-baca (tabel non-spasial). Isi kolom review/note di QC_APD_TEMUAN.csv; "
-                              "nilainya dibaca lagi saat QC dijalankan ulang.")
+            self.info.setText("This layer is read-only (non-spatial table). Fill the review/note columns in QC_APD_TEMUAN.csv; "
+                              "they are read again when the QC runs again.")
             return
         lyr.changeAttributeValue(fid, ir, st)
         if ic >= 0:
             lyr.changeAttributeValue(fid, ic, note[:200])
         ok = lyr.commitChanges() if not was else True
-        self.info.setText("Review disimpan: %s%s" % (st, "" if ok else " (GAGAL commit - file terkunci?)"))
+        self.info.setText("Review saved: %s%s" % (st, "" if ok else " (commit FAILED - file locked?)"))
         pos = self._pos
         self.refresh()
         if self._leaves:
@@ -437,22 +437,22 @@ class QcNavigator(QDockWidget):
     def copy_image(self):
         lyr, fid = self._current()
         if lyr is None:
-            self.info.setText("Pilih satu temuan dulu.")
+            self.info.setText("Select a finding first.")
             return
         img, a = self._render(lyr, fid)
         if img is None:
-            self.info.setText("Temuan ini tidak punya lokasi di peta.")
+            self.info.setText("This finding has no map location.")
             return
         from qgis.PyQt.QtWidgets import QApplication
         QApplication.clipboard().setImage(img)
-        self.info.setText("Gambar %s disalin. Tempel di Word dengan Ctrl+V." % a["fid"])
+        self.info.setText("Picture %s copied. Paste it into Word with Ctrl+V." % a["fid"])
 
     def export_word(self):
         """Laporan Word untuk temuan yang tampil (sesuai filter), maksimum 150 temuan bergambar."""
         if not self._leaves:
-            self.info.setText("Tidak ada temuan yang tampil.")
+            self.info.setText("No findings shown.")
             return
-        path, _f = QFileDialog.getSaveFileName(self, "Simpan laporan Word", "LAPORAN_TEMUAN_QC.docx", "Word (*.docx)")
+        path, _f = QFileDialog.getSaveFileName(self, "Save Word report", "LAPORAN_TEMUAN_QC.docx", "Word (*.docx)")
         if not path:
             return
         if not path.lower().endswith(".docx"):
@@ -469,7 +469,7 @@ class QcNavigator(QDockWidget):
             lyr = QgsProject.instance().mapLayer(data[0])
             if lyr is None:
                 continue
-            self.info.setText("Membuat gambar %d dari %d ..." % (k + 1, min(150, len(self._leaves))))
+            self.info.setText("Creating picture %d of %d ..." % (k + 1, min(150, len(self._leaves))))
             QApplication.processEvents()
             try:
                 img, a = self._render(lyr, data[1])
@@ -495,12 +495,12 @@ class QcNavigator(QDockWidget):
             D.qc_report(path, "Laporan Temuan QC - %s" % proj, "Temuan terpilih dari panel Navigator QC Seranta (gambar dari peta QGIS)",
                         [("Proyek", proj), ("Jumlah temuan", str(len(recs))), ("Filter", "sesuai filter Navigator saat ekspor")],
                         rows, recs, imgs, footer="Seranta - Navigator QC")
-            self.info.setText("Laporan Word disimpan: %s (%d temuan)" % (path, len(recs)))
+            self.info.setText("Word report saved: %s (%d findings)" % (path, len(recs)))
         except OSError as e:
-            self.info.setText("Gagal menyimpan (file sedang dibuka di Word?): %s" % e)
+            self.info.setText("Cannot save (file open in Word?): %s" % e)
 
     def export_csv(self):
-        path, _ = QFileDialog.getSaveFileName(self, "Ekspor temuan QC", "QC_REVIEW.csv", "CSV (*.csv)")
+        path, _ = QFileDialog.getSaveFileName(self, "Export QC findings", "QC_REVIEW.csv", "CSV (*.csv)")
         if not path:
             return
         import csv
@@ -521,4 +521,4 @@ class QcNavigator(QDockWidget):
                                 g(ft, "review") or "OPEN", g(ft, "catatan"),
                                 round(p.x(), 7) if p else "", round(p.y(), 7) if p else ""])
                     n += 1
-        self.info.setText("%d temuan diekspor ke %s" % (n, path))
+        self.info.setText("%d findings exported to %s" % (n, path))

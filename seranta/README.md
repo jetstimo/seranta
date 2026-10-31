@@ -17,16 +17,18 @@ New versions appear under **Upgradeable**; no ZIP needed.
 ## The four tools (Processing Toolbox → Seranta, or menu Vector → Seranta)
 | Tool | When | What you get |
 |---|---|---|
-| 1. Siapkan Input Desain Otomatis + QC Survei | before design | homepass layer, pole KMZ, road layer, nine survey standards incl. cross-cluster duplicates and sibling BOUNDARY checks, `RINGKASAN_QC.html` |
-| 2. Alokasi FDT & FAT (estimasi kebutuhan) | planning | FAT groups along the route, COLO vs new FDT, link budget, `ALOKASI_FDT.html` |
-| 3. Pasca-Desain: Kode FDT-FAT, Tabel Closure + QC | after design | FDT-FAT code table, colour-coded closure tables (KMZ/HTML) |
-| 4. QC APD Pasca-Desain | before hand-over | 22 rules incl. seven package rules, one layer per rule, `QC_APD.html`, reviewer worklist `QC_APD_TEMUAN.xlsx`, CSV/JSON |
+| 1. Survey QC & Design Input | before design | homepass layer, pole KMZ, road layer, survey checks incl. cross-cluster duplicates, review remarks, `RINGKASAN_QC.html` |
+| 2. FDT & FAT Allocation | planning | FAT groups along the route, colocation vs new FDT, link budget, `ALOKASI_FDT.html` |
+| 3. Post-Design Tables | after design | FDT-FAT code table, colour-coded closure tables (KMZ/HTML) |
+| 4. Design Package QC | before hand-over | 22 rules incl. seven package rules, one layer per rule, `QC_APD.html`, reviewer worklist `QC_APD_TEMUAN.xlsx`, CSV/JSON |
+
+Each tool needs only **one folder**: pick it and click **Run**. Optional settings sit under **Advanced**.
 
 Every HTML report starts with one sentence telling the reader what to do. Each rule explains **what was checked**,
 **why it matters** and **what to do**; each finding is written in plain language with a map link, and the technical
 detail is one click below. Fonts are embedded, so reports look the same offline and print cleanly to PDF.
 
-The QC Navigator panel (Vector → Seranta) takes the map straight to each finding and stores a review status
+The QC Findings Navigator panel (Vector → Seranta) takes the map straight to each finding and stores a review status
 (verified, false positive, approved exception, resolved) that survives re-runs.
 
 ## Your own standards (profiles)
@@ -44,12 +46,12 @@ A profile with `"default": true` is selected first. A profile with the same `pro
 
 ## Reference data
 Service boundaries, existing-network KMZ, administrative-area attributes and design-software configs belong to your
-team and are **not shipped with the plugin**. Pick the reference folder once in tool 1; the reports list what was found
+team and are **not shipped with the plugin**. Seranta finds the reference folder near your survey folders, or you pick it once under Advanced in tool 1; the reports list what was found
 and mark rules that could not be checked as *Belum bisa dicek* (UNVERIFIED) — never as a pass.
 
 ## Requirements
 No extra Python packages, no internet, no account. The automatic design software is a separate product.
-User interface and reports are in Indonesian.
+Menus, forms and messages are in English; reports and review remarks are in Indonesian.
 
 ## Development
 See [CONTRIBUTING.md](https://github.com/jetstimo/seranta/blob/main/CONTRIBUTING.md) in the repository: tests,
