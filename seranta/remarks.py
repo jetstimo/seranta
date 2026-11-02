@@ -32,7 +32,7 @@ PRIORITY = [
     "HP_DUPLIKAT_KOORDINAT", "HP_DUPLIKAT_ID", "HP_DUPLIKAT_LABEL", "HP_HPDB_TIDAK_ADA_DI_KMZ", "HP_KMZ_TIDAK_ADA_DI_HPDB",
     "HP_SUDAH_ADA_DI_DESIGN_LITE", "TIANG_BARU_SUDAH_ADA", "WARN_TIANG_GANDA_LINTAS_CLUSTER", "WARN_ID_CLUSTER_GANDA",
     "ADMIN_", "WARN_TIANG_DUPLIKAT_KMZ", "WARN_BELOKAN_TANPA_TIANG", "WARN_POLE_SHEET_BEDA_KMZ", "WARN_CLUSTER_NAME_KOSONG",
-    "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
+    "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
 ]
 
 
@@ -306,7 +306,18 @@ def phrases(findings, rowmap=None, findim_stale=False):
                 "%s HP tanpa foto evidence" % (m.group(1) if m else n))
         elif key == "TIANG_NGANGGUR":
             nm = [re.match(r"^(\S+)", f["ket"]).group(1) for f in L if re.match(r"^(\S+)", f["ket"])]
-            add(key, "%s tidak dilewati jalur" % (", ".join(nm[:3]) if n <= 3 else "%d tiang" % n), "%d tiang nganggur" % n)
+            tk = [re.search(r"tikor ([-\d.]+, [-\d.]+)", f["ket"]) for f in L]
+            tk = [m.group(1) for m in tk if m]
+            if n <= 2 and tk:
+                add(key, "; ".join("%s nganggur (tikor %s)" % (a, b) for a, b in zip(nm, tk)), "%d tiang NP nganggur" % n)
+            else:
+                add(key, "%s tidak dilewati jalur" % (", ".join(nm[:3]) if n <= 3 else "%d tiang NP" % n), "%d tiang NP nganggur" % n)
+        elif key == "WARN_HP_JAUH_LEWAT_JALUR":
+            add(key, "%d HP >%s m ke tiang lewat jalur/akses (baris %s): cek akses" % (
+                n, num(L[0].get("lim") or 50, 0), rows_compact(rows, 4)), "%d HP jauh lewat jalur" % n)
+        elif key == "WARN_HP_AKSES_DALAM":
+            add(key, "%d HP jauh dari jalur, akses masuk dari mana? (baris %s)" % (n, rows_compact(rows, 4)),
+                "%d HP akses perlu dicek" % n)
         elif key == "WARN_HP_LABEL_SAMA":
             parts = []
             for f in L[:2]:

@@ -29,7 +29,7 @@ try:  # defusedxml bila terpasang; bila tidak, ElementTree standar (expat >= 2.4
 except ImportError:
     import xml.etree.ElementTree as ET  # nosec B405
 
-RULE_VERSION = "2026.10-r9"
+RULE_VERSION = "2026.11-r10"
 SEVERITIES = ("ERROR", "WARNING", "UNVERIFIED", "INFO", "PASS")
 SEV_RANK = {s: i for i, s in enumerate(SEVERITIES)}
 DASAR_LABEL = {"INTERNAL+RISET": "kebijakan internal dengan dukungan riset", "REGULASI": "Regulasi Indonesia", "STANDAR": "Standar (ITU-T/GR/konstruksi distribusi)",
@@ -394,6 +394,137 @@ def in_poly(p, poly):
 
 def dist_to_ring(p, ring, pr):
     return min(seg_proj(p, ring[i], ring[i + 1], pr)[0] for i in range(len(ring) - 1)) if len(ring) > 1 else float("inf")
+
+
+class SegGrid(object):
+    """Indeks ruas garis (sel ~ cell_m meter): jarak titik ke garis terdekat tanpa memeriksa semua ruas.
+    items: [(pts, obj)] polyline (lon, lat). Dipakai untuk aturan tiang/kabel pada ribuan objek (jauh lebih cepat)."""
+
+    def __init__(self, items, pr, cell_m=50.0):
+        self.pr, self.c = pr, cell_m
+        self.segs = []                  # (a, b, obj, idx_garis, chainage_awal)
+        self.cells = {}
+        for li, (pts, o) in enumerate(items):
+            acc = 0.0
+            for i in range(len(pts) - 1):
+                a, b = pts[i], pts[i + 1]
+                k = len(self.segs)
+                self.segs.append((a, b, o, li, acc))
+                acc += pr.d(a, b)
+                (ax, ay), (bx, by) = pr.xy(a), pr.xy(b)
+                for cx in range(int(min(ax, bx) // cell_m), int(max(ax, bx) // cell_m) + 1):
+                    for cy in range(int(min(ay, by) // cell_m), int(max(ay, by) // cell_m) + 1):
+                        self.cells.setdefault((cx, cy), []).append(k)
+
+    def near(self, p, r):
+        """[(jarak, obj, idx_garis, chainage)] ruas dalam radius r, satu baris per garis (yang terdekat)."""
+        x, y = self.pr.xy(p)
+        k = int(r // self.c) + 1
+        cx, cy = int(x // self.c), int(y // self.c)
+        best, seen = {}, set()
+        for i in range(cx - k, cx + k + 1):
+            for j in range(cy - k, cy + k + 1):
+                for sid in self.cells.get((i, j), ()):
+                    if sid in seen:
+                        continue
+                    seen.add(sid)
+                    a, b, o, li, acc = self.segs[sid]
+                    d, t = seg_proj(p, a, b, self.pr)
+                    if d <= r and (li not in best or d < best[li][0]):
+                        best[li] = (d, o, li, acc + t * self.pr.d(a, b))
+        return sorted(best.values(), key=lambda v: (v[0], v[2]))
+
+    def nearest_d(self, p, rmax=200.0):
+        hit = self.near(p, rmax)
+        return hit[0][0] if hit else float("inf")
+
+
+class PolyIndex(object):
+    """Indeks kotak-batas poligon: titik-dalam-poligon hanya diuji pada poligon yang kotaknya memuat titik."""
+
+    def __init__(self, polys, cell_deg=0.002):
+        self.polys, self.c, self.cells = polys, cell_deg, {}
+        for i, P in enumerate(polys):
+            ring = P["poly"][0]
+            xs, ys = [q[0] for q in ring], [q[1] for q in ring]
+            for cx in range(int(math.floor(min(xs) / cell_deg)), int(math.floor(max(xs) / cell_deg)) + 1):
+                for cy in range(int(math.floor(min(ys) / cell_deg)), int(math.floor(max(ys) / cell_deg)) + 1):
+                    self.cells.setdefault((cx, cy), []).append(i)
+
+    def inside(self, p):
+        cand = self.cells.get((int(math.floor(p[0] / self.c)), int(math.floor(p[1] / self.c))), ())
+        return [i for i in cand if in_poly(p, self.polys[i]["poly"])]
+
+
+class RouteGraph(object):
+    """Graf jalur kabel (simpul = verteks kabel; verteks berjarak <= snap_m disatukan). Jarak FAT -> HP dihitung
+    SEPANJANG kabel (Dijkstra), bukan garis lurus: desain otomatis juga menghitung jarak premis lewat jalur
+    (MAXPPDIST / drop yang mengikuti jalur ke tiang terdekat)."""
+
+    def __init__(self, cables, pr, snap_m=1.0):
+        self.pr, self.pts, self.adj = pr, [], []
+        grid = {}
+
+        def node(p):
+            x, y = pr.xy(p)
+            cx, cy = int(x // snap_m), int(y // snap_m)
+            for i in range(cx - 1, cx + 2):
+                for j in range(cy - 1, cy + 2):
+                    for k in grid.get((i, j), ()):
+                        if pr.d(self.pts[k], p) <= snap_m:
+                            return k
+            k = len(self.pts)
+            self.pts.append(p)
+            self.adj.append([])
+            grid.setdefault((cx, cy), []).append(k)
+            return k
+        self.node = node
+        for c in cables:
+            pts = c["pts"]
+            prev = node(pts[0])
+            for q in pts[1:]:
+                cur = node(q)
+                if cur != prev:
+                    w = pr.d(self.pts[prev], self.pts[cur])
+                    self.adj[prev].append((cur, w))
+                    self.adj[cur].append((prev, w))
+                prev = cur
+        self.index = SegGrid([([self.pts[a], self.pts[b]], (a, b)) for a in range(len(self.adj))
+                              for b, _w in self.adj[a] if a < b], pr, 50.0)
+
+    def attach(self, p, rmax):
+        """Titik pada graf terdekat ke p: (jarak, simpul_a, simpul_b, jarak_dari_a) atau None."""
+        hit = self.index.near(p, rmax)
+        if not hit:
+            return None
+        d, (a, b), _li, ch = hit[0]
+        return d, a, b, ch
+
+    def dijkstra(self, src_nodes, limit):
+        """Jarak terpendek dari simpul sumber [(simpul, jarak_awal)] sampai batas limit meter: {simpul: (jarak, asal)}."""
+        import heapq
+        dist, heap = {}, []
+        for k, d0 in src_nodes:
+            if d0 < dist.get(k, (float("inf"),))[0]:
+                dist[k] = (d0, None)
+                heapq.heappush(heap, (d0, k))
+        while heap:
+            d, k = heapq.heappop(heap)
+            if d > dist[k][0] or d > limit:
+                continue
+            for j, w in self.adj[k]:
+                nd = d + w
+                if nd < dist.get(j, (float("inf"),))[0]:
+                    dist[j] = (nd, k)
+                    heapq.heappush(heap, (nd, j))
+        return dist
+
+    def path(self, dist, k):
+        out = []
+        while k is not None:
+            out.append(self.pts[k])
+            k = dist[k][1]
+        return out[::-1]
 
 
 def segs_intersect(a, b, c, d):
@@ -1074,19 +1205,14 @@ def rule_coverage(net, prof, pr):
         return r.unverify("data Homepass tidak ada")
     tol = pv(prof, "coverage_edge_tol_m", 0.5)
     fats = _fats(net)
-    owner = []
-    for P in net.polys:
-        o = P["owner"]
-        match = [f for f in fats if o and o in (f["id"], f["name"], f["label"])]
-        if not match:
-            inside = [f for f in fats if in_poly((f["x"], f["y"]), P["poly"])]
-            match = inside if len(inside) == 1 else []
-        owner.append(match[0] if match else None)
+    owner = _poly_owners(net, fats)
+    idx = PolyIndex(net.polys)
     n_in = 0
     for e in net.endpoints:
         p = (e["x"], e["y"])
-        hit = [i for i, P in enumerate(net.polys) if in_poly(p, P["poly"])
-               or dist_to_ring(p, P["poly"][0], pr) <= tol]
+        hit = idx.inside(p)
+        if not hit:
+            hit = [i for i, P in enumerate(net.polys) if dist_to_ring(p, P["poly"][0], pr) <= tol]
         if not hit:
             d = min(dist_to_ring(p, P["poly"][0], pr) for P in net.polys)
             r.add(finding("HP_OUTSIDE_FAT_COVERAGE", "ERROR", "HP %s di luar semua FAT Coverage (%.1f m dari tepi terdekat)"
@@ -1267,41 +1393,139 @@ def rule_multi_fdt(net, prof, pr):
     return r
 
 
+def _poly_owners(net, fats):
+    """FAT pemilik tiap poligon FAT Coverage (kolom pemilik, atau satu-satunya FAT di dalam poligon)."""
+    owner = []
+    for P in net.polys:
+        o = P["owner"]
+        match = [f for f in fats if o and o in (f["id"], f["name"], f["label"])]
+        if not match:
+            inside = [f for f in fats if in_poly((f["x"], f["y"]), P["poly"])]
+            match = inside if len(inside) == 1 else []
+        owner.append(match[0] if match else None)
+    return owner
+
+
+def fat_members(net, fats, pr=None):
+    """Anggota tiap FAT: HP (endpoint keluaran desain) yang berada di dalam FAT Coverage milik FAT itu. Tanpa layer
+    coverage -> relasi SUPID. Mengembalikan ({id_fat: [hp]}, dasar)."""
+    members = {f["id"]: [] for f in fats}
+    if "polys" in net.has and net.polys and net.endpoints:
+        owners = _poly_owners(net, fats)
+        idx = PolyIndex(net.polys)
+        for e in net.endpoints:
+            own = {owners[i]["id"] for i in idx.inside((e["x"], e["y"])) if owners[i] is not None}
+            if len(own) == 1:
+                members[own.pop()].append(e)
+        if any(members.values()):
+            return members, "coverage"
+    by = {}
+    for f in fats:
+        by[f["id"]] = f["id"]
+        if f["name"]:
+            by.setdefault(f["name"], f["id"])
+    for e in net.endpoints:
+        if e["sup"] and e["sup"] in by:
+            members[by[e["sup"]]].append(e)
+    return members, "supid"
+
+
 def rule_fat_hp(net, prof, pr):
-    r = RuleResult("FAT_HP_DISTANCE", "Jarak FAT ke homepass (120 m; khusus 150 m)", "15", "P0-02", "INTERNAL",
-                   "Handbook KMZ kasus 15; config desain otomatis MAXPPDIST")
+    r = RuleResult("FAT_HP_DISTANCE", "Jarak FAT ke homepass sepanjang jalur (120 m; khusus 150 m)", "15", "P0-02", "INTERNAL",
+                   "Handbook KMZ kasus 15; config desain otomatis MAXPPDIST; anggota FAT = HP di dalam FAT Coverage")
     warn, err = pv(prof, "fat_hp_warn_m", 120), pv(prof, "fat_hp_err_m", 150)
     fats = _fats(net)
     if not fats:
         return r.unverify("FAT tidak ada")
-    by_sup = {}
-    for e in net.endpoints:
-        if e["sup"]:
-            by_sup.setdefault(e["sup"], []).append(e)
-    measured = 0
+    members, basis = fat_members(net, fats, pr)
+    graph = None
+    cabs = [c for c in net.cables if c["kind"] in ("dist", "pancingan", "drop", "feeder") and len(c["pts"]) >= 2]
+    if cabs:
+        graph = RouteGraph(cabs, pr)
+    pole_grid = Grid([((p["x"], p["y"]), p) for p in net.poles], pr, 30.0) if net.poles else None
+    on_tol = pv(prof, "pole_on_line_m", 3.0)
+    side_tol = pv(prof, "span_side_tol_m", 7.0)
+    limit = max(err * 2.0, 400.0)
+
+    def reach(dist, att, fa):
+        """Jarak jalur dari FAT ke titik tempel (d, a, b, ch) dan simpul ujung yang dipakai (None = ruas yang sama)."""
+        d, a, b, ch = att
+        L = graph.pr.d(graph.pts[a], graph.pts[b])
+        da = dist[a][0] + ch if a in dist else float("inf")
+        db = dist[b][0] + (L - ch) if b in dist else float("inf")
+        best = (da, a) if da <= db else (db, b)
+        if {a, b} == {fa[1], fa[2]}:            # FAT dan titik tujuan di ruas yang sama: langsung sepanjang ruas
+            fch = fa[3] if a == fa[1] else L - fa[3]
+            if abs(ch - fch) <= best[0]:
+                return abs(ch - fch), None
+        return best
+
+    measured, how_used = 0, set()
     for f in fats:
-        d, how, far = f["maxpp"], "jalur (MAXPPDIST desain otomatis)", None
-        if d is None:
-            hs = by_sup.get(f["id"]) or by_sup.get(f["name"]) or []
+        hs = members.get(f["id"]) or []
+        if f["maxpp"] is not None:
+            d, how, geom, far = f["maxpp"], "jalur (MAXPPDIST desain otomatis)", _pt(f), None
+        else:
             if not hs:
                 continue
-            far = max(hs, key=lambda e: pr.d((f["x"], f["y"]), (e["x"], e["y"])))
-            d, how = pr.d((f["x"], f["y"]), (far["x"], far["y"])), "garis lurus (batas bawah; jalur kabel >= nilai ini)"
+            best = None
+            dist, fa = None, None
+            if graph is not None:
+                fa = graph.attach((f["x"], f["y"]), max(side_tol, 10.0))
+            if fa is not None:
+                d0, a, b, ch = fa
+                L = pr.d(graph.pts[a], graph.pts[b])
+                dist = graph.dijkstra([(a, ch), (b, L - ch)], limit)
+
+                def fpath(dist, k, f=f):
+                    return [(f["x"], f["y"])] + (graph.path(dist, k) if k is not None else [])
+            for e in hs:
+                hp = (e["x"], e["y"])
+                cand = None
+                if dist is not None:
+                    att = graph.attach(hp, 1.0)          # garis drop/kabel yang berakhir di rumah
+                    if att is not None:
+                        v, k = reach(dist, att, fa)
+                        if v < float("inf"):
+                            cand = (v + att[0] + fa[0], fpath(dist, k) + [hp], "jalur kabel")
+                    if cand is None and pole_grid is not None:
+                        for dp, _q, pole in pole_grid.near(hp, 150.0)[:3]:
+                            patt = graph.attach((pole["x"], pole["y"]), side_tol)
+                            if patt is None:
+                                continue
+                            v, k = reach(dist, patt, fa)
+                            if v < float("inf"):
+                                tot = v + patt[0] + fa[0] + dp
+                                if cand is None or tot < cand[0]:
+                                    cand = (tot, fpath(dist, k) + [(pole["x"], pole["y"]), hp], "jalur kabel + drop")
+                if cand is None:
+                    cand = (pr.d((f["x"], f["y"]), hp), [(f["x"], f["y"]), hp], "garis lurus")
+                if best is None or cand[0] > best[0]:
+                    best = cand + (e,)
+            d, pts, how, far = best
+            how = {"jalur kabel": "jalur kabel sampai rumah", "jalur kabel + drop": "jalur kabel + drop dari tiang",
+                   "garis lurus": "garis lurus (batas bawah; jalur kabel tidak tersambung)"}[how]
+            geom = ("line", pts)
         measured += 1
-        geom = ("line", [(f["x"], f["y"]), (far["x"], far["y"])]) if far else _pt(f)
+        how_used.add(how.split(" (")[0])
+        hp_txt = " (HP %s)" % (far["id"] or far["name"]) if far else ""
         if d > err:
-            r.add(finding("FAT_HP_OVER_150", "ERROR", "FAT %s: HP terjauh %.0f m > %d m [%s]" % (f["name"] or f["id"], d, err, how),
-                          geom, "FAT", f["id"], round(d, 1), err, "pecah FAT / tambah FAT"))
-        elif d > warn and how.startswith("jalur"):
-            r.add(finding("FAT_HP_120_150", "WARNING", "FAT %s: HP terjauh %.0f m (120-150 m: wajib justifikasi special case) [%s]"
-                          % (f["name"] or f["id"], d, how), geom, "FAT", f["id"], round(d, 1), warn,
+            r.add(finding("FAT_HP_OVER_150", "ERROR", "FAT %s: HP terjauh%s %.0f m > %d m [%s]" % (
+                f["name"] or f["id"], hp_txt, d, err, how), geom, "FAT", f["id"], round(d, 1), err, "pecah FAT / tambah FAT"))
+        elif d > warn and not how.startswith("garis"):
+            r.add(finding("FAT_HP_120_150", "WARNING", "FAT %s: HP terjauh%s %.0f m (120-150 m: wajib justifikasi special case) [%s]"
+                          % (f["name"] or f["id"], hp_txt, d, how), geom, "FAT", f["id"], round(d, 1), warn,
                           "catat justifikasi geografis (approved exception)"))
         elif d > warn:
-            r.add(finding("FAT_HP_120_150", "WARNING", "FAT %s: HP terjauh >= %.0f m garis lurus (> %d m)" % (f["name"] or f["id"], d, warn),
-                          geom, "FAT", f["id"], round(d, 1), warn))
+            r.add(finding("FAT_HP_120_150", "WARNING", "FAT %s: HP terjauh%s >= %.0f m garis lurus (> %d m)" % (
+                f["name"] or f["id"], hp_txt, d, warn), geom, "FAT", f["id"], round(d, 1), warn))
     if not measured:
-        r.unverify("MAXPPDIST dan relasi HP->FAT tidak ada")
+        r.unverify("MAXPPDIST dan anggota FAT (FAT Coverage / SUPID) tidak ada")
     r.stats["fat_diukur"] = measured
+    r.stats["anggota_fat"] = "HP di dalam FAT Coverage" if basis == "coverage" else "relasi SUPID"
+    r.notes.append("Anggota FAT: %s. Jarak: %s." % (
+        "HP (endpoint desain) di dalam poligon FAT Coverage milik FAT" if basis == "coverage" else "HP ber-SUPID FAT itu",
+        ", ".join(sorted(how_used)) or "-"))
     return r
 
 
@@ -1375,18 +1599,41 @@ def rule_fat_on_pole(net, prof, pr):
     return r
 
 
+def _tikor(o):
+    return "tikor %.6f, %.6f" % (o["y"], o["x"])
+
+
 def rule_pole_idle(net, prof, pr):
-    r = RuleResult("POLE_IDLE", "Tiang nganggur (tidak dilewati kabel)", "25", "-", "INTERNAL", "Handbook KMZ kasus 25")
+    r = RuleResult("POLE_IDLE", "Tiang nganggur (tidak dilewati kabel)", "25", "-", "INTERNAL",
+                   "Handbook KMZ kasus 25: tidak boleh ada tiang baru (NP) nganggur; tiang existing (EP) dan tiang yang "
+                   "dilewati kabel feeder boleh")
     cabs = _dist_cables(net)
     if not net.poles or not cabs:
         return r.unverify("butuh layer Pole dan kabel")
     tol = pv(prof, "pole_on_line_m", 3.0)
+    side = max(tol, pv(prof, "span_side_tol_m", 7.0))
+    idx = SegGrid([(c["pts"], c) for c in cabs], pr, 50.0)
+    n_ep = n_side = 0
     for p in net.poles:
-        d = min(point_line((p["x"], p["y"]), c["pts"], pr)[0] for c in cabs)
-        if d > tol:
-            r.add(finding("POLE_IDLE", "WARNING" if p["status"] != "EXISTING" else "INFO",
-                          "Tiang %s %.1f m dari kabel terdekat (nganggur)" % (p["name"], d), _pt(p), "POLE", p["name"],
-                          round(d, 1), tol, "hapus tiang atau lewatkan kabel"))
+        hit = idx.near((p["x"], p["y"]), side)
+        d = hit[0][0] if hit else idx.nearest_d((p["x"], p["y"]), 500.0)
+        if d <= tol:
+            continue
+        if d <= side:
+            # tiang di seberang/tepi jalan dari garis kabel (<= lebar jalan): dianggap menopang kabel (crossing)
+            n_side += 1
+            continue
+        if p["status"] == "EXISTING":
+            n_ep += 1               # EP boleh nganggur (tiang pihak lain/cadangan rute)
+            continue
+        dtxt = "%.1f m" % d if d < float("inf") else "> 500 m"
+        r.add(finding("POLE_IDLE", "ERROR",
+                      "Tiang baru (NP) %s tidak dilewati kabel (%s dari kabel terdekat); %s" % (p["name"], dtxt, _tikor(p)),
+                      _pt(p), "POLE", p["name"], round(d, 1) if d < float("inf") else None, tol,
+                      "hapus tiang NP atau lewatkan kabel distribusi/feeder melalui tiang ini"))
+    r.stats.update(tiang=len(net.poles), ep_nganggur_boleh=n_ep, tiang_seberang_jalan=n_side)
+    if n_ep:
+        r.notes.append("%d tiang existing (EP) tidak dilewati kabel: diperbolehkan, tidak dihitung temuan." % n_ep)
     return r
 
 
@@ -1403,21 +1650,18 @@ def rule_spans(net, prof, pr):
     if not net.poles or not cabs:
         return r.unverify("butuh layer Pole dan kabel")
     smax, sreg = pv(prof, "span_max_m", 60), pv(prof, "span_reg_m", 50)
-    tol = pv(prof, "pole_on_line_m", 3.0)
+    tol = max(pv(prof, "pole_on_line_m", 3.0), pv(prof, "span_side_tol_m", 7.0))
     done = set()
-    grid = Grid([((p["x"], p["y"]), p) for p in net.poles], pr, 50.0)
-    for c in cabs:
+    # Tiang penopang = tiang <= lebar jalan dari garis kabel, termasuk tiang di seberang jalan (kabel menyeberang kiri-
+    # kanan jalan). Satu pencarian per tiang di indeks ruas kabel (bukan per titik kabel x per tiang).
+    idx = SegGrid([(c["pts"], c) for c in cabs], pr, 50.0)
+    by_cable = {}
+    for p in net.poles:
+        for d, c, li, ch in idx.near((p["x"], p["y"]), tol):
+            by_cable.setdefault(li, []).append((ch, p))
+    for li, c in enumerate(cabs):
         L = line_len(c["pts"], pr)
-        cand = {}
-        for q in c["pts"]:
-            for d, _qq, p in grid.near(q, 200.0):
-                cand[id(p)] = p
-        on = []
-        for p in cand.values():
-            d, ch = point_line((p["x"], p["y"]), c["pts"], pr)
-            if d <= tol:
-                on.append((ch, p))
-        on.sort(key=lambda t: t[0])
+        on = sorted(by_cable.get(li, []), key=lambda t: (t[0], t[1]["name"]))
         for (c1, p1), (c2, p2) in zip(on, on[1:]):
             key = tuple(sorted((id(p1), id(p2))))
             if key in done:
@@ -1453,7 +1697,7 @@ def rule_fat_center(net, prof, pr):
         return r.unverify("relasi HP->FAT tidak ada (butuh net_endpoints SUPID)")
     ratio = pv(prof, "fat_center_ratio", 1.5)
     fats = _fats(net)
-    fat_pts = [(f, (f["x"], f["y"])) for f in fats]
+    fgrid = Grid([((f["x"], f["y"]), f) for f in fats], pr, 100.0)
     for f in fats:
         hs = by.get(f["id"]) or by.get(f["name"]) or []
         if len(hs) < 4:
@@ -1467,7 +1711,9 @@ def rule_fat_center(net, prof, pr):
                           "REVIEW: pertimbangkan tiang yang lebih sentral (arah rumah tidak tersedia -> orientasi UNVERIFIED)"))
         for e in hs:
             own = pr.d((f["x"], f["y"]), (e["x"], e["y"]))
-            other = min(((pr.d(q, (e["x"], e["y"])), g) for g, q in fat_pts if g is not f), key=lambda t: t[0], default=None)
+            # FAT lain terdekat: cukup dicari dalam radius own/2 (syarat temuan own > 2 x jarak FAT lain)
+            near_ = [(d_, g) for d_, _q, g in fgrid.near((e["x"], e["y"]), own / 2.0) if g is not f]
+            other = near_[0] if near_ else None
             if other and own > 2 * other[0] and own - other[0] > 40:
                 r.add(finding("HP_GROUPING_REVIEW", "INFO", "HP %s ke %s %.0f m, padahal %s hanya %.0f m (garis lurus)"
                               % (e["id"], f["name"] or f["id"], own, other[1]["name"] or other[1]["id"], other[0]),

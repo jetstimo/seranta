@@ -1,6 +1,6 @@
 {
  "profile_id": "REGULASI_KETAT",
- "rule_version": "2026.10-r9",
+ "rule_version": "2026.11-r10",
  "nama": "Regulasi daerah ketat (span 50 m ERROR, lendutan 6 m)",
  "name_en": "Strict local regulation (span 50 m ERROR, 6 m clearance)",
  "keterangan": "Untuk kota yang Perwal-nya membatasi jarak tiang 50 m dan lendutan kabel >= 6 m (mis. Pekalongan 21/2024, Yogyakarta 13/2018).",
@@ -81,6 +81,21 @@
    "dasar": "RISET",
    "sumber": "toleransi digitasi/GPS 3-5 m (Lee dkk., Sensors 2016) - parameter rekayasa",
    "status": "NOT_APPROVED",
+   "unit": "m"
+  },
+  "span_side_tol_m": {
+   "v": 7.0,
+   "dasar": "STANDAR",
+   "sumber": "Lebar jalur jalan sedang 2 x 3,50 m = 7 m (Permen PU 19/PRT/M/2011 Lampiran; telah diganti Permen PUPR 5/2023 - acuan orde besaran). Tiang di seberang jalan sampai 7 m dari garis kabel = tiang penopang (kabel menyeberang kiri-kanan jalan); permintaan tim QC 'pole kanan-kiri ruas jalan terhitung 7 m'",
+   "status": "APPROVED",
+   "unit": "m"
+  },
+  "hp_access_max_m": {
+   "v": 40.0,
+   "dasar": "PRAKTIK",
+   "sumber": "Rumah > 40 m dari jalur survei = rumah lapis kedua/ketiga dari jalan: asumsi desain: rumah lapis pertama < 30 m dari jalan (perlu kalibrasi) + galat GPS ponsel urban 7-13 m (PLOS ONE 2019); drop tidak boleh melintas pekarangan tanpa izin (Standar Review Strand: BAKP/izin warga); lead-in drop mengikuti akses ke tiang (Biarri FOND drop tier). Uji Minahasa: 30 m menandai rumah berhalaman dalam pada batas GPS (30,2-32 m), 40 m hanya rumah yang jelas jauh (58 m).",
+   "status": "NOT_APPROVED",
+   "severity": "WARNING",
    "unit": "m"
   },
   "fat_hp_warn_m": {

@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.8.0 – anggota FAT dari FAT Coverage, jarak sepanjang jalur, tiang seberang jalan, akses rumah
+- QC APD (alat 4) *Rumah terlalu jauh dari FAT*: anggota FAT = HP (endpoint keluaran desain) di dalam poligon FAT Coverage
+  milik FAT; jarak diukur sepanjang jalur kabel (graf kabel + drop dari tiang/garis drop), garis temuan mengikuti jalur.
+  HP ber-SUPID salah tidak lagi membuat FAT lain "terlalu jauh" (tetap dilaporkan HP_WRONG_FAT_AREA).
+- *Rentang tiang ke tiang*: tiang sampai 7 m dari garis kabel (tiang di seberang jalan; lebar jalur jalan sedang 2 × 3,5 m)
+  dihitung tiang penopang, sehingga kabel yang menyeberang kiri-kanan jalan tidak menjadi bentang palsu.
+- *Tiang nganggur*: NP tidak dilewati kabel = ERROR dengan tikor (lintang, bujur); EP dan tiang yang dilewati kabel feeder
+  boleh. Alat 1: NP = WARNING dengan tikor, EP = INFO; tikor juga di remarks.
+- Alat 1 – akses rumah (`akses.py`): WARN_HP_JAUH_LEWAT_JALUR (tiang → jalur → rumah > 55 m walau garis lurus ≤ 50 m) dan
+  WARN_HP_AKSES_DALAM (rumah > 40 m dari jalur survei: rumah di belakang rumah lain, akses masuk perlu dicek). HP jauh dari
+  tiang kini juga mencantumkan tikor.
+- Lebih cepat: indeks poligon, ruas kabel dan FAT (6.000 HP / 300 FAT: aturan inti 10,2 s → 1,4 s; FAT_COVERAGE 10 s → 0,1 s).
+- Profil: parameter baru `span_side_tol_m` (7 m) dan `hp_access_max_m` (40 m). Versi aturan 2026.11-r10.
+
 ## 3.7.0 – menu berbahasa Inggris, satu isian per alat
 - Menu, form, opsi, pesan proses dan panel Navigator QC berbahasa Inggris; laporan dan remarks tetap berbahasa Indonesia.
 - Setiap alat cukup satu isian (folder); pengaturan lain dipindah ke Advanced dengan nilai bawaan yang sama.

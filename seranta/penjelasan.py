@@ -67,11 +67,14 @@ RULES = {
         alasan="Perangkat udara harus dipasang di tiang. Titik yang melayang membuat tim pemasang tidak tahu tiang mana yang dipakai.",
         tindakan="Seret titik perangkat ke titik tiang terdekat, atau tambahkan tiang bila memang belum ada."),
     "POLE_IDLE": dict(
-        cek="Setiap tiang baru dilewati kabel. Tiang yang tidak dilalui kabel disebut tiang nganggur.",
+        cek="Setiap tiang baru (NP) dilewati kabel distribusi atau feeder. Tiang existing (EP) dan tiang yang dilewati kabel "
+            "feeder boleh tidak dilewati kabel distribusi. Tiang di seberang jalan (sampai 7 m dari garis kabel) dihitung dipakai.",
         alasan="Tiang baru yang tidak dipakai adalah biaya pemasangan dan izin tanpa manfaat.",
-        tindakan="Hapus tiang yang tidak diperlukan, atau perbaiki jalur kabel agar melewatinya."),
+        tindakan="Buka koordinat (tikor) di keterangan temuan, lalu hapus tiang NP itu atau lewatkan jalur kabel melaluinya."),
     "SPAN_APD": dict(
-        cek="Jarak antar tiang di sepanjang jalur kabel tidak melebihi batas tegas maupun batas regulasi daerah.",
+        cek="Jarak antar tiang di sepanjang jalur kabel tidak melebihi batas tegas maupun batas regulasi daerah. Tiang di "
+            "kiri-kanan jalan (sampai 7 m dari garis kabel, lebar jalur jalan sedang) dihitung sebagai tiang penopang, "
+            "sehingga kabel yang menyeberang jalan tidak dianggap bentang panjang.",
         alasan="Bentang terlalu panjang membuat kabel melendut rendah di atas jalan dan sering ditolak saat perizinan.",
         tindakan="Sisipkan tiang di tengah bentang yang terlalu panjang."),
     "FAT_CENTER": dict(
@@ -180,7 +183,8 @@ FINDINGS = {
     "FDT_WITHOUT_FAT": ("FDT tanpa FAT", "FDT {obj} tidak punya FAT di bawahnya.",
                         "Periksa apakah FDT ini memang belum dipakai; hapus atau sambungkan FAT."),
     # --- jarak FAT ke HP ---
-    "FAT_HP_OVER_150": ("Rumah terlalu jauh dari FAT", "HP terjauh dari FAT {obj} berjarak {v} m, melebihi batas {t} m.",
+    "FAT_HP_OVER_150": ("Rumah terlalu jauh dari FAT", "HP terjauh di dalam FAT Coverage {obj} berjarak {v} m sepanjang jalur "
+                        "kabel + drop, melebihi batas {t} m.",
                         "Geser FAT mendekati rumah terjauh atau pecah kelompok HP."),
     "FAT_HP_120_150": ("Rumah agak jauh dari FAT", "HP terjauh dari FAT {obj} berjarak {v} m (zona khusus).",
                        "Boleh dipertahankan hanya dengan justifikasi khusus; lebih baik geser FAT."),
@@ -195,8 +199,8 @@ FINDINGS = {
     # --- tiang ---
     "FAT_NOT_ON_POLE": ("FAT melayang", "FAT {obj} berjarak {v} m dari tiang terdekat (batas {t} m).", "Seret FAT ke titik tiang."),
     "FDT_NOT_ON_POLE": ("FDT melayang", "FDT {obj} berjarak {v} m dari tiang terdekat (batas {t} m).", "Seret FDT ke titik tiang."),
-    "POLE_IDLE": ("Tiang tidak dilewati kabel", "Tiang {obj} berjarak {v} m dari kabel terdekat.",
-                  "Hapus tiang baru yang tidak perlu, atau rutekan kabel melewatinya. Tiang existing cukup dicatat."),
+    "POLE_IDLE": ("Tiang baru (NP) tidak dilewati kabel", "Tiang NP {obj} berjarak {v} m dari kabel terdekat.",
+                  "Hapus tiang NP yang tidak perlu, atau rutekan kabel melewatinya (koordinat ada di keterangan)."),
     "SPAN_OVER_MAX": ("Bentang tiang terlalu panjang", "Jarak tiang {obj} = {v} m, melebihi batas tegas {t} m.",
                       "Sisipkan tiang di tengah bentang."),
     "SPAN_OVER_REGULATION": ("Bentang di atas batas regulasi daerah", "Jarak tiang {obj} = {v} m, di atas batas regulasi {t} m.",
@@ -382,6 +386,12 @@ TOOL1_KIND = [
     ("WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR", "ID cluster belum ada di FINDIM, tetapi lebih baru dari semua ID di file FINDIM "
      "yang dipakai: kemungkinan cluster baru yang belum terdaftar.", "Minta FINDIM terbaru sebelum menolak karena ID."),
     ("HP_JAUH_DARI_TIANG", "Rumah terlalu jauh dari tiang terdekat.", "Tambahkan tiang di dekat rumah atau periksa koordinat rumah."),
+    ("WARN_HP_JAUH_LEWAT_JALUR", "Garis lurus rumah ke tiang masih di bawah batas, tetapi bila kabel drop mengikuti jalur/"
+     "akses (menyusuri jalan lalu masuk ke rumah) jaraknya melebihi batas.",
+     "Cek akses di lapangan / street view; tambahkan tiang dekat rumah atau pastikan drop boleh lewat jalan pintas."),
+    ("WARN_HP_AKSES_DALAM", "Rumah jauh dari semua jalur survei (mis. di belakang rumah lain): dari mana kabel drop masuk "
+     "belum terlihat.", "Cek di lapangan atau street view: ada gang, atau izin melintas pekarangan tetangga? Gambar gang "
+     "itu sebagai jalur bila ada."),
     ("HP_DUPLIKAT_LINTAS_CLUSTER", "Rumah yang sama juga tercatat di cluster saudara (koordinat sama, atau nomor rumah/nama "
      "sama dalam jarak galat GPS). Satu rumah akan dihitung dua kali bila kedua cluster didesain.",
      "Tentukan satu cluster pemilik (lihat saran: di dalam BOUNDARY siapa, tiang siapa lebih dekat), hapus baris HPDB dan "
@@ -440,7 +450,9 @@ TOOL1_KIND = [
     ("BAKP_", "Isian BAKP perlu dicek.", "Bandingkan dengan nilai seharusnya di daftar periksa BAKP."),
     ("INFO_BAKP_", "Catatan BAKP.", "Tidak wajib diubah."),
     ("UNV_BAKP", "BAKP belum dapat diverifikasi otomatis.", "Periksa BAKP secara manual."),
-    ("TIANG_NGANGGUR", "Tiang survei tidak dilewati jalur kabel.", "Tinjau: hapus bila tidak dipakai, atau lewatkan jalur bila memang dibutuhkan."),
+    ("TIANG_NGANGGUR", "Tiang baru (NP) survei tidak dilewati jalur kabel.", "Buka koordinat di keterangan; hapus tiang NP "
+     "bila tidak dipakai, atau lewatkan jalur bila memang dibutuhkan."),
+    ("INFO_TIANG_EP_NGANGGUR", "Tiang existing (EP) tidak dilewati jalur kabel. Ini diperbolehkan.", "Tidak perlu tindakan."),
     ("UJUNG_JALUR_TANPA_TIANG", "Jalur berakhir tanpa tiang untuk menambat kabel.", "Tambahkan tiang di ujung jalur."),
     ("WARN_BELOKAN_TANPA_TIANG", "Belokan tajam tanpa tiang (kabel butuh tiang tambat di belokan).", "Tambahkan tiang di titik belokan."),
     ("WARN_SIMPANG_TANPA_TIANG", "Percabangan jalur tanpa tiang.", "Tambahkan tiang di percabangan."),

@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.7.0"
+__version__ = "3.8.0"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -1502,6 +1502,10 @@ QC_LABELS = [
      "FINDIM OLT CLUSTER (data referensi bisa tertinggal dari pembuatan ID baru)"),
     (r"^HP_JAUH_DARI_TIANG", 1, "HP lebih dari batas jarak ke tiang", "S1_HP_JAUH_TIANG",
      "Handbook internal 50 m; bentang drop udara 15-50 m (Europacable 2023)"),
+    (r"^WARN_HP_JAUH_LEWAT_JALUR", 1, "HP lebih dari batas jarak ke tiang bila diukur lewat jalur/akses",
+     "W1_HP_JAUH_LEWAT_JALUR", "Handbook internal 50 m; drop mengikuti jalur akses ke tiang (lead-in path, Biarri FOND)"),
+    (r"^WARN_HP_AKSES_DALAM", 1, "HP jauh dari jalur survei (akses masuk perlu dicek)", "W1_HP_AKSES_DALAM",
+     "drop tidak boleh melintas pekarangan tanpa izin (Standar Review Strand: izin warga/BAKP); 30 m = parameter desain"),
     (r"^HP_DI_RFS_DONE", 2, "HP di cluster terbangun (RFS DONE)", "S2_HP_RFS_DONE", "Standar Review Strand"),
     (r"^HP_DI_RFS_EXT", 2, "HP di RFS EXTENSION cluster lain", "S2_HP_RFS_EXT", "Standar Review Strand"),
     (r"^HP_DI_FUNNEL_LAIN", 2, "HP di funnel cluster lain", "S2_HP_FUNNEL_LAIN", "Standar Review Strand"),
@@ -1555,7 +1559,8 @@ QC_LABELS = [
      "Handbook internal 60 m; posisi NP bisa digeser desainer"),
     (r"^BAKP_", 8, "BAKP perlu dicek", "S8_BAKP", "Standar Review Strand: izin warga"),
     (r"^INFO_BAKP_", 8, "BAKP (info)", "I8_BAKP", "Standar Review Strand: izin warga"),
-    (r"^TIANG_NGANGGUR", None, "Tiang tidak dilewati jalur", "T_TIANG_NGANGGUR", "Handbook: tidak ada pole nganggur"),
+    (r"^TIANG_NGANGGUR", None, "Tiang NP tidak dilewati jalur", "T_TIANG_NGANGGUR",
+     "Handbook: tidak boleh ada tiang nganggur bila NP (EP dan tiang feeder boleh)"),
     (r"^UJUNG_JALUR_TANPA_TIANG", None, "Ujung jalur tanpa tiang", "T_UJUNG_JALUR_TANPA_TIANG",
      "Handbook: jalur harus ada akses pole; praktik operator: tambat akhir di tiang"),
     (r"^WARN_BELOKAN_TANPA_TIANG", None, "Belokan >= 30 derajat tanpa tiang", "W_BELOKAN_TANPA_TIANG",
@@ -1575,6 +1580,8 @@ QC_LABELS = [
      "GPS ponsel 4,9 m terbuka (GPS.gov); 7-13 m urban (PLOS ONE 2019)"),
     (r"^INFO_KABEL_RENDAH", None, "Kabel rendah di tengah bentang (< batas ruang bebas)", "I_KABEL_RENDAH",
      "Permen PU 20/PRT/M/2010 Ps.12(6): >= 5 m di atas jalan; lendutan 2% (spesifikasi teknis FTTH operator nasional)"),
+    (r"^INFO_TIANG_EP_NGANGGUR", None, "Tiang EP tidak dilewati jalur (boleh)", "I_EP_NGANGGUR",
+     "Handbook: tiang nganggur tidak boleh bila NP; boleh bila EP atau dilewati kabel feeder"),
     (r"^INFO_TIANG_BISA_DIHAPUS", None, "Tiang NP bisa dihapus (jalan lurus)", "I_NP_BISA_DIHAPUS",
      "Handbook: pole di jalan lurus < 60 m boleh di take out"),
     (r"^INFO_UJUNG_JALUR_TANPA_HP", None, "Ujung jalur tanpa HP", "I_UJUNG_TANPA_HP",
@@ -3881,21 +3888,70 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                        "Tiang 6 m di luar daftar tinggi tiang 7/8/9 m pedoman infrastruktur bersama Kominfo: pastikan disetujui pemda"
                        % (n_low6, clear_road, attach_height(6.0, embed_frac)))
 
-        idle = [(p, nm_) for p, nm_ in zip(poles, names) if (round(p.x(), 7), round(p.y(), 7)) not in touched]
-        for p, nm_ in idle:
-            qc.append((p, "TIANG_NGANGGUR", "%s tidak dilewati jalur (pole nganggur)" % nm_))
+        # Tiang nganggur: NP tidak boleh (tinjau/hapus); EP boleh (tiang pihak lain/cadangan rute) -> hanya info.
+        # Koordinat (tikor) ditulis di keterangan agar tim lapangan langsung bisa menuju titiknya.
+        idle = [(i_, p, nm_) for i_, (p, nm_) in enumerate(zip(poles, names))
+                if (round(p.x(), 7), round(p.y(), 7)) not in touched]
+        for i_, p, nm_ in idle:
+            if kinds[i_] == "existing":
+                qc.append((p, "INFO_TIANG_EP_NGANGGUR", "%s (EP) tidak dilewati jalur - boleh (tiang existing); tikor %.6f, %.6f"
+                           % (nm_, p.y(), p.x())))
+            else:
+                qc.append((p, "TIANG_NGANGGUR", "%s tidak dilewati jalur (pole nganggur); tikor %.6f, %.6f"
+                           % (nm_, p.y(), p.x())))
         far, far_list = 0, []
         serve = {}          # tiang -> daftar HP yang tiang terdekatnya tiang ini
+        # Akses rumah lewat jalur survei (akses.py): rumah jauh dari jalur mana pun = akses masuk perlu dicek; jarak
+        # tiang -> rumah lewat jalur > batas walau garis lurusnya di bawah batas = drop sebenarnya lebih panjang.
+        access_max = float(qcp("hp_access_max_m", 40.0))
+        via_margin = 5.0          # galat GPS ponsel di langit terbuka 4,9 m (GPS.gov): selisih kecil bukan temuan
+        _ak = None
+        try:
+            from . import akses as _akses_mod
+        except ImportError:
+            import akses as _akses_mod
+        try:
+            _kx_a, _ky_a = _geo.m_per_deg(_lat_c)
+
+            def _m(q):
+                return (q.x() * _kx_a, q.y() * _ky_a)
+            _ak = _akses_mod.Akses([(ka, kb, _m(a_), _m(b_)) for ka, kb, _L, a_, b_ in seg_list],
+                                   [("P", i_) for i_ in range(len(poles))])
+        except Exception as _e:
+            _log.note(_e)
+            _ak = None
+        n_deep = n_via = 0
         for k_, (r, p) in enumerate(data):
             qi, d = nearest_idx(p)
             serve.setdefault(qi, []).append(p)
+            hid_ = r[iid] if iid is not None else "HP %d" % (k_ + 1)
             if d > hp_max:
                 far += 1
-                hid_ = r[iid] if iid is not None else "HP %d" % (k_ + 1)
                 far_list.append((d, hid_, names[qi]))
                 qc.append((p, "HP_JAUH_DARI_TIANG",
-                           "%s (baris %d HPDB): %.1f m ke tiang terdekat %s (batas %.0f m)"
-                           % (hid_, meta[k_][0], d, names[qi], hp_max), None, round(d, 1), hp_max))
+                           "%s (baris %d HPDB): %.1f m ke tiang terdekat %s (batas %.0f m); tikor %.6f, %.6f"
+                           % (hid_, meta[k_][0], d, names[qi], hp_max, p.y(), p.x()), None, round(d, 1), hp_max))
+            if _ak is None:
+                continue
+            acc = _ak.access(_m(p))
+            if acc is None:
+                continue
+            h_, via_, pk_ = acc
+            if h_ > access_max:
+                n_deep += 1
+                qc.append((p, "WARN_HP_AKSES_DALAM",
+                           "%s (baris %d HPDB): %.0f m dari jalur survei terdekat (> %.0f m) - rumah di belakang rumah lain? "
+                           "Cek akses masuk drop (gang / izin melintas pekarangan) di lapangan atau street view; "
+                           "tikor %.6f, %.6f" % (hid_, meta[k_][0], h_, access_max, p.y(), p.x()),
+                           None, round(h_, 1), access_max))
+            if d <= hp_max and via_ is not None and via_ > hp_max + via_margin:
+                n_via += 1
+                pn_ = names[pk_[1]] if pk_ and pk_[0] == "P" else "tiang"
+                qc.append((p, "WARN_HP_JAUH_LEWAT_JALUR",
+                           "%s (baris %d HPDB): garis lurus %.0f m ke %s, tetapi lewat jalur/akses %.0f m dari %s "
+                           "(batas %.0f m): drop sebenarnya lebih panjang; tikor %.6f, %.6f"
+                           % (hid_, meta[k_][0], d, names[qi], via_, pn_, hp_max, p.y(), p.x()),
+                           None, round(via_, 1), hp_max))
 
         # ===== 3a. Efisiensi tiang & ujung jalur (Handbook QC: "minimalisir tiang", "kabel loop <= 100 m / 2 span") =====
         import math
