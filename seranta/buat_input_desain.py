@@ -20,7 +20,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.8.0"
+__version__ = "3.8.1"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -466,6 +466,76 @@ def find_kmz(folder):
 
 
 APD_KMZ_RX = re.compile(r"\bAPD\b|^F\d+_T\d+_|^QC_|FEEDER|DISTRIBUS", re.IGNORECASE)
+# KMZ data referensi tim (bukan KMZ survei cluster): tidak boleh dikira cluster pada mode tanpa HPDB
+REF_KMZ_RX = re.compile(r"FUNNEL|DESIGN[\s_-]*LITE|ATTRIBUT|FINDIM", re.IGNORECASE)
+
+
+AREA_DIR = "_KMZ_PER_AREA"     # diawali '_' -> tidak ikut dicari sebagai cluster pada run berikutnya
+_HP_FOLDER_RX = re.compile(r"\b(hp|homepass|home ?pass|rumah)\b", re.IGNORECASE)
+
+
+def kmz_areas(kmz):
+    """Area (cluster) di satu KMZ survei: Folder/Document yang langsung berisi folder HP. Satu KMZ '1 PIC' sering memuat
+    beberapa lingkungan/cluster, masing-masing dengan folder HP, tiang, jalur dan BOUNDARY sendiri.
+    Kembalikan [(nama, elemen)]; area bertingkat (area di dalam area) tidak dihitung dua kali."""
+    root = kml_root(kmz)
+    found = []
+
+    def name_of(el):
+        return next(((c.text or "").strip() for c in el if _strip(c.tag) == "name"), "")
+
+    def walk(el, inside):
+        for ch in el:
+            if _strip(ch.tag) not in ("Folder", "Document"):
+                continue
+            kids = [k for k in ch if _strip(k.tag) == "Folder"]
+            is_area = (not inside and not _HP_FOLDER_RX.search(name_of(ch))
+                       and any(_HP_FOLDER_RX.search(name_of(k)) for k in kids))
+            if is_area:
+                found.append((name_of(ch) or "AREA %d" % (len(found) + 1), ch))
+            walk(ch, inside or is_area)
+    walk(root, False)
+    return found
+
+
+def split_kmz_areas(cluster_dir, kmz):
+    """Bila KMZ memuat >= 2 area ber-folder HP: tulis satu KML per area ke <cluster>/_KMZ_PER_AREA/<area>/ dan kembalikan
+    daftar folder area (diproses sebagai cluster masing-masing). Bila hanya satu area: []."""
+    areas = kmz_areas(kmz)
+    if len(areas) < 2:
+        return []
+    base = os.path.join(cluster_dir, AREA_DIR)
+    out, used = [], set()
+    for nm, el in areas:
+        safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', " ", nm).strip(" .") or "AREA"
+        safe = re.sub(r"\s+", " ", safe)[:60]
+        k, s0 = 2, safe
+        while safe.upper() in used:
+            safe, k = "%s (%d)" % (s0, k), k + 1
+        used.add(safe.upper())
+        d = os.path.join(base, safe)
+        os.makedirs(d, exist_ok=True)
+        # hanya MENULIS XML (data dari KMZ yang sudah dibaca aman di atas), tidak mem-parse
+        from xml.etree import ElementTree as _ETW  # nosec B405
+        doc = _ETW.Element("{http://www.opengis.net/kml/2.2}kml")
+        dd = _ETW.SubElement(doc, "{http://www.opengis.net/kml/2.2}Document")
+        _ETW.SubElement(dd, "{http://www.opengis.net/kml/2.2}name").text = nm
+        for ch in el:
+            if _strip(ch.tag) != "name":
+                dd.append(ch)
+        _ETW.ElementTree(doc).write(os.path.join(d, safe + ".kml"), encoding="utf-8", xml_declaration=True)
+        out.append(d)
+    return out
+
+
+def kmz_candidates(folder):
+    """KMZ survei di folder (untuk mode QC tanpa HPDB): .kmz/.kml selain hasil turunan, KMZ desain dan data referensi."""
+    try:
+        c = [f for f in _files(folder) if os.path.splitext(f)[1].lower() in (".kmz", ".kml")
+             and not _DERIVED.match(os.path.splitext(f)[0].strip())]
+    except OSError:
+        return []
+    return [f for f in c if not APD_KMZ_RX.search(f) and not REF_KMZ_RX.search(f)]
 
 
 # ---------- Pembaca .xlsx tanpa GDAL (zip + XML, hanya pustaka standar Python) ----------
@@ -2109,6 +2179,10 @@ WGS84 = QgsCoordinateReferenceSystem("EPSG:4326")
 M_PER_DEG = 111320.0  # perkiraan 1 derajat dalam meter (cukup untuk toleransi snap)
 
 
+class _SkipManifest(Exception):
+    """Mode QC tanpa HPDB: manifest input desain sengaja tidak dibuat."""
+
+
 _KEEP_ALIVE = []   # post-processor harus tetap direferensikan Python sampai QGIS selesai memakainya
 
 
@@ -2421,6 +2495,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             "homepass spreadsheet vs KMZ and duplicates (also across neighbouring clusters), service and cluster "
             "boundaries, administrative area, colocation on existing FDTs, pole sheet, survey photos and the community "
             "permit document.</p>"
+            "<p><b>No homepass spreadsheet?</b> The tool still runs a <b>KMZ-only QC</b> on the HP points of the KMZ "
+            "(with a warning): checks that need the spreadsheet are skipped and no auto-design input (HP.csv) is made.</p>"
             "<p><b>Advanced</b> holds the optional settings (reference data folder, limits, naming); the defaults "
             "follow common practice. Reports and remarks are written in Indonesian.</p>"
             % (__product__, __version__, __author__))
@@ -2590,6 +2666,51 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         self._hp_sheet = best[1]
         feedback.pushInfo("Homepass sheet: %s, header on row %d" % (best[1], best[3] + 1))
         return best[2], best[3]
+
+    def _kmz_hp_table(self, kmz, feedback):
+        """Mode QC tanpa HPDB: tabel HP dari titik di folder HP KMZ (bukan sub-folder EVIDENCE/foto).
+        Kolom: ID (folder lingkungan/nama titik), lat, lon, nama titik, folder."""
+        hp_rx = re.compile(r"\b(hp|homepass|home ?pass|rumah)\b", re.IGNORECASE)
+        headers = ["Homepass_ID_Partner", "Homepass_Latitude", "Homepass_Longitude", "NAMA_TITIK_KMZ", "FOLDER_KMZ"]
+        rows, seen, pts = [headers], {}, []
+
+        # sama dengan kml_features (folder HP, bukan EVIDENCE), tetapi nama Document bertingkat (mis. satu KMZ '1 PIC'
+        # berisi beberapa lingkungan sebagai Document) ikut dicatat untuk nama HP
+        def walk(el, folders, area):
+            for ch in el:
+                tag = _strip(ch.tag)
+                if tag in ("Folder", "Document"):
+                    nm_ = next(((c.text or "").strip() for c in ch if _strip(c.tag) == "name"), "")
+                    if tag == "Folder":
+                        walk(ch, folders + [nm_], area if any(hp_rx.search(f) for f in folders) or hp_rx.search(nm_)
+                             else (nm_ or area))
+                    else:
+                        walk(ch, folders, (nm_ or area) if el is not root else area)
+                elif tag == "Placemark" and any(hp_rx.search(f) for f in folders) \
+                        and not any(EVID_RX.search(f) for f in folders):
+                    pn_ = next(((c.text or "").strip() for c in ch if _strip(c.tag) == "name"), "")
+                    for g in ch.iter():
+                        if _strip(g.tag) == "Point":
+                            for c in g:
+                                if _strip(c.tag) == "coordinates":
+                                    q_ = _coords(c.text)
+                                    if q_:
+                                        pts.append((area, folders, pn_, q_[0]))
+        root = kml_root(kmz)
+        walk(root, [], "")
+        n_area = len({a_ for a_, _f, _n, _g in pts})
+        for area, folders, nm, geom in pts:
+            hid = ("%s/%s" % (area, nm or "HP") if area and n_area > 1 else (nm or "HP")).strip()
+            seen[hid] = seen.get(hid, 0) + 1
+            if seen[hid] > 1:
+                hid = "%s#%d" % (hid, seen[hid])
+            rows.append([hid, "%.8f" % geom.y(), "%.8f" % geom.x(), nm or "", " / ".join(folders)])
+        self._sheets, self._hp_sheet = [], None
+        feedback.pushInfo("KMZ-only QC: %d HP points read from the HP folder(s) of %s" % (len(rows) - 1, os.path.basename(kmz)))
+        if len(rows) == 1:
+            raise QgsProcessingException(
+                "KMZ-only QC: no HP folder (HP / HOMEPASS) with points in %s, and no HPDB in the folder." % kmz)
+        return rows, 0
 
     def _find_header(self, rows):
         for i, r in enumerate(rows[:20]):
@@ -2879,13 +3000,47 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 else:
                     clusters.extend(d2 for d2 in subdirs(d) if has_hpdb(d2))
             if not clusters:
-                sheets = [os.path.relpath(os.path.join(r, f), outdir) for r, _ds, fs in os.walk(outdir)
-                          for f in fs if os.path.splitext(f)[1].lower() in (".xlsx", ".xls", ".csv")][:6]
-                raise QgsProcessingException(
-                    "No homepass spreadsheet (HPDB) in this folder or its subfolders: %s. Spreadsheets found: %s. "
-                    "The file name must contain HPDB (or choose the file under Advanced)."
-                    % (outdir, ", ".join(sheets) or "none"))
-            feedback.pushInfo("BATCH MODE: %d cluster folders found in %s" % (len(clusters), outdir))
+                # Tidak ada HPDB sama sekali: QC tetap jalan dari KMZ saja (cek berbasis HPDB dilewati, dengan peringatan).
+                # Hanya dipakai bila TIDAK ADA satu pun HPDB, sehingga run dengan HPDB tidak berubah.
+                if kmz_candidates(outdir):
+                    clusters = [outdir]
+                else:
+                    for d in subdirs(outdir):
+                        if kmz_candidates(d):
+                            clusters.append(d)
+                        else:
+                            clusters.extend(d2 for d2 in subdirs(d) if kmz_candidates(d2))
+                if not clusters:
+                    sheets = [os.path.relpath(os.path.join(r, f), outdir) for r, _ds, fs in os.walk(outdir)
+                              for f in fs if os.path.splitext(f)[1].lower() in (".xlsx", ".xls", ".csv")][:6]
+                    raise QgsProcessingException(
+                        "No homepass spreadsheet (HPDB) and no survey KMZ in this folder or its subfolders: %s. "
+                        "Spreadsheets found: %s. The HPDB file name must contain HPDB (or choose the file under Advanced)."
+                        % (outdir, ", ".join(sheets) or "none"))
+                # satu KMZ berisi beberapa area (KMZ '1 PIC': tiap lingkungan punya folder HP/tiang/jalur/BOUNDARY sendiri)
+                # -> dipecah per area, masing-masing diperiksa sebagai satu cluster
+                expanded = []
+                for c_ in clusters:
+                    try:
+                        ar_ = split_kmz_areas(c_, _choose(c_, kmz_candidates(c_), "KMZ", "KMZ cluster"))
+                    except Exception as e:
+                        _log.note(e)
+                        ar_ = []
+                    if ar_:
+                        feedback.pushInfo("%s: the KMZ holds %d areas with their own HP folder -> checked one by one (%s\\%s)"
+                                          % (os.path.basename(c_.rstrip("\\/")), len(ar_), os.path.basename(c_.rstrip("\\/")),
+                                             AREA_DIR))
+                        expanded.extend(ar_)
+                    else:
+                        expanded.append(c_)
+                clusters = expanded
+                getattr(feedback, "pushWarning", feedback.pushInfo)(
+                    "WARNING - NO HPDB: no homepass spreadsheet in %s. Running KMZ-ONLY QC on %d folder(s): poles, routes, "
+                    "spans, HP points of the KMZ (distance to pole, access, duplicates, boundary). HPDB checks (HPDB vs KMZ, "
+                    "IDs/addresses, FINDIM admin, BAKP, auto-design HP.csv/manifest) are SKIPPED. Do not submit this as a "
+                    "full review." % (outdir, len(clusters)))
+            if len(clusters) > 1 or clusters[0] != outdir:
+                feedback.pushInfo("BATCH MODE: %d cluster folders found in %s" % (len(clusters), outdir))
         if len(clusters) == 1:
             res = self._run_cluster(clusters[0], o, context, feedback)
             if open_rep:
@@ -3243,13 +3398,26 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         hpdb, cluster_kmz = o["hpdb"], o["cluster_kmz"]
         pole_path, road_path = o["pole_path"], o["road_path"]
         separate = bool(pole_path and road_path)
-        if not hpdb:
+        # Mode QC KMZ saja: folder tanpa HPDB sama sekali (tidak ada kandidat HPDB, tidak dipilih di Advanced).
+        # Titik HP diambil dari folder HP di KMZ; cek yang memakai HPDB dilewati.
+        kmz_only = not hpdb and not hpdb_candidates(outdir)
+        if not hpdb and not kmz_only:
             hpdb = find_hpdb(outdir)
         if separate:
             cluster_kmz = ""
         elif not cluster_kmz:
-            cluster_kmz = find_kmz(outdir)
-        feedback.pushInfo("Homepass sheet: %s" % hpdb)
+            cluster_kmz = (_choose(outdir, kmz_candidates(outdir), "KMZ", "KMZ cluster") if kmz_only
+                           else find_kmz(outdir))
+        if kmz_only:
+            hpdb = ""
+            if not cluster_kmz:
+                raise QgsProcessingException(
+                    "No homepass spreadsheet (HPDB) in %s and no cluster KMZ with an HP folder: KMZ-only QC needs the "
+                    "cluster KMZ (separate pole/route files have no HP points)." % outdir)
+            getattr(feedback, "pushWarning", feedback.pushInfo)(
+                "WARNING - KMZ-ONLY QC (no HPDB in %s): HP points are taken from the HP folder of the KMZ. HPDB checks "
+                "are skipped; HP.csv and manifest_input.json are NOT made (not an auto-design input)." % outdir)
+        feedback.pushInfo("Homepass sheet: %s" % (hpdb or "NONE - KMZ-only QC"))
         feedback.pushInfo("Cluster KMZ   : %s" % (cluster_kmz or (pole_path + " + " + road_path)))
         snap_m, span_max, hp_max = o["snap_m"], o["span_max"], o["hp_max"]
         refill, workdir, funnel_dir = o["refill"], o["workdir"], o["funnel_dir"]
@@ -3303,7 +3471,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
 
         # ===== 1. HPDB -> HP.shp =====
         feedback.setProgressText("1/3 Reading the homepass spreadsheet")
-        rows, h = self._read_table(hpdb, feedback)
+        if kmz_only:
+            rows, h = self._kmz_hp_table(cluster_kmz, feedback)
+        else:
+            rows, h = self._read_table(hpdb, feedback)
         headers = []
         for i, c in enumerate(rows[h]):
             c = c or "KOLOM_%d" % (i + 1)
@@ -3337,9 +3508,13 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             data.append((r, QgsPointXY(lon, lat)))
             meta.append((j, (r[iid] if iid is not None else "").strip()))
         if not data:
-            raise QgsProcessingException("No homepass rows with valid coordinates.")
+            raise QgsProcessingException("No homepass rows with valid coordinates." if not kmz_only else
+                                         "KMZ-only QC: no HP points with valid coordinates in the HP folder of the KMZ.")
+        if kmz_only:
+            # nomor = urutan titik HP di KMZ (bukan baris HPDB)
+            meta = [(k_ + 1, m_[1]) for k_, m_ in enumerate(meta)]
 
-        if iid is not None and refill:
+        if iid is not None and refill and not kmz_only:
             for n, (r, _) in enumerate(data, 1):
                 r[iid] = "H%05d" % n
         elif iid is None:
@@ -3366,6 +3541,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                  _col("NEIGHBORHOOD_NO_RT"), _col("HAMLET_NO_RW"), _col("HOMEPASS_UNIT_NUMBER")]
 
         def _hpname(k):
+            # mode KMZ saja: 'baris n' = urutan titik HP di KMZ, ditulis ulang menjadi 'titik n' setelah remarks dibuat
             return "baris %d (%s)" % (meta[k][0], data[k][0][iid] if iid is not None else "HP %d" % (k + 1))
 
         def _addr(r):
@@ -3471,26 +3647,35 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             kind_ = {"koordinat sama": "HP_DUPLIKAT_KOORDINAT", "ID operator sama": "HP_DUPLIKAT_ID",
                      "alamat sama": "INFO_HP_ALAMAT_SAMA"}[jenis]
             qc.append((data[ks[1]][1], kind_, "HP duplikat (%s): %s" % (jenis, names_)))
-        hp_path = outp("HP.shp")
+        # mode KMZ saja: HP_KMZ.shp hanya untuk peta/QC, sengaja beda nama agar tidak terpakai sebagai input desain
+        hp_path = outp("HP_KMZ.shp" if kmz_only else "HP.shp")
         self._write(hp, hp_path, "ESRI Shapefile", context)
         # HP.csv (Comma Delimited, nama kolom utuh - Langkah Pembuatan Input Desain Otomatis APD hlm. 10-18)
-        hp_csv = outp("HP.csv")
-        try:
-            import csv as _csv
-            with open(hp_csv, "w", newline="", encoding="utf-8-sig") as fh_:
-                w_ = _csv.writer(fh_)
-                w_.writerow(headers)
-                for r_, _p in data:
-                    w_.writerow((list(r_) + [""] * len(headers))[:len(headers)])
-        except Exception as e:
-            hp_csv = None
-            feedback.reportError("HP.csv not written: %s" % e, fatalError=False)
+        hp_csv = None if kmz_only else outp("HP.csv")
+        if hp_csv:
+            try:
+                import csv as _csv
+                with open(hp_csv, "w", newline="", encoding="utf-8-sig") as fh_:
+                    w_ = _csv.writer(fh_)
+                    w_.writerow(headers)
+                    for r_, _p in data:
+                        w_.writerow((list(r_) + [""] * len(headers))[:len(headers)])
+            except Exception as e:
+                hp_csv = None
+                feedback.reportError("HP.csv not written: %s" % e, fatalError=False)
 
         # nama kolom setelah dipotong shapefile (maks 10 karakter)
         written = QgsVectorLayer(hp_path, "HP", "ogr")
         trunc = [f.name() for f in written.fields()]
-        rep.append("HOMEPASS")
-        rep.append("  Baris valid        : %d" % len(data))
+        if kmz_only:
+            rep.append("HOMEPASS (TANPA HPDB - titik HP dari folder HP di KMZ %s)" % os.path.basename(cluster_kmz))
+            rep.append("  ! PERINGATAN: tidak ada HPDB di folder cluster. Hanya QC berbasis KMZ yang dijalankan; cek HPDB vs KMZ,")
+            rep.append("    ID/alamat, administrasi FINDIM dan BAKP DILEWATI. HP.csv dan manifest TIDAK dibuat; %s hanya untuk"
+                       % os.path.basename(hp_path))
+            rep.append("    peta/QC, bukan input desain otomatis. Nomor 'titik KMZ n' = urutan titik di folder HP KMZ.")
+        else:
+            rep.append("HOMEPASS")
+        rep.append("  %s        : %d" % ("Titik HP KMZ" if kmz_only else "Baris valid", len(data)))
         rep.append("  Baris dilewati     : %d (tanpa koordinat/di luar Indonesia)" % skipped)
         rep.append("  HP duplikat        : %d koordinat sama, %d label/no. rumah sama (bergeser), %d label sama berjauhan "
                    "(WARNING), %d ID operator sama, %d alamat sama (info), %d pasang kemungkinan duplikat <= %.0f m (info)"
@@ -3509,11 +3694,12 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                          ("; alamat: %s" % _addr(r0)) if _addr(r0) else ""))
         if len(dup_groups) > 30:
             rep.append("    ... %d grup lain di QC_TEMUAN.kmz" % (len(dup_groups) - 30))
-        if iid is not None:
+        if iid is not None and not kmz_only:
             rep.append("  ID dibuat          : %s s/d %s" % (data[0][0][iid], data[-1][0][iid]))
-        rep.append("  Nama kolom di HP.shp (untuk pemetaan Name/External ID di desain otomatis):")
-        for o, t in zip(headers, trunc):
-            rep.append("    %-12s <- %s" % (t, o))
+        if not kmz_only:
+            rep.append("  Nama kolom di HP.shp (untuk pemetaan Name/External ID di desain otomatis):")
+            for o, t in zip(headers, trunc):
+                rep.append("    %-12s <- %s" % (t, o))
         feedback.setProgress(33)
 
         # ===== 2. Tiang -> POLE.kmz =====
@@ -4041,7 +4227,14 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         rep.append("")
         rep.append("HPDB vs KMZ (HOMEPASS)")
         n_kmz = len(kmz_hp)
-        if kmz_hp:
+        if kmz_only:
+            n_kmz = len(data)
+            rep.append("  DILEWATI: tidak ada HPDB (mode QC KMZ saja). HP duplikat di KMZ: %d koordinat sama, "
+                       "%d label sama bergeser" % (dup, dup_lbl))
+            std[4] = (False if (dup or dup_lbl) else None,
+                      "HPDB TIDAK ADA - HPDB vs KMZ tidak dicek; KMZ %d HP%s" % (len(data), (
+                          ", duplikat KMZ: %d koordinat sama, %d label sama" % (dup, dup_lbl)) if (dup or dup_lbl) else ""))
+        elif kmz_hp:
             kidx = QgsSpatialIndex()
             for i, (g, nm) in enumerate(kmz_hp):
                 ft = QgsFeature(i)
@@ -4268,7 +4461,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         rep.append("")
         rep.append("ADMINISTRASI HPDB vs FINDIM (hpdb attributes)")
         att, findim_ids, olt_reg = None, set(), None
-        if funnel_dir:
+        if kmz_only:
+            rep.append("  DILEWATI: tidak ada HPDB (mode QC KMZ saja)")
+        if funnel_dir and not kmz_only:
             ac = ref_files(funnel_dir, "attributes")
             for pth, tgl, nver in latest_per_kind(ac)[:1]:
                 umur = (_dt.date.today() - tgl).days
@@ -4386,6 +4581,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 t3 += "; info sheet %s" % "; sheet ".join("'%s' %d baris %s" % x for x in other_bad[:2])
                 rep.append("  Catatan: status standar 3 dihitung dari sheet homepass. Sheet lain hanya info, tetap rapikan.")
             std[3] = (bad_admin == 0, t3)
+        elif kmz_only:
+            std[3] = (None, "HPDB TIDAK ADA - administrasi tidak dicek")
         else:
             rep.append("  hpdb_attributes*.xlsx tidak ada di folder referensi (cek dilewati)")
             std[3] = (None, "file hpdb attributes tidak ada")
@@ -5137,7 +5334,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         # ===== 8. BAKP (izin warga) =====
         bk_mode = opt.get("bakp", 0)
         bres = None
-        if bk_mode == 0:
+        if kmz_only:
+            std[8] = (None, "HPDB TIDAK ADA - BAKP tidak dicek otomatis (jumlah HP per RT/lingkungan butuh HPDB); cek manual")
+            rep.append("")
+            rep.append("BAKP: DILEWATI (tidak ada HPDB, mode QC KMZ saja) - tetap cek BAKP secara manual!")
+        elif bk_mode == 0:
             try:
                 def _maj(*names):
                     i_ = self._pick(headers, list(names), "\x00")
@@ -5218,6 +5419,15 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             len(removable), loops, opt["prof"]["key"], opt["prof"]["src"]))
         if ignored:
             summ.append("  Diabaikan sesuai aturan: " + "; ".join("%s: %d" % kv for kv in sorted(ignored.items())))
+        def _kt(t_):
+            # tanpa HPDB tidak ada 'baris HPDB': nomor yang tertulis = urutan titik HP di KMZ. Panjang teks tidak bertambah
+            # (batas remarks 255 karakter tetap terjaga).
+            t_ = re.sub(r"\(baris (\d+) HPDB\)", r"(titik KMZ \1)", str(t_))
+            t_ = t_.replace("HPDB baris", "titik KMZ").replace("baris HPDB", "titik KMZ")
+            return re.sub(r"\bbaris\b", "titik", t_)
+        if kmz_only:
+            summ.insert(1, "  !! PERINGATAN: TANPA HPDB - hanya QC KMZ. Standar 3, 4 (HPDB vs KMZ) dan 8 tidak dicek; "
+                           "bukan review lengkap.")
         # ===== Remarks review otomatis (<= 255 karakter, nomor baris HPDB asli) =====
         rmk = None
         try:
@@ -5234,6 +5444,13 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         fl_.append({"kind": k_, "sev": d_["sev"], "ket": "", "val": None, "lim": None, "hint": h_})
                 fl_.append(d_)
             rmk = _remarks.build(fl_, rowmap=hid_row)
+            if kmz_only:
+                rmk["text"] = _kt(rmk["text"])
+                rmk["length"] = len(rmk["text"])
+                rmk["notes"] = [_kt(n_) for n_ in rmk["notes"]]
+                rmk["dropped"] = [_kt(n_) for n_ in rmk["dropped"]]
+                rmk["notes"].insert(0, "TANPA HPDB: QC hanya dari KMZ (cek HPDB vs KMZ, ID/alamat, FINDIM, BAKP dilewati); "
+                                       "nomor 'titik' = urutan titik HP di folder HP KMZ")
             summ.append("  REMARKS (%s, %d karakter): %s" % (rmk["status"], rmk["length"], rmk["text"]))
             for n_ in rmk["notes"]:
                 summ.append("    catatan: %s" % n_)
@@ -5263,13 +5480,22 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 "Cluster : %s  (kode %s%s)" % (
                     cluster_label(outdir, hpdb), kode, ", ID %s" % cl_id if cl_id else ""),
                 "Dibuat  : %s" % _dt.datetime.now().strftime("%d-%m-%Y %H:%M"),
-                "HPDB    : %s" % hpdb, "Tiang   : %s" % pole_path, "Jalur   : %s" % road_path,
+                "HPDB    : %s" % (hpdb or "TIDAK ADA - QC KMZ saja (cek berbasis HPDB dilewati, bukan input desain)"),
+                "Tiang   : %s" % pole_path, "Jalur   : %s" % road_path,
                 "Snap    : %.1f m, perilaku: prefer aligning nodes, don't insert new vertices" % snap_m,
                 "Input   : Roads=%s, cutting points=%s, Homepass=%s" % (
                     os.path.basename(roads_path), os.path.basename(pole_out), os.path.basename(hp_path)), ""]
+        if kmz_only:
+            qc[:] = [(it_[0], it_[1], _kt(it_[2])) + tuple(it_[3:]) for it_ in qc]
+            rep[:] = [_kt(x_) for x_ in rep]
+            summ[:] = [_kt(x_) for x_ in summ]
         # ===== Temuan QC: satu Shapefile per kategori (folder QC) + gabungan + KMZ =====
         qc_map, qc_cats = self._write_qc(qc, inp, outp, kode, context, feedback)
         try:
+            if kmz_only:
+                rep.append("")
+                rep.append("MANIFEST INPUT DESAIN OTOMATIS: tidak dibuat (tanpa HPDB, hasil ini bukan input desain)")
+                raise _SkipManifest()
             man = self._write_manifest(outp("manifest_input.json"), kode, cl_id, hpdb, headers, (ilon, ilat, iid), data,
                                        hp_path, hp_csv, roads_path, pole_out, qprof, opt)
             feedback.pushInfo("Input manifest: %s (%s)" % (os.path.basename(man[0]), man[1]))
@@ -5277,6 +5503,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             rep.append("MANIFEST INPUT DESAIN OTOMATIS: %s -> %s" % (os.path.basename(man[0]), man[1]))
             for line_ in man[2]:
                 rep.append("  " + line_)
+        except _SkipManifest:
+            pass
         except Exception as e:
             feedback.reportError("manifest_input.json not written: %s" % e, fatalError=False)
         qc_path = outp("QC_TEMUAN.kmz")
@@ -5320,7 +5548,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     a_[headers[k_]] = v_
                 hp_attrs.append(a_)
             hp_rows = {meta[k_][0]: (hp_attrs[k_] if k_ < len(hp_attrs) else {}) for k_ in range(len(data))}
-            src_ = {"HPDB": os.path.basename(hpdb or ""), "KMZ cluster": os.path.basename(cluster_kmz or pole_path or ""),
+            src_ = {"HPDB": os.path.basename(hpdb or "") or ("TIDAK ADA - QC KMZ saja" if kmz_only else ""), "KMZ cluster": os.path.basename(cluster_kmz or pole_path or ""),
                     "Profil": "%s (versi aturan %s)" % (qprof.get("profile_id"), qprof.get("rule_version")),
                     "Alat": "%s v%s" % (__product__, __version__), "Dibuat": _dt.datetime.now().strftime("%d-%m-%Y %H:%M")}
             word_name, snaps_uri, map_data = self._qc_word(
@@ -5349,9 +5577,12 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                         "fat_max_hp", "fdt_max_premises", "fdt_max_spl")]},
                 std, judul, summ[1 + len(judul):], bres,
                 [("Roads", os.path.basename(roads_path)), ("Cutting points (tiang)", os.path.basename(pole_out)),
-                 ("Homepass", os.path.basename(hp_path)), ("Homepass CSV (Comma Delimited)", os.path.basename(outp("HP.csv"))),
-                 ("Manifest impor (cek siap impor + SHA-256)", os.path.basename(outp("manifest_input.json"))),
-                 ("Laporan teks", os.path.basename(lap))]
+                 ("Homepass (titik KMZ, TANPA HPDB - bukan input desain)" if kmz_only else "Homepass",
+                  os.path.basename(hp_path))]
+                + ([] if kmz_only else
+                   [("Homepass CSV (Comma Delimited)", os.path.basename(outp("HP.csv"))),
+                    ("Manifest impor (cek siap impor + SHA-256)", os.path.basename(outp("manifest_input.json")))])
+                + [("Laporan teks", os.path.basename(lap))]
                 + ([("Temuan QC (QGIS)", os.path.basename(qc_map))] if qc_map else []),
                 "\n".join(head + summ + rep))
             feedback.pushInfo("HTML summary: %s" % lap_html)

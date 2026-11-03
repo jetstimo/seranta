@@ -2,7 +2,7 @@
 name=Seranta - FTTH Design Assistant
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
-version=3.8.0
+version=3.8.1
 author=Joseph Edward Timothy Siahaan
 email=edwardtimoo@gmail.com
 description=One-folder FTTH/GPON design tools for QGIS: survey QC, design input, FDT/FAT allocation and design package QC.
@@ -17,4 +17,4 @@ hasProcessingProvider=yes
 experimental=False
 deprecated=False
 server=False
-changelog=3.8.0 Design package QC: 'house too far from FAT' now uses the houses inside each FAT Coverage polygon (design endpoints) and measures along the cable route plus the drop, not a straight line; poles up to 7 m from the cable (across the road) count as supports for span checks; idle new poles (NP) are errors with coordinates, existing poles (EP) and poles on feeder cables are allowed. Survey QC: houses far from any surveyed route (access to check) and houses over 50 m from the pole along the route are flagged; idle-pole findings show coordinates. Core checks up to 7x faster on large clusters. Full history: https://github.com/jetstimo/seranta/blob/main/CHANGELOG.md
+changelog=3.8.1 Survey QC (tool 1) also runs when a cluster folder has no homepass spreadsheet (HPDB): the HP points of the KMZ are used and only the KMZ checks are made (poles, routes, spans, house distance and access, duplicates, boundary, cross-cluster); HPDB checks, BAKP, HP.csv and the import manifest are skipped, with a clear warning in the log, report and remarks. Runs with an HPDB are unchanged. 3.8.0 FAT Coverage membership and route distance for 'house too far from FAT', road-side poles count for spans, idle NP poles with coordinates, house access check, faster QC. Full history: https://github.com/jetstimo/seranta/blob/main/CHANGELOG.md

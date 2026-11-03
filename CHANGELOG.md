@@ -1,5 +1,15 @@
 # Changelog
 
+## 3.8.1 – QC survei tetap jalan tanpa HPDB (QC KMZ saja)
+- Alat 1: folder cluster tanpa HPDB (mis. hanya `1 PIC TOMOHON.kmz`) tidak lagi gagal "No homepass spreadsheet". Titik HP
+  diambil dari folder HP di KMZ dan hanya cek berbasis KMZ yang dijalankan: tiang, jalur, rentang, jarak dan akses rumah ke
+  tiang, HP duplikat koordinat, boundary/Funnel, Design Lite dan lintas cluster.
+- Cek yang memakai HPDB dilewati: HPDB vs KMZ, ID/alamat, administrasi FINDIM, BAKP otomatis. `HP.csv` dan
+  `manifest_input.json` tidak dibuat; titik HP disimpan sebagai `HP_KMZ.shp` (hanya peta/QC, bukan input desain).
+- Peringatan jelas di log QGIS, laporan, ringkasan standar dan REMARKS ("TANPA HPDB – bukan review lengkap"); nomor temuan
+  memakai urutan titik KMZ (`titik KMZ n`), bukan baris HPDB.
+- Mode ini hanya aktif bila tidak ada satu pun HPDB; run dengan HPDB tidak berubah (temuan identik dengan 3.8.0).
+
 ## 3.8.0 – anggota FAT dari FAT Coverage, jarak sepanjang jalur, tiang seberang jalan, akses rumah
 - QC APD (alat 4) *Rumah terlalu jauh dari FAT*: anggota FAT = HP (endpoint keluaran desain) di dalam poligon FAT Coverage
   milik FAT; jarak diukur sepanjang jalur kabel (graf kabel + drop dari tiang/garis drop), garis temuan mengikuti jalur.
