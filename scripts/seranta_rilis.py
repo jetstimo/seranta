@@ -143,7 +143,12 @@ def rilis(a):
                 if f.endswith((".pyc", ".pyo")):
                     continue
                 full = os.path.join(d, f)
-                z.write(full, os.path.relpath(full, tmp).replace(os.sep, "/"))
+                zi = zipfile.ZipInfo(os.path.relpath(full, tmp).replace(os.sep, "/"),
+                                     datetime.datetime.fromtimestamp(os.path.getmtime(full)).timetuple()[:6])
+                zi.compress_type = zipfile.ZIP_DEFLATED
+                zi.external_attr = (0o100644 << 16)     # rw-r--r--: tanpa izin eksekusi (peringatan pemindai QGIS)
+                with open(full, "rb") as fh:
+                    z.writestr(zi, fh.read())
     size = os.path.getsize(zp)
     if size > 25 * 1024 * 1024:
         raise SystemExit("Zip %.1f MB > 25 MB (batas repositori plugin QGIS)" % (size / 1048576.0))

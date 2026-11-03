@@ -121,7 +121,12 @@ def main():
     zname = "%s.%s.zip" % (pid, g["version"])
     with zipfile.ZipFile(os.path.join(out, zname), "w", zipfile.ZIP_DEFLATED) as z:
         for p in files_of(src):
-            z.write(p, pid + "/" + os.path.relpath(p, src).replace(os.sep, "/"))
+            zi = zipfile.ZipInfo(pid + "/" + os.path.relpath(p, src).replace(os.sep, "/"),
+                                 datetime.datetime.fromtimestamp(os.path.getmtime(p)).timetuple()[:6])
+            zi.compress_type = zipfile.ZIP_DEFLATED
+            zi.external_attr = 0o100644 << 16       # rw-r--r--: no executable bit (plugins.qgis.org File Permissions)
+            with open(p, "rb") as fh:
+                z.writestr(zi, fh.read())
     print("ZIP:", os.path.join(out, zname))
     if repo_url:
         open(os.path.join(out, "icon.png"), "wb").write(open(os.path.join(src, g.get("icon", "icon.png")), "rb").read())
