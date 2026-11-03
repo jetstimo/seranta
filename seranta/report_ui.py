@@ -12,7 +12,7 @@ Prinsip desain:
     gambar peta per temuan yang bisa diperbesar, unduh laporan Word dan rekap review.
 
 Part of Seranta - FTTH Design Assistant.
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-2.0-or-later (see LICENSE).
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-3.0-or-later (see LICENSE).
 """
 import base64
 import html as _h

@@ -3,7 +3,7 @@
 sedang dikunci, dsb.). Dicatat ke panel Log Messages QGIS (tab Seranta) supaya tetap bisa ditelusuri.
 
 Part of Seranta - FTTH Design Assistant.
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-2.0-or-later (see LICENSE).
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-3.0-or-later (see LICENSE).
 """
 
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Seranta - FTTH Design Assistant
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later.
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later.
 
 CEK TAMBAHAN ALAT 1 (versi 3.6.0) - dari review lapangan Jambi, Tegal dan Minahasa (Oktober 2026)
 ---------------------------------------------------------------------------------------------------

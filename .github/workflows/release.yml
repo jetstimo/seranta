@@ -32,6 +32,7 @@ jobs:
           python seranta/tests/test_qc_core.py
           python seranta/tests/test_uat_paket.py
           python seranta/tests/test_v35.py
+          python seranta/tests/test_v39.py
           python seranta/tests/test_v380.py
       - name: Brand-neutral texts
         env:

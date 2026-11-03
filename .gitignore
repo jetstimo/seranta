@@ -8,3 +8,7 @@ data/
 *.kmz
 *.xlsx
 *.sdproj
+
+# kunci privat rilis Seranta - JANGAN pernah di-commit
+*.key
+_KUNCI_PRIBADI/

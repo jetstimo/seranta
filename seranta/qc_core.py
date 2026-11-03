@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Seranta - FTTH Design Assistant - inti QC terpadu (tanpa QGIS; dapat diuji dengan Python biasa)
-# Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later (see LICENSE).
+# Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later (see LICENSE).
 """Inti QC Seranta yang dipakai alat 1 dan alat 4:
 
 * Profil standar (profiles/*.json): setiap angka punya nilai, dasar (REGULASI/STANDAR/PRAKTIK/RISET/INTERNAL),
@@ -29,7 +29,7 @@ try:  # defusedxml bila terpasang; bila tidak, ElementTree standar (expat >= 2.4
 except ImportError:
     import xml.etree.ElementTree as ET  # nosec B405
 
-RULE_VERSION = "2026.11-r10"
+RULE_VERSION = "2026.11-r11"
 SEVERITIES = ("ERROR", "WARNING", "UNVERIFIED", "INFO", "PASS")
 SEV_RANK = {s: i for i, s in enumerate(SEVERITIES)}
 DASAR_LABEL = {"INTERNAL+RISET": "kebijakan internal dengan dukungan riset", "REGULASI": "Regulasi Indonesia", "STANDAR": "Standar (ITU-T/GR/konstruksi distribusi)",

@@ -1,5 +1,5 @@
 """Seranta - release tool (not part of the plugin).
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later.
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later.
 
   python scripts/release.py seranta dist [--github USER] [--repo-url URL] [--strict]
 

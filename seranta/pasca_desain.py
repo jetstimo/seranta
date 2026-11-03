@@ -2,7 +2,7 @@
 """
 Seranta - FTTH Design Assistant - tool 3: post-design FDT FAT CODE + closure table + APD QC
 =================================================================
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later (see LICENSE).
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later (see LICENSE).
 
 Menggantikan langkah manual setelah desain desain otomatis selesai (Handbook KMZ):
   * FDT FAT CODE  : dulu net_nodes -> QGIS "Add geometry" -> VLOOKUP spreadsheet ke spliceplan (Route optique)

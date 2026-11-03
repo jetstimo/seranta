@@ -22,6 +22,16 @@ scripts/check_neutral.py cegah nama merek/perusahaan masuk ke rilis publik
 3. Angka batas baru masuk ke `profiles/*.json` lengkap dengan `dasar`, `sumber`, `status`.
 4. Tambahkan uji di `seranta/tests/`.
 
+## Tanda tangan rilis (wajib sejak 3.9.0)
+Rilis resmi memuat `seranta/RILIS.json` yang ditandatangani kunci privat Ed25519 pembuat (`seranta/keaslian.py`).
+Setiap laporan mencetak status ASLI / DIMODIFIKASI / TIDAK RESMI. Sebelum membuat tag:
+```
+python scripts/seranta_rilis.py rilis --plugin seranta --kunci <kunci privat> --keluar dist --tulis-sumber
+git add seranta/RILIS.json && git commit -m "Tanda tangan rilis <versi>"
+```
+Kunci privat hanya dipegang pembuat dan **tidak pernah** di-commit (`*.key` ada di `.gitignore`). Setelah RILIS.json
+di-commit, jangan mengubah berkas plugin lagi sebelum tag, karena status rilis akan menjadi DIMODIFIKASI.
+
 ## Merilis versi baru (otomatis)
 1. Naikkan `version=` di `seranta/metadata.txt` dan `__version__` di `seranta/buat_input_desain.py`, tulis baris
    pertama `changelog=` untuk versi itu, dan perbarui `CHANGELOG.md`.

@@ -3,7 +3,7 @@
 One-page HTML QC summary (traffic lights, BAKP reminder + checklist, output files, full log).
 
 Part of Seranta - FTTH Design Assistant.
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-2.0-or-later (see LICENSE).
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-3.0-or-later (see LICENSE).
 """
 import html as _h
 import os
@@ -200,7 +200,7 @@ var s=load();boxes.forEach(function(b){b.checked=!!s[b.dataset.k];b.addEventList
                  [("Kode cluster", meta.get("kode", "")), ("ID", meta.get("cl_id", "")), ("Dibuat", meta.get("date", "")),
                   ("Profil desain", meta.get("profile", "")), ("Alat", "%s v%s" % (meta.get("product", ""), meta.get("version", "")))],
                  counts, items, (meta.get("map_html") or "") + U.howto() + "".join(cards) + "".join(sec),
-                 "%s v%s. &copy; 2026 %s, GPL-2.0-or-later. Hasil QC adalah alat bantu; keputusan desain tetap pada desainer "
+                 "%s v%s. &copy; 2026 %s, GPL-3.0-or-later. Hasil QC adalah alat bantu; keputusan desain tetap pada desainer "
                  "dan reviewer." % (_E(meta.get("product", "")), _E(meta.get("version", "")), _E(meta.get("author", ""))),
                  run_key=str(meta.get("kode", "")), word_href=meta.get("word"))
     doc = doc.replace("</body>", js + "</body>")

@@ -1,5 +1,30 @@
 # Changelog
 
+## 3.9.0 – wilayah induk / paket 1 PIC, lisensi GPL v3 + pasal 7, rilis bertanda tangan
+- BOUNDARY yang identik (poligon yang sama disalin ke KMZ beberapa cluster) dilaporkan sekali sebagai boundary induk:
+  "boundary KMZ = boundary induk '<nama>' (sama di N cluster lain)". Remarks tidak lagi habis untuk mendaftar cluster
+  satu per satu, dan ratusan catatan "HP di tepi BOUNDARY cluster saudara" tidak muncul lagi.
+- Ringkasan grup menyebut wilayah induk dan jenis grup: satu jaringan (1 PIC desain), paket survei 1 PIC
+  (dokumen/boundary sama, jaringan terpisah), atau berdampingan. Dokumen bersama (BOUNDARY/BAKP identik) disebut dengan
+  jumlah clusternya.
+- Nama pendek cluster tanpa ID mempertahankan bagian pembeda (RT/RW/lingkungan); frasa tiang ganda punya versi pendek
+  agar tetap masuk 255 karakter.
+- Lisensi GPL-3.0-or-later dengan syarat tambahan pasal 7: nama pembuat dipertahankan, versi modifikasi berganti nama &
+  ditandai, tidak boleh mengaku sebagai pembuat; merek Seranta tidak dilisensikan. Versi s.d. 3.8.2: GPL-2.0-or-later.
+- Rilis resmi ditandatangani digital (Ed25519, `RILIS.json`); kepala laporan dan dialog About menampilkan ASLI /
+  DIMODIFIKASI / TIDAK RESMI. Kunci, sidik dan tanda tangan disimpan sebagai bilangan (lolos pemindai rahasia
+  plugins.qgis.org). Alat rilis: `scripts/seranta_rilis.py`.
+
+## 3.8.2 – lintas cluster mode KMZ saja / KMZ 1 PIC, laporan gabungan
+- Cek lintas cluster berjalan pada mode tanpa HPDB dan KMZ 1 PIC yang dipecah per area (tiang ganda, HP di BOUNDARY
+  cluster lain, BOUNDARY tumpang tindih, grup 1 PIC); BOUNDARY di akar folder area terbaca; label survei '? -37'
+  dicek; penomoran label yang diulang per area tidak dianggap duplikat lintas cluster; jalur berimpit dicatat sebagai info.
+- Laporan HTML gabungan REKAP_GRUP_1PIC_*.html / REKAP_BATCH_*.html: tab laporan lengkap tiap cluster, remarks tambahan
+  + status per cluster, catatan grup, unduh Word semua cluster + CSV remarks.
+- BAKP PDF dengan object stream (CamScanner) terbaca per halaman; ID cluster lain di judul PDF BAKP ditandai; vendor
+  tanpa ekstensi file; ID cluster yang belum ada di FINDIM lama (> 90 hari) menjadi catatan; folder EVIDEN dikenali;
+  REKAP batch memisahkan kolom Proses dan Remarks; HP yang sudah disebut "> 50 m" tidak diulang sebagai akses.
+
 ## 3.8.1 – QC survei tetap jalan tanpa HPDB (QC KMZ saja)
 - Alat 1: folder cluster tanpa HPDB (mis. hanya `1 PIC TOMOHON.kmz`) tidak lagi gagal "No homepass spreadsheet". Titik HP
   diambil dari folder HP di KMZ dan hanya cek berbasis KMZ yang dijalankan: tiang, jalur, rentang, jarak dan akses rumah ke

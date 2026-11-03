@@ -9,7 +9,7 @@ Dua hal yang tidak terlihat dari jarak garis lurus:
   street view (izin melintas pekarangan, gang yang belum digambar);
 * jarak tiang ke rumah LEWAT AKSES lebih panjang dari batas walaupun garis lurusnya masih di bawah batas.
 
-Semua koordinat dalam meter (proyeksi lokal). Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later.
+Semua koordinat dalam meter (proyeksi lokal). Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later.
 """
 import heapq
 import math

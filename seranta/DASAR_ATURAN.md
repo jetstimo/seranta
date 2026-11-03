@@ -1,6 +1,6 @@
 # Dasar Teknis Aturan QC — Seranta - FTTH Design Assistant (v3.3.0)
 
-Copyright (C) 2026 Joseph Edward Timothy Siahaan (GPL-2.0-or-later). Dokumen ini menjelaskan **untuk apa** setiap
+Copyright (C) 2026 Joseph Edward Timothy Siahaan (GPL-3.0-or-later + syarat tambahan pasal 7, lihat LICENSE). Dokumen ini menjelaskan **untuk apa** setiap
 pemeriksaan dilakukan dan **dari mana** setiap ambang berasal. Nilai yang dipakai plugin tersimpan di
 `profiles/*.json` (profil standar). Setiap parameter di sana memuat nilai, kategori dasar, sumber, dan status
 pengesahan. Setiap temuan mencatat `profile_id` dan `rule_version` (2026.10-r1).
@@ -200,3 +200,25 @@ Permintaan tim QC (dokumen *improve QC QGIS*) dan kasus grup lapangan (HP > 50 m
 - **Kecepatan**: titik-dalam-poligon memakai indeks kotak-batas (FAT_COVERAGE 6.000 HP × 300 poligon: 10,1 s → 0,1 s),
   jarak titik-ke-kabel memakai indeks ruas (`SegGrid`), FAT_CENTER memakai indeks FAT. Seluruh aturan inti untuk 6.000 HP
   / 1.052 tiang / 300 FAT: 10,2 s → 1,4 s; hasil aturan lain tidak berubah (5 berkas uji lama tetap lulus).
+
+## Tambahan 3.8.2 — lintas cluster mode KMZ saja / KMZ 1 PIC (review Tomohon & Pematangsiantar, November 2026)
+- **Cluster saudara mode KMZ saja**: pada folder tanpa HPDB (termasuk KMZ "1 PIC" yang dipecah ke `_KMZ_PER_AREA`), folder
+  saudara yang hanya berisi KMZ survei ikut dibandingkan. Sebelumnya saudara wajib ber-HPDB sehingga 7 lingkungan Kakaskasen
+  tercatat "Cluster saudara dibandingkan: 0" dan 15 tiang yang sama koordinat di Lingk. 4 & 6 lolos. Mode ber-HPDB tidak berubah.
+- **BOUNDARY di akar area**: placemark poligon yang diletakkan langsung di folder area (tanpa folder BOUNDARY) dibungkus folder
+  BOUNDARY saat KMZ dipecah, bila area itu belum punya folder BOUNDARY.
+- **Label survei mode KMZ saja**: nama titik KMZ (`? -37`) dipakai sebagai label untuk cek label sama di dalam cluster dan lintas
+  cluster (aturan 25 m / 25–50 m tidak berubah).
+- **Penomoran label urut diulang** (`seq_labels_restart`): bila ≥ 5 label ?NNN dan ≥ 50 % label urut cluster yang lebih kecil juga
+  ada di cluster saudara, tetapi median jarak pasangan berlabel sama > 2 × 50 m, label urut tidak dipakai sebagai pengenal
+  lintas cluster untuk pasangan itu (KMZ 1 PIC Tomohon: 72–98 % label sama, median 116–699 m). Duplikat tetap dinilai dari
+  koordinat (≤ 0,5 m ERROR, 0,5–5 m INFO) dan nama usaha/bangunan.
+- **Jalur berimpit (info)**: panjang ruas jalur yang searah (≤ 20°) dan ≤ 2 m dari jalur cluster saudara, dilaporkan bila ≥ 30 m.
+  Bukan kesalahan: dua kabel boleh lewat ruas tiang yang sama; kesalahan BOQ adalah tiang yang dicatat di dua KMZ
+  (WARN_TIANG_GANDA_LINTAS_CLUSTER, tetap ≤ 1 m).
+- **Remarks**: HP yang sudah disebut "> 50 m ke tiang" tidak disebut lagi sebagai "jauh dari jalur/akses"; kelebihan < 0,05 m dari
+  batas ditulis "< 0,1 m"; ID cluster yang belum ada di FINDIM berumur > 90 hari menjadi catatan (findim_stale), bukan alasan reject.
+- **BAKP**: PDF dengan object stream terkompresi (PDF 1.5+, CamScanner) kini terbaca per halaman; ID 9–12 digit di judul/subjek
+  PDF yang berbeda dari ID cluster → WARN_BAKP_ID_METADATA_BEDA (bukan penghalang, wajib dicocokkan manual).
+- **Evidence**: folder `EVIDEN` dikenali; folder foto di luar folder HP (mis. `Dokumentasi`) dilaporkan sebagai foto umum, tidak
+  dipakai untuk cek "HP tanpa foto".

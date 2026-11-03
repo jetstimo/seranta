@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Seranta - FTTH Design Assistant - QC paket tiga berkas (KMZ APD + Splice Plan + tabel kode FDT/FAT)
-# Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later (see LICENSE).
+# Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later (see LICENSE).
 """Tujuh kelompok QC operasional untuk desain APD (tanpa QGIS; dapat diuji dengan Python biasa):
 
 QC-01 kode & grouping FDT   QC-02 premises, splitter, fiber/tube   QC-03 properties FDT/FAT (COLO/NEW)

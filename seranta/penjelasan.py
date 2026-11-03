@@ -12,7 +12,7 @@ Teks sengaja netral (tanpa nama merek atau perusahaan). Angka batas diambil dari
 dipakai saat QC dijalankan, bukan ditulis tetap di sini.
 
 Part of Seranta - FTTH Design Assistant.
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-2.0-or-later (see LICENSE).
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-3.0-or-later (see LICENSE).
 """
 
 # ---------------------------------------------------------------------------------------------
@@ -447,6 +447,9 @@ TOOL1_KIND = [
     ("COLO_", "Catatan kemungkinan COLO FDT existing.", "Bandingkan pilihan FDT di tabel colo."),
     ("RENTANG_NP_NP", "Jarak antar tiang baru melebihi batas.", "Sisipkan tiang baru di tengah."),
     ("RENTANG_NP_EP", "Jarak tiang baru ke tiang existing melebihi batas.", "Geser tiang baru atau sisipkan tiang."),
+    ("WARN_BAKP_ID_METADATA_BEDA", "Judul/subjek file PDF BAKP (nama dokumen di aplikasi scan) memuat ID cluster lain: "
+     "kemungkinan BAKP milik cluster lain ikut terlampir.", "Buka BAKP dan cocokkan Cluster ID & jumlah homepass dengan "
+     "cluster ini; minta BAKP yang benar bila berbeda."),
     ("BAKP_", "Isian BAKP perlu dicek.", "Bandingkan dengan nilai seharusnya di daftar periksa BAKP."),
     ("INFO_BAKP_", "Catatan BAKP.", "Tidak wajib diubah."),
     ("UNV_BAKP", "BAKP belum dapat diverifikasi otomatis.", "Periksa BAKP secara manual."),

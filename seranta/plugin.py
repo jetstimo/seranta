@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Seranta - FTTH Design Assistant - menus, toolbar and Processing registration
-# Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later (see LICENSE).
+# Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later (see LICENSE).
 try:
     from . import _log
 except ImportError:  # dijalankan sebagai modul lepas (uji unit)
@@ -136,6 +136,8 @@ class SerantaPlugin:
             "<b>Seranta&trade; - FTTH Design Assistant</b> v%s<br>Author: %s<br>File integrity: %s<br><br>"
             "Four one-folder tools for FTTH/GPON access networks: survey QC and design input, FDT/FAT allocation, "
             "post-design tables, and design package QC. Reports are written in Indonesian.<br><br>"
-            "Licence: GNU GPL v2 or later. Copies and modifications must keep the author's name and the same licence. "
+            "Licence: GNU GPL v3 or later with the section 7 terms in LICENSE: copies and modifications must keep the "
+            "author's name, modified versions must be renamed and marked as modified and may not claim authorship. "
+            "Official releases are digitally signed by the author. "
             "Seranta&trade; is a trademark of Joseph Edward Timothy Siahaan."
             % (__version__, __author__, integrity_status(en=True)))
