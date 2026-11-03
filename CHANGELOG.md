@@ -4,6 +4,8 @@
 - Alat 1: folder cluster tanpa HPDB (mis. hanya `1 PIC TOMOHON.kmz`) tidak lagi gagal "No homepass spreadsheet". Titik HP
   diambil dari folder HP di KMZ dan hanya cek berbasis KMZ yang dijalankan: tiang, jalur, rentang, jarak dan akses rumah ke
   tiang, HP duplikat koordinat, boundary/Funnel, Design Lite dan lintas cluster.
+- Satu KMZ berisi beberapa area (mis. KMZ "1 PIC" dengan beberapa lingkungan, masing-masing punya folder HP, tiang,
+  jalur dan BOUNDARY) dipecah otomatis ke `_KMZ_PER_AREA\<area>` dan diperiksa per area, lalu direkap di REKAP_BATCH.
 - Cek yang memakai HPDB dilewati: HPDB vs KMZ, ID/alamat, administrasi FINDIM, BAKP otomatis. `HP.csv` dan
   `manifest_input.json` tidak dibuat; titik HP disimpan sebagai `HP_KMZ.shp` (hanya peta/QC, bukan input desain).
 - Peringatan jelas di log QGIS, laporan, ringkasan standar dan REMARKS ("TANPA HPDB – bukan review lengkap"); nomor temuan
