@@ -1,5 +1,9 @@
 # Changelog
 
+## 3.9.1 – perbaikan paket rilis
+- Berkas di dalam zip tidak lagi membawa izin eksekusi (rw-r--r--), sehingga pemeriksaan *File Permissions*
+  plugins.qgis.org lolos (skor pindai 100%). Tidak ada perubahan analisis; hasil QC sama dengan 3.9.0.
+
 ## 3.9.0 – wilayah induk / paket 1 PIC, lisensi GPL v3 + pasal 7, rilis bertanda tangan
 - BOUNDARY yang identik (poligon yang sama disalin ke KMZ beberapa cluster) dilaporkan sekali sebagai boundary induk:
   "boundary KMZ = boundary induk '<nama>' (sama di N cluster lain)". Remarks tidak lagi habis untuk mendaftar cluster
