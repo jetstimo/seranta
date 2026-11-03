@@ -397,10 +397,11 @@ TOOL1_KIND = [
      "Tentukan satu cluster pemilik (lihat saran: di dalam BOUNDARY siapa, tiang siapa lebih dekat), hapus baris HPDB dan "
      "titik KMZ dari cluster yang lain, lalu rapikan BOUNDARY."),
     ("WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER", "HP cluster ini sangat mungkin rumah yang sama dengan HP cluster saudara: "
-     "namanya hampir sama (salah ketik) atau titiknya berimpit dalam satu bangunan.",
+     "namanya hampir sama (salah ketik), titiknya berimpit dalam satu bangunan, atau label umumnya sama (mis. 'RUKO-1') "
+     "pada jarak 5-25 m. Nomor unit seperti RUKO-1/TOKO 2 dipakai ulang di tiap deret, jadi perlu dicek.",
      "Cek di citra satelit; bila sama, simpan di satu cluster saja. Bila memang dua unit (ruko/kos), beri label yang jelas."),
-    ("WARN_HP_LABEL_SAMA", "Dua HP memakai label survei yang sama tetapi berjauhan (25-50 m): rumah yang sama dengan titik "
-     "bergeser jauh, atau label salah ketik pada rumah berbeda.",
+    ("WARN_HP_LABEL_SAMA", "Dua HP memakai label survei yang sama tetapi berjauhan (25-50 m), atau label umum yang sama "
+     "(mis. 'RUKO-1') pada 5-25 m: rumah yang sama dengan titik bergeser, atau rumah/unit berbeda berlabel sama.",
      "Cek citra satelit: bila rumah sama hapus salah satu; bila berbeda beri label unik (mis. nomor yang hilang di urutan)."),
     ("HP_DUPLIKAT_LABEL", "Dua baris HP di cluster ini memakai label survei (mis. ?327) atau nama/nomor rumah yang sama "
      "tetapi titiknya bergeser: satu rumah tercatat dua kali.",

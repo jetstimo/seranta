@@ -101,6 +101,14 @@ class SerantaPlugin:
             self.nav = QcNavigator(self.iface)
             self.iface.addDockWidget(RIGHT_DOCK, self.nav)
         self.nav.refresh()
+        try:
+            from qgis.core import QgsProject
+            from .qc_navigator import is_qc_layer
+            from . import basemap
+            if any(is_qc_layer(lyr) for lyr in QgsProject.instance().mapLayers().values()):
+                basemap.ensure()
+        except Exception as _e:
+            _log.note(_e)
         self.nav.show()
         self.nav.raise_()
 

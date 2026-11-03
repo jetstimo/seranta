@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.9.2 – label umum (RUKO-1) & peta dasar satelit
+- Label umum = kata generik + nomor unit (RUKO-1, Toko 2, KIOS A3, Kos No 12) diperlakukan sebagai pengenal lemah, karena
+  penomoran seperti ini diulang di setiap deret/lingkungan. Label sama di dua cluster: ERROR hanya bila <= 5 m
+  (`generic_label_match_m`); 5–25 m menjadi WARNING "cek citra"; > 25 m tidak dilaporkan. Keterangan menyebut apakah deret
+  kedua cluster saling tumpang (kemungkinan disurvei dua kali) atau bersambung (kemungkinan unit berbeda). Berlaku juga di
+  dalam satu cluster. Kasus nyata: Tomohon "RUKO-1" L3 vs "Ruko-1" L7, 17 m, deret bersambung → WARNING (sebelumnya ERROR).
+- Nama usaha khas, nomor urut survei (?327, ? -37) dan nomor rumah biasa tidak berubah. Uji regresi 3.9.1 vs 3.9.2 pada
+  TOMOHON (KMZ saja), JAMBI dan TOMOHON mode HPDB: hanya temuan RUKO di atas yang berubah.
+- Peta dasar pembuktian di QGIS: satu layer XYZ Esri World Imagery di dasar daftar layer saat hasil QC dimuat, dipakai ulang
+  untuk semua cluster; pilihan Satelit / Peta jalan (OSM) / Tanpa di panel QC Navigator (tersimpan). Ikut di "Copy picture"
+  dan laporan Word Navigator. Peta HTML langsung membuka citra satelit bila online.
+- Keterangan temuan panjang di shapefile QC dipotong rapi (batas 254 byte), tanpa karakter rusak.
+
 ## 3.9.1 – perbaikan paket rilis
 - Berkas di dalam zip tidak lagi membawa izin eksekusi (rw-r--r--), sehingga pemeriksaan *File Permissions*
   plugins.qgis.org lolos (skor pindai 100%). Tidak ada perubahan analisis; hasil QC sama dengan 3.9.0.

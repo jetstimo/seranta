@@ -51,7 +51,8 @@ mis. sudut belok, toleransi snap, dan toleransi FAT ke tiang.
 | Kemungkinan duplikat | 0,5–**5 m** (naik dari 3 m), nomor rumah sama/kosong | INFO | RISET: GPS ponsel 4,9 m |
 | HP duplikat **lintas cluster** (folder cluster saudara di folder induk) | koordinat ≤ 0,5 m; label survei ?NNN / nama usaha sama ≤ **25 m** (25–50 m WARNING); no. rumah biasa sama ≤ **15 m** (≤ 30 m bila nama jalan sama) | ERROR | pola temuan tim QC (review Jambi 2026); RISET: GPS ponsel 7–13 m urban |
 | HP duplikat **label** di dalam satu cluster (HP_DUPLIKAT_LABEL) | aturan label yang sama, titik bergeser > 0,5 m | ERROR | pola temuan tim QC |
-| Mungkin duplikat lintas cluster | nama mirip ≥ 85 % ≤ 30 m; dua titik ≤ 2 m beda label | WARNING | salah ketik / satu bangunan |
+| Mungkin duplikat lintas cluster | nama mirip ≥ 85 % ≤ 30 m; dua titik ≤ 2 m beda label; label umum (RUKO-1, TOKO 2) sama 5–25 m | WARNING | salah ketik / satu bangunan / nomor unit dipakai ulang per deret |
+| Label umum sama (kata generik + nomor unit) | ERROR hanya ≤ **5 m** (`generic_label_match_m`); 5–25 m WARNING cek citra; > 25 m tidak dilaporkan | ERROR / WARNING | review Tomohon 2026 (RUKO-1 L3 vs Ruko-1 L7, 17 m, deret bersambung); RISET: GPS ponsel 4,9 m langit terbuka |
 | Kemungkinan duplikat lintas cluster | 0,5–5 m, no. rumah kosong | INFO | GPS.gov 4,9 m |
 | HP di dalam BOUNDARY cluster saudara | > 10 m dari garis = ERROR; ≤ 10 m = INFO tepi | ERROR/INFO | Standar Review Strand; toleransi GPS ponsel |
 | BOUNDARY tumpang tindih dengan cluster saudara | irisan berisi HP dan lebar > 10 m = WARNING; irisan tipis = INFO | WARNING/INFO | satu rumah satu cluster |
@@ -222,3 +223,13 @@ Permintaan tim QC (dokumen *improve QC QGIS*) dan kasus grup lapangan (HP > 50 m
   PDF yang berbeda dari ID cluster → WARN_BAKP_ID_METADATA_BEDA (bukan penghalang, wajib dicocokkan manual).
 - **Evidence**: folder `EVIDEN` dikenali; folder foto di luar folder HP (mis. `Dokumentasi`) dilaporkan sebagai foto umum, tidak
   dipakai untuk cek "HP tanpa foto".
+
+## Tambahan 3.9.2 — label umum & peta dasar (review Tomohon, November 2026)
+- **Label umum** (`generic_unit`): kata generik (RUKO, TOKO, KIOS, KOS, WARUNG, RUMAH, KANTOR, ...) + nomor unit
+  ('RUKO-1', 'Toko 2', 'KIOS A3', 'Kos No 12'). Nomor seperti ini diulang di tiap deret bangunan/lingkungan, jadi label sama
+  bukan bukti rumah yang sama: ERROR hanya ≤ 5 m, 5–25 m WARNING "cek citra", > 25 m tidak dilaporkan. Hanya mempersempit
+  jenis 'nama usaha'; nama khas, nomor urut survei dan nomor rumah biasa memakai aturan lama.
+- **Hubungan deret** (`series_relation`): bila kedua cluster punya ≥ 2 unit berlabel umum yang sama, celah terdekat antarderet
+  dibandingkan dengan jarak antarunit (median tetangga terdekat). Celah > 1,5 × jarak antarunit = deret bersambung (kemungkinan
+  unit berbeda); selain itu deret saling tumpang (kemungkinan disurvei dua kali). Hanya keterangan; tingkat tetap WARNING.
+- **Peta dasar** QGIS (Esri World Imagery / OpenStreetMap) hanya latar pembuktian; tidak dipakai dalam perhitungan QC.

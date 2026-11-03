@@ -29,7 +29,9 @@ Every HTML report starts with one sentence telling the reader what to do. Each r
 detail is one click below. Fonts are embedded, so reports look the same offline and print cleanly to PDF.
 
 The QC Findings Navigator panel (Vector → Seranta) takes the map straight to each finding and stores a review status
-(verified, false positive, approved exception, resolved) that survives re-runs.
+(verified, false positive, approved exception, resolved) that survives re-runs. A satellite base map (Esri World Imagery,
+or OpenStreetMap streets) is placed once at the bottom of the layer list as background evidence; choose Satellite / Street
+map / None in the panel. Only the tiles on screen are downloaded, and QC results never depend on it.
 
 ## Your own standards (profiles)
 Thresholds live in JSON profiles (`profiles/`): every number carries its basis, source and approval status.

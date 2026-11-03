@@ -21,7 +21,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.9.1"
+__version__ = "3.9.2"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -1592,7 +1592,7 @@ QC_LABELS = [
      "pola temuan tim QC (review Jambi 2026): label survei ?NNN unik per rumah; GPS ponsel 7-13 m urban (PLOS ONE 2019)"),
     (r"^WARN_HP_LABEL_SAMA", 4, "Label survei sama berjauhan (duplikat atau salah label)", "W4_LABEL_SAMA",
      "label survei unik per rumah; > 2x galat GPS urban"),
-    (r"^WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER", 4, "Mungkin duplikat lintas cluster (nama mirip / titik berimpit)",
+    (r"^WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER", 4, "Mungkin duplikat lintas cluster (nama mirip / titik berimpit / label umum sama)",
      "W4_MUNGKIN_DUPLIKAT_LINTAS", "pola temuan tim QC; salah ketik nama; satu bangunan dua titik"),
     (r"^HP_DUPLIKAT_LINTAS_CLUSTER", 4, "HP duplikat lintas cluster (rumah sama di cluster saudara)",
      "S4_DUPLIKAT_LINTAS_CLUSTER", "satu rumah satu homepass; GPS ponsel 4,9 m / 7-13 m urban (GPS.gov; PLOS ONE 2019)"),
@@ -1733,6 +1733,17 @@ def qc_item(it):
 def _short(t, n):
     t = " ".join(str(t).split())
     return t if len(t) <= n else t[:n - 1] + "…"
+
+
+def _short_b(t, n):
+    """Seperti _short, tetapi n = batas BYTE UTF-8 (kolom shapefile string(254) dihitung dalam byte: tanpa ini '…' atau
+    huruf non-ASCII terpotong di tengah dan tampil sebagai karakter rusak di QGIS)."""
+    t = " ".join(str(t).split())
+    if len(t.encode("utf-8")) <= n:
+        return t
+    while len((t + "…").encode("utf-8")) > n:
+        t = t[:-1]
+    return t.rstrip() + "…"
 
 
 def qc_by_std(qc):
@@ -3358,7 +3369,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             if rv and not as_line:
                 n_rev[0] += 1
             f.setAttributes([n_, qc_status(kind), qc_severity(kind), str(no) if no else "", lab,
-                             _short(ket, 254), float(val) if val is not None else None,
+                             _short_b(ket, 254), float(val) if val is not None else None,
                              float(lim) if lim is not None else None, _short(qc_source(kind), 160), qc_dasar(kind), kind,
                              "F-%04d" % n_, pid, _qc.RULE_VERSION,
                              rv[0] if rv else "OPEN", rv[1][:200] if rv else "",
@@ -3681,12 +3692,26 @@ class BuatInputDesain(QgsProcessingAlgorithm):
               "blk": _lintas.norm_block(r_[i_adr[2]] if i_adr[2] is not None and i_adr[2] < len(r_) else "")}
              for r_, p_ in data],
             label_m=float(qcp("cross_label_match_m", 25.0)), name_m=float(qcp("cross_name_match_m", 15.0)),
-            street_m=float(qcp("same_street_match_m", 30.0)), label_warn_m=float(qcp("label_review_m", 50.0)))
+            street_m=float(qcp("same_street_match_m", 30.0)), label_warn_m=float(qcp("label_review_m", 50.0)),
+            gen_m=float(qcp("generic_label_match_m", 5.0)))
         lbl_pairs = [t for t in lbl_pairs if not (t[0] in used_k and t[1] in used_k)]
         lbl_set = {(min(t[0], t[1]), max(t[0], t[1])) for t in lbl_pairs}
         near_dup = [t for t in near_dup if (min(t[0], t[1]), max(t[0], t[1])) not in lbl_set]
         for i_, j_, d_, n_, sure_ in lbl_pairs[:300]:
-            if sure_:
+            gen_ = _lintas.label_kind(n_) == "gen"
+            if sure_ and gen_:
+                qc.append((data[j_][1], "HP_DUPLIKAT_LABEL",
+                           "%s dan %s memakai label umum yang sama '%s' dan hanya berjarak %.1f m: unit yang sama tercatat dua "
+                           "kali. Hapus salah satu, atau perbaiki label bila memang unit berbeda"
+                           % (_hpname(i_), _hpname(j_), _lbl(data[i_][0]).upper(), d_), [data[i_][1], data[j_][1]], round(d_, 1),
+                           float(qcp("generic_label_match_m", 5.0))))
+            elif gen_:
+                qc.append((data[j_][1], "WARN_HP_LABEL_SAMA",
+                           "%s dan %s memakai label umum yang sama '%s' dan berjarak %.1f m: nomor unit seperti ini bisa dipakai "
+                           "ulang di deret lain. Cek citra; bila bangunan yang sama hapus salah satu, bila berbeda beri label unik"
+                           % (_hpname(i_), _hpname(j_), _lbl(data[i_][0]).upper(), d_), [data[i_][1], data[j_][1]], round(d_, 1),
+                           float(qcp("cross_label_match_m", 25.0))))
+            elif sure_:
                 qc.append((data[j_][1], "HP_DUPLIKAT_LABEL",
                            "%s dan %s memakai label/nomor rumah yang sama '%s' tetapi berjarak %.1f m: satu rumah tercatat dua "
                            "kali (titik bergeser). Hapus salah satu, atau perbaiki label bila memang rumah berbeda"
@@ -5025,6 +5050,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                        bldg_m=float(qcp("same_building_m", 2.0)),
                                        pole_same_m=float(qcp("cross_pole_same_m", 1.0)),
                                        route_dup_m=float(qcp("cross_route_dup_m", 30.0)),
+                                       gen_m=float(qcp("generic_label_match_m", 5.0)),
                                        hp_per_spl=hp_per_spl, fdt_cap=opt["prof"]["fdt_cap"], ratio=opt["prof"]["ratio"])
                 pic_group = cres.get("pic") or []
                 bakp_shared = [s_["label"] for s_ in cres["used"]
