@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Seranta - peta temuan interaktif di laporan HTML (Leaflet 1.9.4, BSD-2, disematkan; tanpa internet tetap jalan).
 
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later.
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later.
 
 Objek jaringan (homepass, tiang, perangkat, kabel, batas) beserta atributnya dan setiap temuan QC digambar di satu peta.
 Klik temuan -> isi temuan, nilai vs batas, gambar, objek & temuan di sekitar, tautan Google Earth/Maps/Street View.

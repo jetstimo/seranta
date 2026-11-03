@@ -3,7 +3,7 @@
 Seranta - FTTH Design Assistant - tool 2: FDT & FAT allocation estimate
 =======================================================================
 Copyright (C) 2026 Joseph Edward Timothy Siahaan <edwardtimoo@gmail.com>
-GPL-2.0-or-later (see LICENSE).
+GPL-3.0-or-later (see LICENSE).
 
 Before designing in desain otomatis: how many FATs does this cluster need, can they be served by existing FDTs within
 1 km (each FDT max 24 FAT, kebijakan internal), and how many new FDTs are needed?

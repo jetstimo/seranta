@@ -1,6 +1,6 @@
 # Dasar Teknis Aturan QC — Seranta - FTTH Design Assistant (v3.3.0)
 
-Copyright (C) 2026 Joseph Edward Timothy Siahaan (GPL-2.0-or-later). Dokumen ini menjelaskan **untuk apa** setiap
+Copyright (C) 2026 Joseph Edward Timothy Siahaan (GPL-3.0-or-later + syarat tambahan pasal 7, lihat LICENSE). Dokumen ini menjelaskan **untuk apa** setiap
 pemeriksaan dilakukan dan **dari mana** setiap ambang berasal. Nilai yang dipakai plugin tersimpan di
 `profiles/*.json` (profil standar). Setiap parameter di sana memuat nilai, kategori dasar, sumber, dan status
 pengesahan. Setiap temuan mencatat `profile_id` dan `rule_version` (2026.10-r1).
@@ -64,7 +64,9 @@ mis. sudut belok, toleransi snap, dan toleransi FAT ke tiang.
 | Ujung jalur tanpa tiang (derajat 1) | ada | ERROR | praktik operator: tambat akhir di tiang |
 | Belokan tanpa tiang | ≥ 30° WARNING; 15–30° INFO; sambungan lurus **tidak** ditandai | WARNING/INFO | pedoman konstruksi jaringan distribusi TR (NOT_APPROVED, kalibrasi) |
 | Percabangan tanpa tiang | ada | WARNING | Handbook: jalur harus ada akses pole |
-| Tiang nganggur | ada | ERROR | Handbook kasus 25 |
+| Tiang nganggur | NP tidak dilewati jalur = WARNING (tahap survei; tikor di keterangan); EP = INFO (boleh) | WARNING/INFO | Handbook kasus 25; aturan tim QC: NP tidak boleh nganggur, EP/tiang feeder boleh |
+| HP jauh lewat jalur/akses | garis lurus ≤ 50 m tetapi tiang → jalur → rumah > 55 m (50 m + galat GPS 5 m) | WARNING | Handbook 50 m; drop mengikuti akses ke tiang (lead-in path, Biarri FOND) |
+| HP akses dalam | rumah > 40 m dari jalur survei terdekat (rumah lapis kedua/ketiga; 30 m + galat GPS 10 m) | WARNING | izin warga/BAKP; parameter desain (NOT_APPROVED) |
 | BAKP | tidak ada sumber = UNVERIFIED (BAKP_NOT_SUPPLIED); dikenali dari isi/ID cluster = UNVERIFIED kandidat (BAKP_UNRECOGNIZED); dipilih manual = BAKP_MAPPED | — | spesifikasi O.1 / X-01 |
 | Manifest input | jumlah HP shp = csv = HPDB, ID unik dengan format H00001, koordinat di Indonesia, ROADS tidak kosong | PASS/ERROR/UNVERIFIED | Langkah Input Desain Otomatis APD |
 
@@ -110,11 +112,11 @@ Dengan feeder 5 km, konfigurasi 1:4 × 1:8 (1:32) menghasilkan ±26,7 dB. Hasil 
 | FAT_COVERAGE | 8 | HP di luar semua poligon (toleransi tepi 0,5 m), tumpang tindih, HP di coverage FAT lain | ERROR / WARNING | UNVERIFIED |
 | CABLE_END | 1, 34 | Graf kabel: ujung derajat 1 tanpa FAT ≤ 3 m. Closure = INFO. Ekor > 100 m atau > 2 span = WARNING | ERROR / WARNING | UNVERIFIED |
 | MULTI_FDT | 2, 22 | Induk FAT dari SUPID, hirarki ELEMENTID, dan awalan kode. Klaim ganda = ERROR. Per FDT: HP ≤ 384, splitter ≤ 12, premises ikon = jumlah HP | ERROR | UNVERIFIED |
-| FAT_HP_DISTANCE | 15 | MAXPPDIST > 150 m ERROR; 120–150 m WARNING (special case). Tanpa MAXPPDIST, garis lurus dipakai sebagai batas bawah | ERROR / WARNING | UNVERIFIED |
+| FAT_HP_DISTANCE | 15 | Anggota FAT = HP (endpoint keluaran desain) di dalam poligon FAT Coverage milik FAT itu (tanpa coverage: SUPID). MAXPPDIST > 150 m ERROR; 120–150 m WARNING. Tanpa MAXPPDIST: jarak **sepanjang jalur kabel** (Dijkstra) + drop dari tiang/garis drop ke rumah; garis lurus hanya bila jalur tidak tersambung (batas bawah) | ERROR / WARNING | UNVERIFIED |
 | FAT_CODE | 11, 32 | Nomor D-xx melompat, kode ganda, awalan beda dari FDT, urutan vs SUPDIST, panjang label | WARNING / INFO | UNVERIFIED |
 | FAT_ON_POLE | 3 | FAT > 2 m dari tiang (FAT melayang) | WARNING | UNVERIFIED |
-| POLE_IDLE | 25 | Tiang > 3 m dari kabel | WARNING | UNVERIFIED |
-| SPAN_APD | 9 | Rentang antar tiang di sepanjang kabel > 60 m ERROR, > 50 m WARNING | ERROR / WARNING | UNVERIFIED |
+| POLE_IDLE | 25 | Tiang **NP** > 7 m dari semua kabel distribusi/feeder = ERROR dengan tikor. EP boleh nganggur (dicatat, bukan temuan); tiang yang dilewati feeder dan tiang di seberang jalan (3–7 m) dihitung dipakai | ERROR | UNVERIFIED |
+| SPAN_APD | 9 | Rentang antar tiang berurutan di sepanjang kabel > 60 m ERROR, > 50 m WARNING. Tiang penopang = tiang ≤ 7 m dari garis kabel (lebar jalur jalan sedang 2 × 3,5 m), termasuk tiang di seberang jalan (kabel menyeberang kiri-kanan) | ERROR / WARNING | UNVERIFIED |
 | FAT_CENTER | 6, 33 | Rata-rata jarak HP ke FAT > 1,5 × titik paling sentral; grouping melewati FAT lain | INFO (REVIEW) | UNVERIFIED |
 | SLACK | 21 | Jarak antar penanda slack > 250 m | WARNING | UNVERIFIED_SLACK |
 | CROSSING | 17, 19, 27 | Kabel memotong layer rel/tol | WARNING | UNVERIFIED_REFERENCE |
@@ -174,3 +176,49 @@ cluster berikutnya, sehingga cluster yang jauh dari cluster pertama tetap diband
 - **Penulisan hasil**: shapefile hasil yang .shx/.dbf-nya tidak terbentuk (file lama masih dipegang koneksi OGR di Windows) dilaporkan sebagai gagal tulis, tidak lolos diam-diam.
 - **Uji di QGIS 3.40.14**: 209 (+210 lewat grup), 213, 210 dijalankan dua kali dengan urutan terbalik → semua QC_TEMUAN, layer QC/*, REMARKS, LAPORAN_INPUT dan REKAP_GRUP identik.
 - **Uji**: grup Minahasa (209/210, 211/213) dan Jambi (Pinang Merah, Simpang Rimbo, Bagan Pete) dipindah ke Aceh, Papua, NTT, Kalimantan, Jakarta + 5 urutan acak + ulang + 4 hash seed → 33 + 4 run, 0 beda temuan dan remarks.
+
+## Tambahan 3.8.0 — anggota FAT dari FAT Coverage, jarak sepanjang jalur, tiang seberang jalan, akses rumah
+
+Permintaan tim QC (dokumen *improve QC QGIS*) dan kasus grup lapangan (HP > 50 m dari tiang; rumah di belakang rumah lain):
+
+- **Rumah terlalu jauh dari FAT (alat 4)**: anggota FAT kini ditentukan oleh **poligon FAT Coverage** milik FAT (endpoint
+  keluaran desain otomatis). HP yang SUPID-nya menunjuk FAT jauh tetapi letaknya di coverage FAT lain tidak lagi membuat
+  FAT itu "terlalu jauh" (kesalahan SUPID tetap dilaporkan oleh FAT_COVERAGE sebagai HP_WRONG_FAT_AREA). Jarak diukur
+  **sepanjang jalur kabel** (graf kabel distribusi/pancingan/drop, Dijkstra) sampai tiang drop terdekat lalu ke rumah, atau
+  sampai ujung garis drop bila digambar. Garis temuan di peta mengikuti jalur itu. Dasar: desain otomatis menghitung
+  MAXPPDIST lewat jalur; drop mengikuti *lead-in path* ke tiang/struktur terdekat (Biarri FOND, *drop tier settings*).
+- **Rentang tiang (alat 4)**: tiang sampai **7 m** dari garis kabel dihitung tiang penopang (tiang di seberang jalan, kabel
+  menyeberang kiri-kanan). 7 m = lebar jalur jalan sedang 2 × 3,50 m (Permen PU 19/PRT/M/2011 Lampiran, telah diganti
+  Permen PUPR 5/2023 — acuan orde besaran). Contoh dokumen: tiang tengah 4–5 m dari garis tidak lagi menghasilkan bentang palsu.
+- **Tiang nganggur**: NP yang tidak dilewati kabel = ERROR (alat 4) / WARNING (alat 1, tahap survei) dengan **tikor**
+  (lintang, bujur) di keterangan dan remarks. EP dan tiang yang dilewati kabel feeder boleh (aturan tim QC).
+- **Akses rumah (alat 1, `akses.py`)**: jarak tiang → rumah dihitung juga lewat jalur survei (menyusuri jalur lalu masuk ke
+  rumah). WARN_HP_JAUH_LEWAT_JALUR bila > 55 m (50 m + galat GPS 5 m) padahal garis lurusnya ≤ 50 m; WARN_HP_AKSES_DALAM bila
+  rumah > 40 m (asumsi desain rumah lapis pertama < 30 m dari jalan, perlu kalibrasi, + galat GPS urban 10 m) dari jalur survei terdekat (rumah lapis kedua/ketiga — akses masuk drop perlu dicek, izin melintas pekarangan / BAKP).
+  Batasan: hanya jalan/gang yang digambar sebagai jalur survei yang dikenal; gang yang belum digambar membuat rumah tampak
+  "dalam" (karena itu WARNING, bukan ERROR).
+- **Kecepatan**: titik-dalam-poligon memakai indeks kotak-batas (FAT_COVERAGE 6.000 HP × 300 poligon: 10,1 s → 0,1 s),
+  jarak titik-ke-kabel memakai indeks ruas (`SegGrid`), FAT_CENTER memakai indeks FAT. Seluruh aturan inti untuk 6.000 HP
+  / 1.052 tiang / 300 FAT: 10,2 s → 1,4 s; hasil aturan lain tidak berubah (5 berkas uji lama tetap lulus).
+
+## Tambahan 3.8.2 — lintas cluster mode KMZ saja / KMZ 1 PIC (review Tomohon & Pematangsiantar, November 2026)
+- **Cluster saudara mode KMZ saja**: pada folder tanpa HPDB (termasuk KMZ "1 PIC" yang dipecah ke `_KMZ_PER_AREA`), folder
+  saudara yang hanya berisi KMZ survei ikut dibandingkan. Sebelumnya saudara wajib ber-HPDB sehingga 7 lingkungan Kakaskasen
+  tercatat "Cluster saudara dibandingkan: 0" dan 15 tiang yang sama koordinat di Lingk. 4 & 6 lolos. Mode ber-HPDB tidak berubah.
+- **BOUNDARY di akar area**: placemark poligon yang diletakkan langsung di folder area (tanpa folder BOUNDARY) dibungkus folder
+  BOUNDARY saat KMZ dipecah, bila area itu belum punya folder BOUNDARY.
+- **Label survei mode KMZ saja**: nama titik KMZ (`? -37`) dipakai sebagai label untuk cek label sama di dalam cluster dan lintas
+  cluster (aturan 25 m / 25–50 m tidak berubah).
+- **Penomoran label urut diulang** (`seq_labels_restart`): bila ≥ 5 label ?NNN dan ≥ 50 % label urut cluster yang lebih kecil juga
+  ada di cluster saudara, tetapi median jarak pasangan berlabel sama > 2 × 50 m, label urut tidak dipakai sebagai pengenal
+  lintas cluster untuk pasangan itu (KMZ 1 PIC Tomohon: 72–98 % label sama, median 116–699 m). Duplikat tetap dinilai dari
+  koordinat (≤ 0,5 m ERROR, 0,5–5 m INFO) dan nama usaha/bangunan.
+- **Jalur berimpit (info)**: panjang ruas jalur yang searah (≤ 20°) dan ≤ 2 m dari jalur cluster saudara, dilaporkan bila ≥ 30 m.
+  Bukan kesalahan: dua kabel boleh lewat ruas tiang yang sama; kesalahan BOQ adalah tiang yang dicatat di dua KMZ
+  (WARN_TIANG_GANDA_LINTAS_CLUSTER, tetap ≤ 1 m).
+- **Remarks**: HP yang sudah disebut "> 50 m ke tiang" tidak disebut lagi sebagai "jauh dari jalur/akses"; kelebihan < 0,05 m dari
+  batas ditulis "< 0,1 m"; ID cluster yang belum ada di FINDIM berumur > 90 hari menjadi catatan (findim_stale), bukan alasan reject.
+- **BAKP**: PDF dengan object stream terkompresi (PDF 1.5+, CamScanner) kini terbaca per halaman; ID 9–12 digit di judul/subjek
+  PDF yang berbeda dari ID cluster → WARN_BAKP_ID_METADATA_BEDA (bukan penghalang, wajib dicocokkan manual).
+- **Evidence**: folder `EVIDEN` dikenali; folder foto di luar folder HP (mis. `Dokumentasi`) dilaporkan sebagai foto umum, tidak
+  dipakai untuk cek "HP tanpa foto".

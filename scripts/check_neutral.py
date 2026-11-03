@@ -4,7 +4,7 @@ The list of forbidden names is NOT stored in this public repository. Provide it 
 environment variable BRAND_DENYLIST (GitHub: repository secret of the same name), e.g. "name one,name two".
 
     BRAND_DENYLIST="..." python scripts/check_neutral.py seranta
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later.
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later.
 """
 import os
 import re

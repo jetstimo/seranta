@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # Seranta - FTTH Design Assistant - Processing provider
-# Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later (see LICENSE).
+# Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later (see LICENSE).
 import os
 
 from qgis.core import QgsProcessingProvider

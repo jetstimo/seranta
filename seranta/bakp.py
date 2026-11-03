@@ -3,7 +3,7 @@
 BAKP reminder & offline check (Berita Acara Kesepakatan Perijinan / community permit form).
 
 Part of Seranta - FTTH Design Assistant.
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-2.0-or-later (see LICENSE).
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-3.0-or-later (see LICENSE).
 
 No AI, no internet, no account needed. The tool:
   * reminds the designer that the BAKP must be checked and builds a visual checklist that puts each
@@ -196,6 +196,32 @@ class PdfDoc:
             if end < 0:
                 break
             pos = end + 6
+        self._parse_objstm()
+
+    def _parse_objstm(self):
+        """PDF 1.5+ (mis. hasil CamScanner): objek halaman/katalog disimpan terkompresi di dalam /ObjStm, sehingga
+        pembaca objek polos di atas tidak menemukan halaman sama sekali (BAKP Pematangsiantar 2026 terbaca 'Halaman: 0'
+        padahal 4 halaman). Objek di dalam ObjStm ditambahkan bila nomornya belum ada (objek polos tetap diutamakan)."""
+        for num, (d, s) in list(self.objs.items()):
+            if s is None or not re.search(rb"/Type\s*/ObjStm", d):
+                continue
+            try:
+                raw = zlib.decompress(s) if re.search(rb"/FlateDecode", d) else s
+                n = int(re.search(rb"/N\s+(\d+)", d).group(1))
+                first = int(re.search(rb"/First\s+(\d+)", d).group(1))
+                hdr = [int(x) for x in raw[:first].split()]
+                pairs = [(hdr[2 * k], hdr[2 * k + 1]) for k in range(min(n, len(hdr) // 2))]
+                for k, (onum, off) in enumerate(pairs):
+                    if onum in self.objs:
+                        continue
+                    a = first + off
+                    b = first + pairs[k + 1][1] if k + 1 < len(pairs) else len(raw)
+                    body = raw[a:b].strip()
+                    if body.startswith(b"<<"):
+                        body = body[:_match_dict(body, 0)]
+                    self.objs[onum] = (body, None)
+            except Exception as e:      # ObjStm rusak/filter lain: lewati, objek polos tetap terbaca
+                _log.note(e)
 
     # ---- helpers
     def get(self, num):
@@ -268,6 +294,28 @@ class PdfDoc:
                     if m:
                         meta[k.decode()] = m.group(1).decode("latin-1", "replace")
         return meta
+
+    def title_subject(self):
+        """Judul & subjek PDF (string literal atau hex UTF-16 '<FEFF...>' seperti keluaran CamScanner). Dipakai hanya
+        untuk mencari ID cluster yang tertulis di metadata; tidak memengaruhi cek aplikasi edit (info())."""
+        out = []
+        for n, (d, _) in self.objs.items():
+            if re.search(rb"/Type\s*/(Page|Catalog|XObject)", d):
+                continue
+            for k in (b"Title", b"Subject"):
+                m = re.search(rb"/" + k + rb"\s*(\(([^)]*)\)|<([0-9A-Fa-f\s]*)>)", d)
+                if not m:
+                    continue
+                if m.group(2) is not None:
+                    out.append(m.group(2).decode("latin-1", "replace"))
+                else:
+                    try:
+                        b = bytes.fromhex(re.sub(rb"\s", b"", m.group(3)).decode("ascii"))
+                        out.append(b[2:].decode("utf-16-be", "replace") if b[:2] == b"\xfe\xff" else
+                                   b.decode("latin-1", "replace"))
+                    except ValueError:
+                        pass
+        return out
 
 
 def _int(d, key, default=0):
@@ -447,6 +495,11 @@ def load_bakp(path):
         return res
     doc = PdfDoc(data)
     res["meta"] = doc.info()
+    try:
+        res["title_subject"] = doc.title_subject()
+    except Exception as e:
+        res["title_subject"] = []
+        _log.note(e)
     pages = doc.pages()
     res["n_pages"] = len(pages)
     for pi, (pd, rs) in enumerate(pages[:MAX_PAGES], 1):
@@ -540,6 +593,7 @@ def offline_check(doc):
     items, info = [], {}
     pages = doc["pages"]
     info["n_pages"] = doc["n_pages"]
+    info["title_subject"] = doc.get("title_subject") or []
     groups = []                      # kelompok gambar tempelan yang identik secara visual
     # Lencana aplikasi pemindai (mis. 'Dipindai dengan CamScanner', 240x90 px) ikut tertanam sebagai gambar kecil di
     # SETIAP halaman. Itu bukan stempel/tanda tangan: kecil (< 2% luas halaman) dan abu-abu, atau muncul di >= 80%
@@ -677,6 +731,13 @@ def evaluate(off, exp):
     elif want_id and want_id not in fid:
         items.append(("BAKP_NAMA_FILE_ID_BEDA", False,
                       "nama file BAKP memuat ID %s, sedangkan HPDB/KMZ %s" % (", ".join(fid), want_id)))
+    # ID cluster di judul/subjek PDF (aplikasi scan memakai nama dokumen yang diketik surveyor): ID lain = kemungkinan BAKP
+    # cluster lain (Pematangsiantar 2026: BAKP 2184641132 berjudul 'Cls 2184634529 Cls Name Lingkungan3 Bahkapul')
+    mid = sorted({m_ for t_ in (off[0].get("title_subject") or []) for m_ in re.findall(r"(?<!\d)(\d{9,12})(?!\d)", t_)})
+    if want_id and mid and want_id not in mid:
+        items.append(("WARN_BAKP_ID_METADATA_BEDA", False,
+                      "judul/subjek PDF BAKP memuat ID %s, sedangkan HPDB/KMZ %s: kemungkinan BAKP cluster lain - cocokkan "
+                      "Cluster ID di isian BAKP" % (", ".join(mid), want_id)))
     sets = off[0].get("sets") or []
     if len(sets) > 1:
         items.append(("INFO_BAKP_GABUNGAN", None,

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Seranta - FTTH Design Assistant
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later.
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later.
 
 CEK GRUP 1 PIC DESAIN / JARINGAN BERSAMA
 ----------------------------------------
@@ -32,7 +32,13 @@ def short_id(label, cl_id=""):
     if cl_id:
         return cl_id
     m = ID_RX.search(label or "")
-    return m.group(1) if m else (label or "?")[:30]
+    if m:
+        return m.group(1)
+    try:
+        from .remarks import short_label
+    except ImportError:
+        from remarks import short_label
+    return short_label(label) if label else "?"
 
 
 def groups(results):
@@ -86,6 +92,63 @@ def groups(results):
     return out
 
 
+GENERIC_AREA = {"RT", "RW", "LK", "LINGKUNGAN", "LINGK", "DUSUN", "BLOK", "NO", "TAHAP", "PERUM", "PERUMAHAN", "KEL",
+                "KELURAHAN", "DESA", "JL", "JALAN", "GG", "GANG"}
+
+
+def wilayah_name(labels):
+    """Nama wilayah induk dari nama cluster anggota: kata depan atau kata belakang yang sama di semua anggota
+    ('SUKA KARYA KOTA BARU RT 06/02/03...' -> 'SUKA KARYA KOTA BARU'; 'LINGKUNGAN 1..7-KAKASKASEN' -> 'KAKASKASEN')."""
+    try:
+        from .remarks import short_label
+    except ImportError:
+        from remarks import short_label
+    toks = []
+    for lb in labels:
+        t = short_label(ID_RX.sub("", lb or "").strip(" _-"), max_len=200)
+        toks.append([w for w in re.split(r"[\s_-]+", t.upper()) if w])
+    toks = [t for t in toks if t]
+    if len(toks) < 2:
+        return ""
+
+    def common(seqs):
+        out = []
+        for ws in zip(*seqs):
+            if len(set(ws)) != 1:
+                break
+            out.append(ws[0])
+        return out
+    pre = common(toks)
+    suf = list(reversed(common([list(reversed(t)) for t in toks])))
+    best = max((pre, suf), key=lambda ws: sum(len(w) for w in ws if w not in GENERIC_AREA and not w.isdigit()))
+    while best and (best[-1] in GENERIC_AREA or best[-1].isdigit()):
+        best = best[:-1]
+    while best and (best[0] in GENERIC_AREA or best[0].isdigit()):
+        best = best[1:]
+    name = " ".join(best)
+    return name if re.search(r"[A-Z]{4}", name) else ""
+
+
+def group_kind(links):
+    """Jenis grup:
+      'jaringan'   : SATU JARINGAN / 1 PIC desain - bukti fisik (tiang sama koordinat, jalur tersambung, folder cluster lain
+                     di KMZ);
+      'paket'      : PAKET SURVEI 1 PIC - jaringan terpisah, tetapi dokumen/batas disalin dari satu paket (BOUNDARY identik
+                     atau file BAKP identik);
+      'berdampingan': cluster bertetangga - hanya BOUNDARY bersinggungan/berdampingan."""
+    sig = " | ".join("; ".join(p.get("signals") or []) for _a, _b, p in links)
+    if any(p.get("one_net") for _a, _b, p in links):
+        return "jaringan"
+    if "BOUNDARY identik" in sig or "BAKP identik" in sig:
+        return "paket"
+    return "berdampingan"
+
+
+KIND_TITLE = {"jaringan": "SATU JARINGAN (1 PIC desain)",
+              "paket": "PAKET SURVEI 1 PIC (dokumen/boundary sama, jaringan terpisah)",
+              "berdampingan": "BERDAMPINGAN (cluster bertetangga, jaringan & dokumen terpisah)"}
+
+
 def summarize(g, hp_per_spl=32, fdt_cap=384, ratio=4):
     """Ringkasan satu grup -> dict(ids, n_hp, spl, fdt, shared, one_net, status, lines[])."""
     mem = g["members"]
@@ -105,10 +168,35 @@ def summarize(g, hp_per_spl=32, fdt_cap=384, ratio=4):
         status = "APPROVE DENGAN CATATAN"
     else:
         status = "APPROVE"
+    kind = group_kind(g["links"])
+    wil = wilayah_name([r.get("label") for r in mem])
+    # dokumen/batas yang sama di beberapa anggota (union pasangan bertanda 'BOUNDARY identik' / 'BAKP identik')
+    def members_with(word):
+        ks = set()
+        for a, b, p in g["links"]:
+            if any(word in x for x in p.get("signals") or []):
+                ks.update((a, b))
+        return ks
+    bnd_k, bakp_k = members_with("BOUNDARY identik"), members_with("BAKP identik")
+    bnd_nm = ""
+    for _a, _b, p in g["links"]:
+        for x in p.get("signals") or []:
+            m = re.search(r"BOUNDARY identik \('(.+)'\)", x)
+            if m:
+                bnd_nm = m.group(1)
     L = []
-    L.append("GRUP %s: %s" % ("SATU JARINGAN (1 PIC desain)" if one_net else "KEMUNGKINAN 1 PIC desain (jaringan terpisah)",
-                              " + ".join(ids)))
+    L.append("GRUP %s: %s" % (KIND_TITLE[kind], " + ".join(ids)))
     L.append("  Status grup      : %s" % status)
+    if wil:
+        L.append("  Wilayah induk    : %s (%d cluster)" % (wil, len(mem)))
+    docs = []
+    if bnd_k:
+        docs.append("BOUNDARY identik%s di %d cluster (boundary induk belum dipotong per cluster)" % (
+            (" '%s'" % bnd_nm) if bnd_nm else "", len(bnd_k)))
+    if bakp_k:
+        docs.append("file BAKP identik di %d cluster (BAKP harus mencantumkan ID & HP setiap cluster)" % len(bakp_k))
+    if docs:
+        L.append("  Dokumen bersama  : %s" % "; ".join(docs))
     L.append("  Total HP grup    : %d -> %d splitter 1x%d (%d HP/splitter), %s" % (
         n_hp, spl, ratio, hp_per_spl, "muat 1 FDT %d HP" % fdt_cap if n_fdt <= 1 else "butuh %d FDT %d HP" % (n_fdt, fdt_cap)))
     if shared:
@@ -127,7 +215,8 @@ def summarize(g, hp_per_spl=32, fdt_cap=384, ratio=4):
              "satu rumah satu cluster; BOUNDARY tidak saling masuk; satu rencana FDT untuk %d HP; BAKP mencantumkan "
              "semua ID cluster grup." % n_hp)
     return {"ids": ids, "n_hp": n_hp, "spl": spl, "fdt": n_fdt, "shared": shared, "one_net": one_net,
-            "status": status, "lines": L}
+            "status": status, "lines": L, "kind": kind, "wilayah": wil, "bnd_same": len(bnd_k), "bnd_name": bnd_nm,
+            "bakp_same": len(bakp_k)}
 
 
 def write_report(path_txt, g, s, product="Seranta", when=""):

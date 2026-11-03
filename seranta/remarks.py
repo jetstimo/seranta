@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 Seranta - FTTH Design Assistant
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later.
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later.
 
 REMARKS REVIEW OTOMATIS (maks. 255 karakter)
 --------------------------------------------
@@ -27,12 +27,12 @@ BLOCKING_WARN = {"WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "WARN_TIANG_GANDA_LINTA
 PRIORITY = [
     "CLUSTER_LAIN_DIGABUNG", "BOUNDARY_MEMUAT_CLUSTER_LAIN", "HP_DUPLIKAT_LINTAS_CLUSTER", "HP_DI_RFS_DONE", "HP_DI_RFS_EXTENSION", "HP_DI_FUNNEL_LAIN",
     "HP_DI_BOUNDARY_CLUSTER_LAIN", "WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "BAKP_HP_KURANG", "BAKP_STEMPEL_TTD_TEMPELAN_DIGITAL",
-    "BAKP_ADA_GAMBAR_TEMPELAN", "BAKP_NAMA_FILE_ID_BEDA", "BAKP_DIEDIT_APLIKASI_GRAFIS", "FUNNEL_SENDIRI_REJECT",
+    "BAKP_ADA_GAMBAR_TEMPELAN", "BAKP_NAMA_FILE_ID_BEDA", "WARN_BAKP_ID_METADATA_BEDA", "BAKP_DIEDIT_APLIKASI_GRAFIS", "FUNNEL_SENDIRI_REJECT",
     "HP_LUAR_FUNNEL", "HP_LUAR_BOUNDARY", "HP_JAUH_DARI_TIANG", "RENTANG_NP_NP", "RENTANG_NP_EP",
     "HP_DUPLIKAT_KOORDINAT", "HP_DUPLIKAT_ID", "HP_DUPLIKAT_LABEL", "HP_HPDB_TIDAK_ADA_DI_KMZ", "HP_KMZ_TIDAK_ADA_DI_HPDB",
     "HP_SUDAH_ADA_DI_DESIGN_LITE", "TIANG_BARU_SUDAH_ADA", "WARN_TIANG_GANDA_LINTAS_CLUSTER", "WARN_ID_CLUSTER_GANDA",
     "ADMIN_", "WARN_TIANG_DUPLIKAT_KMZ", "WARN_BELOKAN_TANPA_TIANG", "WARN_POLE_SHEET_BEDA_KMZ", "WARN_CLUSTER_NAME_KOSONG",
-    "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
+    "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
 ]
 
 
@@ -44,6 +44,12 @@ def num(v, nd=1):
     if nd == 0 or abs(v) >= 100:
         return "{:,.0f}".format(round(v)).replace(",", ".")
     return ("%.*f" % (nd, v)).replace(".", ",")
+
+
+def _excess(v):
+    """Kelebihan dari batas untuk catatan 'ukur ulang': nilai yang dibulatkan ke 0,1 m bisa tampak 0,0 m padahal di atas
+    batas (review Tomohon 2026: 'span 60,0 m hanya 0,0 m di atas 60 m') -> tulis '< 0,1'."""
+    return num(v) if v >= 0.05 else "< 0,1"
 
 
 def rows_compact(nums, max_items=6):
@@ -64,11 +70,36 @@ def rows_compact(nums, max_items=6):
     return ", ".join(txt)
 
 
-def short_cluster(label):
+def short_label(label, max_len=26):
+    """Nama pendek cluster untuk remarks/grup: ID cluster (9-12 digit) bila ada; bila tidak, nama folder tanpa awalan kota
+    ('JAMBI_') dan akhiran jumlah HP/vendor ('_60HP_PT.EKSPANINDO'), dipotong dari DEPAN agar bagian pembeda (RT/RW/
+    lingkungan) tetap terbaca. Dulu dipotong 24 karakter pertama sehingga 'JAMBI_SUKA KARYA KOTA BARU RT 10/16/18' semua
+    tertulis 'JAMBI_SUKA KARYA KOTA BA' (review Jambi 2026)."""
     m = re.search(r"(?<!\d)(\d{9,12})(?!\d)", label or "")
     if m:
         return m.group(1)
-    return (label or "cluster lain")[:24]
+    t = (label or "").strip()
+    if not t:
+        return "cluster lain"
+    t = re.sub(r"[_\s-]+\d+\s*HP(?![A-Za-z]).*$", "", t, flags=re.IGNORECASE)
+    if "_" in t:
+        head, rest = t.split("_", 1)
+        if re.match(r"^[A-Za-z .]+$", head) and re.search(r"[A-Za-z]{3}", rest):
+            t = rest
+    t = re.sub(r"\s+", " ", t.replace("_", " ")).strip()
+    if len(t) <= max_len:
+        return t
+    words, out = t.split(" "), ""
+    for w in reversed(words):
+        cand = (w + " " + out).strip()
+        if len(cand) > max_len:
+            break
+        out = cand
+    return out or t[-max_len:]
+
+
+def short_cluster(label):
+    return short_label(label)
 
 
 def _rows_of(ket, rowmap):
@@ -95,6 +126,11 @@ def phrases(findings, rowmap=None, findim_stale=False):
         if k:
             by.setdefault(k, []).append(f)
     out, notes = [], []
+    # HP yang sudah disebut sebagai 'HP >50 m ke tiang' tidak disebut lagi sebagai 'jauh dari jalur, akses ...' (satu
+    # titik, satu akar masalah; review Tomohon 2026: titik 1-6 dan 41-43 Lingk. 5 tertulis dua kali, memakan 255 karakter)
+    jauh_rows = {r for f in by.get("HP_JAUH_DARI_TIANG", [])
+                 if f.get("val") is None or f.get("lim") is None or f["val"] - f["lim"] > MARGIN_M
+                 for r in _rows_of(f["ket"], rowmap)}
 
     def add(key, long_, short_=None, blocking=None):
         sev = by[key][0]["sev"]
@@ -117,7 +153,7 @@ def phrases(findings, rowmap=None, findim_stale=False):
                 if f not in real:
                     m = re.match(r"^(.+?):", f["ket"])
                     notes.append("span %s %s m hanya %s m di atas %s m (di bawah galat GPS): ukur ulang, bukan alasan reject"
-                                 % (m.group(1) if m else "", num(f["val"]), num(f["val"] - f["lim"]), num(f["lim"], 0)))
+                                 % (m.group(1) if m else "", num(f["val"]), _excess(f["val"] - f["lim"]), num(f["lim"], 0)))
             if not real:
                 continue
             real.sort(key=lambda f: -f["val"])
@@ -133,7 +169,7 @@ def phrases(findings, rowmap=None, findim_stale=False):
             for f in L:
                 if f not in real:
                     notes.append("HP baris %s %s m ke tiang, hanya %s m di atas batas: ukur ulang" % (
-                        rows_compact(_rows_of(f["ket"], rowmap)), num(f["val"]), num(f["val"] - f["lim"])))
+                        rows_compact(_rows_of(f["ket"], rowmap)), num(f["val"]), _excess(f["val"] - f["lim"])))
             if not real:
                 continue
             rr = [r for f in real for r in _rows_of(f["ket"], rowmap)]
@@ -206,6 +242,15 @@ def phrases(findings, rowmap=None, findim_stale=False):
             if parts:
                 add(key, "; ".join(parts), "; ".join(sh))
         elif key == "BOUNDARY_MEMUAT_CLUSTER_LAIN":
+            same = [f for f in L if "identik dengan BOUNDARY" in (f["ket"] or "")]
+            if same:
+                m = re.search(r"identik dengan BOUNDARY (\d+) cluster lain(?: '([^']+)')?", same[0]["ket"])
+                n_, nm_ = (m.group(1), m.group(2)) if m else ("?", None)
+                add(key, "boundary KMZ = boundary induk%s (sama di %s cluster lain)" % ((" '%s'" % nm_) if nm_ else "", n_),
+                    "boundary KMZ = boundary induk (sama di %s cluster lain)" % n_)
+                L = [f for f in L if f not in same]
+                if not L:
+                    continue
             parts, sh = [], []
             for f in L:
                 m = re.search(r"memuat (\d+) dari (\d+) HP cluster (.+?)(?: \(baris [^)]+\))?:", f["ket"])
@@ -214,12 +259,16 @@ def phrases(findings, rowmap=None, findim_stale=False):
             add(key, "boundary KMZ masih boundary induk, memuat %s" % ", ".join(parts) if parts else
                 "boundary KMZ masih boundary induk", "boundary KMZ masih boundary induk")
         elif key == "WARN_TIANG_GANDA_LINTAS_CLUSTER":
-            parts = []
+            parts, tot = [], 0
             for f in L:
                 m = re.search(r"^(\d+) tiang .*?KMZ cluster (.+?) \(", f["ket"])
                 if m:
+                    tot += int(m.group(1))
                     parts.append("%s tiang sama koordinat dgn %s (BOQ ganda)" % (m.group(1), short_cluster(m.group(2))))
-            add(key, "; ".join(parts) or "tiang dipakai cluster lain")
+            # versi pendek agar tetap masuk 255 karakter bila banyak temuan lain (review Jambi 2026: 17 tiang ganda RT 10
+            # tidak tercantum karena frasa panjangnya tidak muat)
+            add(key, "; ".join(parts) or "tiang dipakai cluster lain",
+                ("%d tiang ganda dgn %d cluster lain (BOQ)" % (tot, len(parts))) if parts else None)
         elif key.startswith("BAKP_"):
             for f in L:
                 t = f["ket"]
@@ -264,6 +313,10 @@ def phrases(findings, rowmap=None, findim_stale=False):
                 if any(f["kind"] == "ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR" for f in other):
                     txt.append("ID cluster tidak ada di FINDIM OLT CLUSTER")
                 add(key, "; ".join(txt))
+        elif key == "WARN_BAKP_ID_METADATA_BEDA":
+            m = re.search(r"memuat ID ([\d, ]+), sedangkan HPDB/KMZ (\d+)", L[0]["ket"])
+            add(key, "cek BAKP: judul PDF memuat ID %s, bukan %s" % (m.group(1).strip(), m.group(2)) if m else
+                "cek BAKP: judul PDF memuat ID cluster lain", "cek ID di BAKP")
         elif key == "FUNNEL_SENDIRI_REJECT":
             m = re.search(r"berstatus (.+)$", L[0]["ket"])
             add(key, "funnel cluster ini berstatus %s" % (m.group(1) if m else "reject/drop"))
@@ -306,7 +359,24 @@ def phrases(findings, rowmap=None, findim_stale=False):
                 "%s HP tanpa foto evidence" % (m.group(1) if m else n))
         elif key == "TIANG_NGANGGUR":
             nm = [re.match(r"^(\S+)", f["ket"]).group(1) for f in L if re.match(r"^(\S+)", f["ket"])]
-            add(key, "%s tidak dilewati jalur" % (", ".join(nm[:3]) if n <= 3 else "%d tiang" % n), "%d tiang nganggur" % n)
+            tk = [re.search(r"tikor ([-\d.]+, [-\d.]+)", f["ket"]) for f in L]
+            tk = [m.group(1) for m in tk if m]
+            if n <= 2 and tk:
+                add(key, "; ".join("%s nganggur (tikor %s)" % (a, b) for a, b in zip(nm, tk)), "%d tiang NP nganggur" % n)
+            else:
+                add(key, "%s tidak dilewati jalur" % (", ".join(nm[:3]) if n <= 3 else "%d tiang NP" % n), "%d tiang NP nganggur" % n)
+        elif key == "WARN_HP_JAUH_LEWAT_JALUR":
+            add(key, "%d HP >%s m ke tiang lewat jalur/akses (baris %s): cek akses" % (
+                n, num(L[0].get("lim") or 50, 0), rows_compact(rows, 4)), "%d HP jauh lewat jalur" % n)
+        elif key == "WARN_HP_AKSES_DALAM":
+            if jauh_rows:
+                L = [f for f in L if not (set(_rows_of(f["ket"], rowmap)) and set(_rows_of(f["ket"], rowmap)) <= jauh_rows)]
+                if not L:
+                    continue
+                n = len(L)
+                rows = [r for f in L for r in _rows_of(f["ket"], rowmap)]
+            add(key, "%d HP jauh dari jalur, akses masuk dari mana? (baris %s)" % (n, rows_compact(rows, 4)),
+                "%d HP akses perlu dicek" % n)
         elif key == "WARN_HP_LABEL_SAMA":
             parts = []
             for f in L[:2]:

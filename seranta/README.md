@@ -7,7 +7,7 @@ A QGIS plugin for FTTH/GPON access-network design. It turns field-survey data (h
 ready-to-use input for automatic network-design software, checks the survey before design, estimates FDT/FAT
 allocation, produces post-design tables, and checks the final design package — with reports anyone can understand.
 
-Copyright © 2026 **Joseph Edward Timothy Siahaan** · code: GNU GPL v2 or later · QGIS 3.22 LTR – 4.x
+Copyright © 2026 **Joseph Edward Timothy Siahaan** · code: GNU GPL v3 or later + section 7 terms · QGIS 3.22 LTR – 4.x
 Seranta™ and the Seranta logo are trademarks of Joseph Edward Timothy Siahaan.
 
 ## Install
@@ -58,6 +58,9 @@ See [CONTRIBUTING.md](https://github.com/jetstimo/seranta/blob/main/CONTRIBUTING
 release by git tag, automatic upload to the QGIS plugin repository.
 
 ## License and trademark
-Code: GPL-2.0-or-later – see [LICENSE](LICENSE). Embedded fonts Inter and Poppins: SIL Open Font License 1.1
-(`assets/fonts/OFL.txt`). Copies and modified versions must keep the author's name and the same licence, and must use
-a different name and logo (the GPL does not cover the Seranta trademark).
+Code: GPL-3.0-or-later with additional terms under section 7 – see [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
+Embedded fonts Inter and Poppins: SIL Open Font License 1.1 (`assets/fonts/OFL.txt`). You may use, share and modify
+Seranta. Copies and modified versions must keep the author's name (also in the About dialog and report headers), must
+be marked as modified with a different name and logo, and must not claim authorship or ownership of Seranta.
+Official releases are digitally signed by the author (`RILIS.json`, Ed25519); every report prints whether the copy that
+made it is an ORIGINAL signed release or a MODIFIED / UNOFFICIAL copy.

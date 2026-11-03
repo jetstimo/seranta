@@ -5,7 +5,7 @@ beberapa sheet, baris judul tebal dan dibekukan, filter otomatis, lebar kolom, t
 tautan (HYPERLINK) dan daftar pilihan (data validation) untuk kolom status review.
 
 Part of Seranta - FTTH Design Assistant.
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-2.0-or-later (see LICENSE).
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-3.0-or-later (see LICENSE).
 """
 import zipfile
 

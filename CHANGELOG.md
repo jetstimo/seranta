@@ -1,5 +1,56 @@
 # Changelog
 
+## 3.9.0 – wilayah induk / paket 1 PIC, lisensi GPL v3 + pasal 7, rilis bertanda tangan
+- BOUNDARY yang identik (poligon yang sama disalin ke KMZ beberapa cluster) dilaporkan sekali sebagai boundary induk:
+  "boundary KMZ = boundary induk '<nama>' (sama di N cluster lain)". Remarks tidak lagi habis untuk mendaftar cluster
+  satu per satu, dan ratusan catatan "HP di tepi BOUNDARY cluster saudara" tidak muncul lagi.
+- Ringkasan grup menyebut wilayah induk dan jenis grup: satu jaringan (1 PIC desain), paket survei 1 PIC
+  (dokumen/boundary sama, jaringan terpisah), atau berdampingan. Dokumen bersama (BOUNDARY/BAKP identik) disebut dengan
+  jumlah clusternya.
+- Nama pendek cluster tanpa ID mempertahankan bagian pembeda (RT/RW/lingkungan); frasa tiang ganda punya versi pendek
+  agar tetap masuk 255 karakter.
+- Lisensi GPL-3.0-or-later dengan syarat tambahan pasal 7: nama pembuat dipertahankan, versi modifikasi berganti nama &
+  ditandai, tidak boleh mengaku sebagai pembuat; merek Seranta tidak dilisensikan. Versi s.d. 3.8.2: GPL-2.0-or-later.
+- Rilis resmi ditandatangani digital (Ed25519, `RILIS.json`); kepala laporan dan dialog About menampilkan ASLI /
+  DIMODIFIKASI / TIDAK RESMI. Kunci, sidik dan tanda tangan disimpan sebagai bilangan (lolos pemindai rahasia
+  plugins.qgis.org). Alat rilis: `scripts/seranta_rilis.py`.
+
+## 3.8.2 – lintas cluster mode KMZ saja / KMZ 1 PIC, laporan gabungan
+- Cek lintas cluster berjalan pada mode tanpa HPDB dan KMZ 1 PIC yang dipecah per area (tiang ganda, HP di BOUNDARY
+  cluster lain, BOUNDARY tumpang tindih, grup 1 PIC); BOUNDARY di akar folder area terbaca; label survei '? -37'
+  dicek; penomoran label yang diulang per area tidak dianggap duplikat lintas cluster; jalur berimpit dicatat sebagai info.
+- Laporan HTML gabungan REKAP_GRUP_1PIC_*.html / REKAP_BATCH_*.html: tab laporan lengkap tiap cluster, remarks tambahan
+  + status per cluster, catatan grup, unduh Word semua cluster + CSV remarks.
+- BAKP PDF dengan object stream (CamScanner) terbaca per halaman; ID cluster lain di judul PDF BAKP ditandai; vendor
+  tanpa ekstensi file; ID cluster yang belum ada di FINDIM lama (> 90 hari) menjadi catatan; folder EVIDEN dikenali;
+  REKAP batch memisahkan kolom Proses dan Remarks; HP yang sudah disebut "> 50 m" tidak diulang sebagai akses.
+
+## 3.8.1 – QC survei tetap jalan tanpa HPDB (QC KMZ saja)
+- Alat 1: folder cluster tanpa HPDB (mis. hanya `1 PIC TOMOHON.kmz`) tidak lagi gagal "No homepass spreadsheet". Titik HP
+  diambil dari folder HP di KMZ dan hanya cek berbasis KMZ yang dijalankan: tiang, jalur, rentang, jarak dan akses rumah ke
+  tiang, HP duplikat koordinat, boundary/Funnel, Design Lite dan lintas cluster.
+- Satu KMZ berisi beberapa area (mis. KMZ "1 PIC" dengan beberapa lingkungan, masing-masing punya folder HP, tiang,
+  jalur dan BOUNDARY) dipecah otomatis ke `_KMZ_PER_AREA\<area>` dan diperiksa per area, lalu direkap di REKAP_BATCH.
+- Cek yang memakai HPDB dilewati: HPDB vs KMZ, ID/alamat, administrasi FINDIM, BAKP otomatis. `HP.csv` dan
+  `manifest_input.json` tidak dibuat; titik HP disimpan sebagai `HP_KMZ.shp` (hanya peta/QC, bukan input desain).
+- Peringatan jelas di log QGIS, laporan, ringkasan standar dan REMARKS ("TANPA HPDB – bukan review lengkap"); nomor temuan
+  memakai urutan titik KMZ (`titik KMZ n`), bukan baris HPDB.
+- Mode ini hanya aktif bila tidak ada satu pun HPDB; run dengan HPDB tidak berubah (temuan identik dengan 3.8.0).
+
+## 3.8.0 – anggota FAT dari FAT Coverage, jarak sepanjang jalur, tiang seberang jalan, akses rumah
+- QC APD (alat 4) *Rumah terlalu jauh dari FAT*: anggota FAT = HP (endpoint keluaran desain) di dalam poligon FAT Coverage
+  milik FAT; jarak diukur sepanjang jalur kabel (graf kabel + drop dari tiang/garis drop), garis temuan mengikuti jalur.
+  HP ber-SUPID salah tidak lagi membuat FAT lain "terlalu jauh" (tetap dilaporkan HP_WRONG_FAT_AREA).
+- *Rentang tiang ke tiang*: tiang sampai 7 m dari garis kabel (tiang di seberang jalan; lebar jalur jalan sedang 2 × 3,5 m)
+  dihitung tiang penopang, sehingga kabel yang menyeberang kiri-kanan jalan tidak menjadi bentang palsu.
+- *Tiang nganggur*: NP tidak dilewati kabel = ERROR dengan tikor (lintang, bujur); EP dan tiang yang dilewati kabel feeder
+  boleh. Alat 1: NP = WARNING dengan tikor, EP = INFO; tikor juga di remarks.
+- Alat 1 – akses rumah (`akses.py`): WARN_HP_JAUH_LEWAT_JALUR (tiang → jalur → rumah > 55 m walau garis lurus ≤ 50 m) dan
+  WARN_HP_AKSES_DALAM (rumah > 40 m dari jalur survei: rumah di belakang rumah lain, akses masuk perlu dicek). HP jauh dari
+  tiang kini juga mencantumkan tikor.
+- Lebih cepat: indeks poligon, ruas kabel dan FAT (6.000 HP / 300 FAT: aturan inti 10,2 s → 1,4 s; FAT_COVERAGE 10 s → 0,1 s).
+- Profil: parameter baru `span_side_tol_m` (7 m) dan `hp_access_max_m` (40 m). Versi aturan 2026.11-r10.
+
 ## 3.7.0 – menu berbahasa Inggris, satu isian per alat
 - Menu, form, opsi, pesan proses dan panel Navigator QC berbahasa Inggris; laporan dan remarks tetap berbahasa Indonesia.
 - Setiap alat cukup satu isian (folder); pengaturan lain dipindah ke Advanced dengan nilai bawaan yang sama.

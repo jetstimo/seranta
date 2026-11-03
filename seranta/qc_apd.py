@@ -2,7 +2,7 @@
 """
 Seranta - FTTH Design Assistant - alat 4: QC APD Pasca-Desain (Served, FAT Coverage, ujung kabel, multi-FDT,
 FDT COLO/NEW Feeder-Distribusi, BOM, kode FAT, KMZ APD)
-Copyright (C) 2026 Joseph Edward Timothy Siahaan <edwardtimoo@gmail.com>. GPL-2.0-or-later (see LICENSE).
+Copyright (C) 2026 Joseph Edward Timothy Siahaan <edwardtimoo@gmail.com>. GPL-3.0-or-later (see LICENSE).
 
 Masukan (semua opsional kecuali salah satu dari 1 atau 2):
   1. folder output desain otomatis (net_nodes, net_endpoints, net_cables, net_ServiceAreasVoronoi, net_SpliceClosure .shp)
@@ -1134,7 +1134,7 @@ def write_html(path, results, prof, meta):
                     ("Versi aturan", prof.get("rule_version", "")), ("Status FDT", meta.get("status_fdt", "")),
                     ("Dibuat", meta["dibuat"].replace("T", " ")), ("Alat", meta["produk"])],
                    counts, items, (meta.get("map_html") or "") + body,
-                   "%s. &copy; 2026 Joseph Edward Timothy Siahaan, GPL-2.0-or-later. Hasil QC adalah alat bantu; keputusan desain "
+                   "%s. &copy; 2026 Joseph Edward Timothy Siahaan, GPL-3.0-or-later. Hasil QC adalah alat bantu; keputusan desain "
                    "dan pengecualian tetap pada desainer dan reviewer." % _E(meta["produk"]),
                    run_key=str(meta.get("cluster", "")), word_href=meta.get("word"))
     with open(path, "w", encoding="utf-8") as fh:

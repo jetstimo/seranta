@@ -5,7 +5,7 @@
 Used by .github/workflows/release.yml with repository secrets OSGEO_USER / OSGEO_PASSWORD. The very first version
 must be uploaded by hand at https://plugins.qgis.org/plugins/add/ (the plugin then waits for approval by the QGIS team);
 every later version can be uploaded with this script.
-Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-2.0-or-later.
+Copyright (C) 2026 Joseph Edward Timothy Siahaan. GPL-3.0-or-later.
 """
 import os
 import sys
