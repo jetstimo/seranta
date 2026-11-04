@@ -106,7 +106,8 @@ class SerantaPlugin:
             from .qc_navigator import is_qc_layer
             from . import basemap
             if any(is_qc_layer(lyr) for lyr in QgsProject.instance().mapLayers().values()):
-                basemap.ensure()
+                ms = self.iface.mapCanvas().mapSettings()
+                basemap.ensure(None, ms.extent(), ms.destinationCrs())
         except Exception as _e:
             _log.note(_e)
         self.nav.show()

@@ -1,5 +1,16 @@
 # Changelog
 
+## 3.9.4 – peta dasar satelit tanpa tulisan "Map data not yet available"
+- Penyebab: Esri World Imagery tidak punya citra di semua zoom (Tomohon: ada s.d. zoom 18). Untuk ubin yang tidak ada,
+  server mengirim gambar pengganti bertulisan "Map data not yet available"; layer 3.9.2–3.9.3 (zmax 19) menampilkannya.
+- Perbaikan: layer dipasang dengan zoom aman 17, lalu Seranta menanyakan zoom asli tertinggi di wilayah QC ke layanan
+  `tilemap` Esri (JSON kecil, di latar belakang, QGIS tidak menunggu) dan menaikkan zmax ke 18/19 bila memang ada. Di atas
+  zoom asli, ubin diperbesar dengan interpolasi bilinear (halus). Hasil disimpan per wilayah (~150 km).
+- Lebih cepat: cache jaringan QGIS minimal 1 GB (bawaan 256 MB), sehingga ubin yang pernah dilihat tampil seketika.
+  Layer peta dasar dari versi sebelumnya otomatis diperbaiki.
+- Peta laporan HTML: perbaikan yang sama (maxNativeZoom dari tilemap Esri, keepBuffer, tanpa unduh ulang saat zoom).
+- Tidak ada perubahan analisis.
+
 ## 3.9.3 – pengamanan rilis berlapis
 - Uji serangan pada 3.9.2: orang yang membuat kunci sendiri, lalu mengganti kunci dan nama pembuat di `keaslian.py`,
   bisa membuat salinan tampil "ASLI ... ditandatangani <nama lain>". Celah ini ditutup:
