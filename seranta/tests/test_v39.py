@@ -189,15 +189,17 @@ class Keaslian(unittest.TestCase):
         try:
             open(os.path.join(d, "a.py"), "w").write("x = 1\n")
             sk = os.urandom(32)
-            old = K.KUNCI_PUBLIK
+            old, old_fp = K.KUNCI_PUBLIK, K.SIDIK_RESMI
             K.KUNCI_PUBLIK = tuple(K.to_ints(K.public_key(sk)))
+            K.SIDIK_RESMI = K.sidik(K.public_key(sk))
             K.write_signed(d, "9.9.9", sk)
             K._CACHE.clear(); self.assertEqual(K.check(d)[0], "ASLI")
             open(os.path.join(d, "a.py"), "w").write("x = 2\n")
             K._CACHE.clear(); self.assertEqual(K.check(d)[0], "DIMODIFIKASI")
             K.KUNCI_PUBLIK = tuple(K.to_ints(K.public_key(os.urandom(32))))
             K._CACHE.clear(); self.assertEqual(K.check(d)[0], "TIDAK_RESMI")
-            K.KUNCI_PUBLIK = old
+            self.assertIn("kunci diganti", K.check(d)[2])       # 3.9.3: sidik tidak cocok dengan SIDIK_RESMI
+            K.KUNCI_PUBLIK, K.SIDIK_RESMI = old, old_fp
         finally:
             shutil.rmtree(d)
 

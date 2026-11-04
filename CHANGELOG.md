@@ -1,5 +1,17 @@
 # Changelog
 
+## 3.9.3 – pengamanan rilis berlapis
+- Uji serangan pada 3.9.2: orang yang membuat kunci sendiri, lalu mengganti kunci dan nama pembuat di `keaslian.py`,
+  bisa membuat salinan tampil "ASLI ... ditandatangani <nama lain>". Celah ini ditutup:
+  - setiap status keaslian menyebut **sidik kunci** rilis; sidik resmi `92C4-D078-D1FC-1C5B` juga diterbitkan di
+    metadata (halaman plugins.qgis.org), NOTICE.md, README.md dan GitHub;
+  - cek silang: kunci di `keaslian.py` harus cocok dengan `SIDIK_RESMI` dan dengan sidik di metadata.txt, NOTICE.md dan
+    README.md, kalau tidak → TIDAK RESMI (kunci diganti);
+  - verifikasi online di dialog About: isi salinan dicocokkan dengan `RILIS_RESMI.json` di GitHub pembuat;
+  - pemeriksa independen `scripts/rilis_resmi.py` (pengganti `seranta_rilis.py`) membawa kunci resmi sendiri, tidak
+    menjalankan kode paket yang diperiksa, dan menyatakan salinan berkunci lain sebagai PALSU. Juga dipakai untuk Seuntai.
+- Tidak ada perubahan analisis.
+
 ## 3.9.2 – label umum (RUKO-1) & peta dasar satelit
 - Label umum = kata generik + nomor unit (RUKO-1, Toko 2, KIOS A3, Kos No 12) diperlakukan sebagai pengenal lemah, karena
   penomoran seperti ini diulang di setiap deret/lingkungan. Label sama di dua cluster: ERROR hanya bila <= 5 m

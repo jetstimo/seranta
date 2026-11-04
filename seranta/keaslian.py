@@ -17,17 +17,36 @@ Status ini dicetak di kepala setiap laporan ("Alat : ... integritas ...") dan di
 salinan yang diubah selalu terlihat berbeda dari rilis resmi. Siapa pun boleh mengubah kode (GPL), tetapi tidak bisa
 membuat tanda tangan yang cocok tanpa kunci privat pembuat; versi turunan wajib berganti nama & ditandai (LICENSE, pasal 7).
 
+LAPISAN PENGAMAN (3.9.3, setelah uji serangan "ganti kunci"):
+  1. Tanda tangan Ed25519 atas sidik SHA-256 setiap berkas (di atas).
+  2. SIDIK KUNCI resmi (SIDIK_RESMI, 16 heksadesimal) dicetak di setiap status. Sidik yang sama diterbitkan di luar
+     paket (GitHub pembuat, halaman plugins.qgis.org, NOTICE.md); salinan yang kuncinya diganti selalu tampil dengan sidik
+     lain.
+  3. CEK SILANG: sidik kunci di keaslian.py harus sama dengan SIDIK_RESMI dan dengan sidik yang tertulis di metadata.txt,
+     NOTICE.md dan README.md. Mengganti kunci di satu tempat saja -> TIDAK RESMI.
+  4. VERIFIKASI ONLINE (opsional, tombol di About): sidik manifest salinan ini dicocokkan dengan daftar rilis resmi
+     RILIS_RESMI.json di repositori GitHub pembuat (REPO_RESMI), yang hanya bisa diubah oleh akun pembuat.
+  5. Pemeriksa independen milik pembuat (scripts/rilis_resmi.py) membawa kunci resminya sendiri dan TIDAK menjalankan kode
+     dari paket yang diperiksa.
+Tidak ada kode terbuka yang mustahil diubah; yang dijamin: salinan yang diubah tidak dapat tampil sebagai rilis resmi
+pembuat, dengan sidik kunci yang sama, tanpa kunci privat pembuat.
+
 Murni Python (hashlib), tanpa pustaka luar, agar memenuhi aturan repositori plugin QGIS (tanpa biner).
 """
 import hashlib
 import json
 import os
 
-# Kunci publik Ed25519 pembuat: 32 byte sebagai 8 bilangan 32-bit. Diisi oleh alat rilis (seranta_rilis.py buat-kunci).
+# Kunci publik Ed25519 pembuat: 32 byte sebagai 8 bilangan 32-bit. Sama dengan KUNCI_RESMI di scripts/rilis_resmi.py.
 # Sengaja BUKAN string hex/base64: pemindai rahasia plugins.qgis.org (detect-secrets) memblokir paket yang memuat
 # string acak panjang (pengalaman integrity.json, 3.4.x). Kunci publik, sidik berkas dan tanda tangan tidak rahasia.
 KUNCI_PUBLIK = (1549593263, 1258448507, 3948243780, 1745094294, 3588476158, 1130529245, 3255756279, 3988926214)
 PEMBUAT = "Joseph Edward Timothy Siahaan"
+PRODUK = "Seranta - FTTH Design Assistant"
+REPO_RESMI = "jetstimo/seranta"
+# Sidik kunci resmi = 8 byte pertama SHA-256(kunci publik), heksadesimal berkelompok. Juga tertulis di CERMIN (cek silang).
+SIDIK_RESMI = "92C4-D078-D1FC-1C5B"
+CERMIN = ("metadata.txt", "NOTICE.md", "README.md")
 BERKAS_RILIS = "RILIS.json"
 TEKS = (".py", ".md", ".txt", ".json", ".svg", ".js", ".css", ".qml", ".html", ".xml", ".csv")
 LEWATI_DIR = {"__pycache__", ".git", "tests", "__MACOSX", ".idea", ".vscode"}
@@ -173,8 +192,31 @@ def list_files(root):
     return out
 
 
+def sidik(public):
+    """Sidik kunci publik untuk dibaca manusia: 'XXXX-XXXX-XXXX-XXXX' (8 byte pertama SHA-256)."""
+    h = hashlib.sha256(public).hexdigest().upper()[:16]
+    return "-".join(h[i:i + 4] for i in range(0, 16, 4))
+
+
+def sidik_manifest(man):
+    """Sidik manifest bertanda tangan (bilangan 32-bit): pengenal unik isi satu rilis, untuk verifikasi online."""
+    return to_ints(hashlib.sha256(canonical(man)).digest())
+
+
+def cermin_beda(root):
+    """Berkas cermin yang tidak memuat SIDIK_RESMI (cek silang lapis 3)."""
+    out = []
+    for f in CERMIN:
+        p = os.path.join(root, f)
+        if os.path.exists(p):
+            with open(p, encoding="utf-8", errors="replace") as fh:
+                if SIDIK_RESMI not in fh.read():
+                    out.append(f)
+    return out
+
+
 def manifest(root, version, when=""):
-    return {"produk": "Seranta - FTTH Design Assistant", "versi": version, "pembuat": PEMBUAT, "dibuat": when,
+    return {"produk": PRODUK, "versi": version, "pembuat": PEMBUAT, "dibuat": when,
             "berkas": {f: file_hash(os.path.join(root, f)) for f in list_files(root)}}
 
 
@@ -209,7 +251,10 @@ def check(root=None):
                 data = json.load(fh)
             man, sig = data["manifest"], from_ints(data["tanda_tangan"])
             key = from_ints(KUNCI_PUBLIK) if KUNCI_PUBLIK else b""
-            if not key or not verify(key, canonical(man), sig):
+            mir = cermin_beda(root)
+            if not key or sidik(key) != SIDIK_RESMI or mir:
+                res = ("TIDAK_RESMI", man.get("versi", ""), ["kunci diganti"] + mir)
+            elif not verify(key, canonical(man), sig):
                 res = ("TIDAK_RESMI", man.get("versi", ""), [])
             else:
                 exp = man.get("berkas") or {}
@@ -225,17 +270,54 @@ def check(root=None):
 
 
 def status(en=False, root=None):
-    """Teks status untuk kepala laporan (Indonesia) atau dialog About (en=True)."""
+    """Teks status untuk kepala laporan (Indonesia) atau dialog About (en=True); selalu menyebut sidik kunci."""
     code, ver, det = check(root)
     files = ", ".join(det[:4]) + (" ..." if len(det) > 4 else "")
+    try:
+        sk = sidik(from_ints(KUNCI_PUBLIK))
+    except Exception:
+        sk = "?"
     if en:
-        return {"ASLI": "ORIGINAL - official release %s signed by %s" % (ver, PEMBUAT),
-                "DIMODIFIKASI": "MODIFIED after official release %s (%s) - not an official Seranta build" % (ver, files),
-                "TIDAK_RESMI": "UNOFFICIAL - release signature does not match the author's key",
+        return {"ASLI": "ORIGINAL - official release %s signed by %s (key %s)" % (ver, PEMBUAT, sk),
+                "DIMODIFIKASI": "MODIFIED after official release %s (%s) - not an official build (key %s)" % (ver, files, sk),
+                "TIDAK_RESMI": "UNOFFICIAL - the release signature or key is not the author's (key %s, official key %s%s)"
+                               % (sk, SIDIK_RESMI, "; " + files if files else ""),
                 "PENGEMBANGAN": "development copy (not a signed release)",
                 "GAGAL": "not verified (%s)" % files}[code]
-    return {"ASLI": "ASLI - rilis resmi %s ditandatangani %s" % (ver, PEMBUAT),
-            "DIMODIFIKASI": "DIMODIFIKASI dari rilis resmi %s (%s) - bukan rilis resmi Seranta" % (ver, files),
-            "TIDAK_RESMI": "TIDAK RESMI - tanda tangan rilis tidak cocok dengan kunci pembuat",
+    return {"ASLI": "ASLI - rilis resmi %s ditandatangani %s (kunci %s)" % (ver, PEMBUAT, sk),
+            "DIMODIFIKASI": "DIMODIFIKASI dari rilis resmi %s (%s) - bukan rilis resmi (kunci %s)" % (ver, files, sk),
+            "TIDAK_RESMI": "TIDAK RESMI - tanda tangan/kunci rilis bukan milik pembuat (kunci %s, kunci resmi %s%s)"
+                           % (sk, SIDIK_RESMI, "; " + files if files else ""),
             "PENGEMBANGAN": "salinan pengembangan (belum rilis bertanda tangan)",
             "GAGAL": "tidak diverifikasi (%s)" % files}[code]
+
+
+# ----------------------------------------------------------------------------- verifikasi online (lapis 4)
+REGISTRI = "RILIS_RESMI.json"
+
+
+def registry_url():
+    return "https://raw.githubusercontent.com/%s/main/%s" % (REPO_RESMI, REGISTRI)
+
+
+def verify_online(fetch, root=None):
+    """Cocokkan salinan ini dengan daftar rilis resmi di GitHub pembuat. fetch(url) -> bytes (disediakan pemanggil,
+    mis. QgsBlockingNetworkRequest agar mengikuti proxy QGIS). Kembali (kode, teks):
+    TERVERIFIKASI / TIDAK_TERDAFTAR / BEDA_KUNCI / BUKAN_RILIS / GAGAL."""
+    root = root or os.path.dirname(os.path.abspath(__file__))
+    code, ver, _det = check(root)
+    if code != "ASLI":
+        return "BUKAN_RILIS", "local check is %s, nothing to verify online" % code
+    try:
+        with open(os.path.join(root, BERKAS_RILIS), encoding="utf-8") as fh:
+            man = json.load(fh)["manifest"]
+        reg = json.loads(fetch(registry_url()).decode("utf-8"))
+    except Exception as e:
+        return "GAGAL", "official release list not reachable (%s)" % str(e)[:80]
+    if reg.get("kunci_sidik") != SIDIK_RESMI:
+        return "BEDA_KUNCI", "the official list on github.com/%s uses key %s, this copy %s" % (
+            REPO_RESMI, reg.get("kunci_sidik"), SIDIK_RESMI)
+    ent = (reg.get("rilis") or {}).get(ver) or {}
+    if list(ent.get("manifest") or []) == sidik_manifest(man):
+        return "TERVERIFIKASI", "release %s is listed as official on github.com/%s (key %s)" % (ver, REPO_RESMI, SIDIK_RESMI)
+    return "TIDAK_TERDAFTAR", "release %s with this content is NOT in the official list on github.com/%s" % (ver, REPO_RESMI)
