@@ -38,7 +38,7 @@ try:
 except ImportError:  # pragma: no cover
     import xml.etree.ElementTree as ET  # nosec B405
 
-RULE_VERSION = "2026.11-r11"
+RULE_VERSION = "2026.11-r12"
 
 HP_RX = re.compile(r"\b(hp|homepass|home ?pass|rumah)\b", re.IGNORECASE)
 # 'EVIDEN' (tanpa -CE) dipakai vendor di KMZ 1 PIC Tomohon 2026; dulu tidak dikenali sebagai folder foto
@@ -218,8 +218,48 @@ def label_kind(n):
         return "num"
     letters = re.sub(r"[^A-Z]", "", n)
     if len(letters) >= 4 and n.lstrip("?") not in GENERIC_WORDS:
-        return "name"
+        return "gen" if generic_unit(n) else "name"
     return ""
+
+
+_GEN_RX = re.compile(r"^(%s)(?:NO|NOMOR|NOMER|UNIT|BLOK|BLK)?([A-Z]{0,2}\d{1,4}[A-Z]{0,2})$"
+                     % "|".join(sorted(GENERIC_WORDS - {"HP", "RR", "NA"}, key=len, reverse=True)))
+
+
+def generic_unit(n):
+    """Label umum = kata generik + nomor unit ('RUKO-1', 'Toko 2', 'KIOS A3', 'Kos No 12' -> ternormal RUKO1, TOKO2, ...).
+    Penomoran unit seperti ini diulang di setiap deret bangunan/lingkungan (review Tomohon 2026: 'RUKO-1' L3 dan
+    'Ruko-1' L7 berjarak 17 m), jadi label sama BUKAN bukti rumah yang sama: pengenal lemah. Kembali (kata, nomor) atau
+    None. Hanya mempersempit jenis 'name' (tidak pernah membuat label baru dianggap pengenal)."""
+    m = _GEN_RX.match((n or "").lstrip("?"))
+    return (m.group(1), m.group(2)) if m else None
+
+
+def series_relation(pa, pb, word):
+    """Hubungan deret label umum '<word>-n' di dua cluster (review Tomohon 2026: L7 'Ruko-1..4' ke selatan dan L3
+    'RUKO-1..2' ke utara, celah 17 m, jarak antarunit +-5 m = satu deret bangunan yang dinomori ulang per lingkungan).
+    Kembali None bila salah satu deret < 2 unit; selain itu dict(n_a, n_b, celah, jarak_unit, pisah):
+      celah      = jarak terdekat antara titik deret A dan deret B (m);
+      jarak_unit = median jarak tetangga terdekat di dalam deret (m), yaitu lebar unit di lapangan;
+      pisah      = celah > 1,5 x jarak_unit (deret tidak saling tumpang: unit berbeda). Hanya menambah keterangan;
+                   tingkat temuan tetap WARNING (cek citra)."""
+    def pts(hp):
+        out = []
+        for p in hp:
+            g = generic_unit(norm_name(p.get("hn")))
+            if g and g[0] == word and "x" in p and "y" in p:
+                out.append((p["x"], p["y"]))
+        return out
+    a, b = pts(pa), pts(pb)
+    if len(a) < 2 or len(b) < 2:
+        return None
+
+    def nn(ps):
+        return [min(dist_m(x, y, u, v) for j, (u, v) in enumerate(ps) if j != i) for i, (x, y) in enumerate(ps)]
+    sp = sorted(nn(a) + nn(b))
+    unit = sp[len(sp) // 2]
+    gap = min(dist_m(x, y, u, v) for x, y in a for u, v in b)
+    return {"n_a": len(a), "n_b": len(b), "celah": gap, "jarak_unit": unit, "pisah": gap > 1.5 * max(unit, 1.0)}
 
 
 def similar(a, b):
@@ -232,7 +272,7 @@ def similar(a, b):
 
 
 def match_rank(d, a, b, dup_exact=0.5, dup_near=5.0, name_m=15.0, label_m=25.0, fuzzy_m=30.0, fuzzy=0.85, bldg_m=2.0,
-               same_street=False, street_m=30.0, label_warn_m=50.0):
+               same_street=False, street_m=30.0, label_warn_m=50.0, gen_m=5.0):
     """Peringkat kecocokan dua titik HP (jarak d meter, label ternormal a & b). Pola diambil dari temuan tim QC
     (review Jambi): rumah dianggap sama bila titiknya disalin (koordinat sama) ATAU label survei/nama usahanya sama
     walau titik bergeser. Kembali (rank, alasan) atau None:
@@ -241,10 +281,18 @@ def match_rank(d, a, b, dup_exact=0.5, dup_near=5.0, name_m=15.0, label_m=25.0, 
       3 nama mirip (salah ketik) dalam fuzzy_m                                                 -> WARNING
       4 berimpit <= bldg_m dengan label berbeda (satu bangunan, dua titik)                    -> WARNING
       5 label kuat sama tetapi label_m-label_warn_m (duplikat atau salah ketik label)        -> WARNING
-      2 0,5-5 m dengan label kosong                                                            -> INFO"""
+      6 label umum sama ('RUKO-1') pada gen_m-label_m: bisa unit lain bernomor sama -> WARNING (cek citra)
+      2 0,5-5 m dengan label kosong                                                            -> INFO
+    Label umum (kata generik + nomor unit) hanya pasti sama dalam gen_m; di luar label_m tidak dilaporkan."""
     if d <= dup_exact:
         return 0, "koordinat sama (%.1f m)" % d
     ka, kb = label_kind(a), label_kind(b)
+    if a and a == b and ka == "gen":
+        if d <= gen_m:
+            return 1, "label umum sama '%s', titik bergeser %.1f m (<= %.0f m: unit yang sama)" % (a, d, gen_m)
+        if d <= label_m:
+            return 6, "label umum sama '%s' berjarak %.1f m (nomor unit dipakai ulang per deret), cek citra" % (a, d)
+        return None
     if a and a == b:
         lim = label_m if ka in ("seq", "name") else (street_m if same_street else name_m)
         if d <= lim:
@@ -263,10 +311,10 @@ def match_rank(d, a, b, dup_exact=0.5, dup_near=5.0, name_m=15.0, label_m=25.0, 
     return None
 
 
-RANK_ORDER = {0: 0, 1: 1, 5: 2, 3: 3, 4: 4, 2: 5}
+RANK_ORDER = {0: 0, 1: 1, 5: 2, 6: 3, 3: 4, 4: 5, 2: 6}
 
 
-def same_label_pairs(pts, label_m=25.0, name_m=15.0, dup_exact=0.5, street_m=30.0, label_warn_m=50.0):
+def same_label_pairs(pts, label_m=25.0, name_m=15.0, dup_exact=0.5, street_m=30.0, label_warn_m=50.0, gen_m=5.0):
     """Di dalam SATU cluster: pasangan HP dengan label kuat yang sama (atau nomor rumah sama berdekatan) tetapi
     koordinat berbeda (> dup_exact; yang berimpit sudah dilaporkan sebagai duplikat koordinat).
     pts: [dict(x, y, hn)]. Kembali [(i, j, d, label, pasti)]; pasti=False untuk label kuat pada label_m-label_warn_m."""
@@ -285,9 +333,15 @@ def same_label_pairs(pts, label_m=25.0, name_m=15.0, dup_exact=0.5, street_m=30.
                 if blocks_differ(pts[i].get("blk"), pts[j].get("blk")):
                     continue                     # nomor rumah sama di blok berbeda: dua rumah, bukan duplikat
                 sa, sb = pts[i].get("adr", ""), pts[j].get("adr", "")
+                d = dist_m(pts[i]["x"], pts[i]["y"], pts[j]["x"], pts[j]["y"])
+                if label_kind(n) == "gen":           # label umum 'RUKO-1': pasti hanya <= gen_m, sampai label_m cek citra
+                    if dup_exact < d <= gen_m:
+                        out.append((i, j, d, n, True))
+                    elif gen_m < d <= label_m and dup_exact < d:
+                        out.append((i, j, d, n, False))
+                    continue
                 strong = label_kind(n) in ("seq", "name")
                 lim = label_m if strong else (street_m if sa and sa == sb else name_m)
-                d = dist_m(pts[i]["x"], pts[i]["y"], pts[j]["x"], pts[j]["y"])
                 if dup_exact < d <= lim:
                     out.append((i, j, d, n, True))
                 elif strong and lim < d <= label_warn_m:
@@ -776,7 +830,8 @@ def seq_labels_restart(own_hp, sib_hp, min_common=5, frac=0.5, far_m=100.0):
 
 def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, near_km=2.0, same_frac=0.6,
             label_m=25.0, fuzzy_m=30.0, fuzzy=0.85, bldg_m=2.0, street_m=30.0, label_warn_m=50.0,
-            pole_same_m=1.0, pic_gap_m=300.0, hp_per_spl=32, fdt_cap=384, ratio=4, induk_frac=0.5, route_dup_m=30.0):
+            pole_same_m=1.0, pic_gap_m=300.0, hp_per_spl=32, fdt_cap=384, ratio=4, induk_frac=0.5, route_dup_m=30.0,
+            gen_m=5.0):
     """own: dict(label, kode, hp=[dict(x, y, hn, hid)], bnd, poles=[(x, y, nama)], ids_hpdb, ids_other, bbox).
     sibs: hasil load_cluster. Kembali dict(findings, report, counts, used, skipped, scene)."""
     res = {"findings": [], "report": [], "used": [], "skipped": [], "counts": {}, "scene": {"bnd": [], "hp": []},
@@ -824,7 +879,7 @@ def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, n
                 if na and na == nb and blocks_differ(h.get("blk"), q.get("blk")):
                     nb = nb + "#BLOK" + q.get("blk", "")   # nomor sama, blok beda -> bukan label yang sama
                 m = match_rank(d, na, nb, dup_exact, dup_near, name_m, label_m,
-                               fuzzy_m, fuzzy, bldg_m, bool(sa) and sa == sb, street_m, label_warn_m)
+                               fuzzy_m, fuzzy, bldg_m, bool(sa) and sa == sb, street_m, label_warn_m, gen_m)
                 if m is None:
                     continue
                 rank = m[0]
@@ -848,23 +903,36 @@ def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, n
             po, ps = _nearest_pole(h["x"], h["y"], own["poles"]), _nearest_pole(q["x"], q["y"], s["poles"])
             keep = _keep_advice(own["label"], s["label"], do, ds, po, ps)
             nm = h["hn"] or q["hn"] or "-"
+            if rank == 6:
+                gu = generic_unit(norm_name(h["hn"]) or norm_name(q["hn"]))
+                rel = series_relation(own["hp"], s["hp"], gu[0]) if gu else None
+                lab = norm_name(h["hn"]) or norm_name(q["hn"])
+                if rel and rel["pisah"]:     # teks ringkas: kolom shapefile/kartu laporan dipotong +-250 karakter
+                    why = ("label umum '%s' sama, %.1f m; deret %s-n tidak tumpang (celah %.0f m, antarunit %.0f m): "
+                           "kemungkinan unit berbeda, cek citra" % (lab, d, gu[0], rel["celah"], rel["jarak_unit"]))
+                elif rel:
+                    why = ("label umum '%s' sama, %.1f m; deret %s-n saling tumpang (celah %.0f m, antarunit %.0f m): "
+                           "kemungkinan disurvei dua kali, cek citra" % (lab, d, gu[0], rel["celah"], rel["jarak_unit"]))
+                keep = "Bila dari citra memang bangunan yang sama: " + keep[0].lower() + keep[1:] + \
+                       " Bila berbeda: beri label unik/catat di remarks tambahan."
             ket = ("%s (no. rumah %s) juga tercatat di cluster %s%s: %s. %s" % (
                 h["hid"], nm, s["label"], (" baris %d" % q["row"]) if q.get("row") else "", why, keep))
             kind = {0: "HP_DUPLIKAT_LINTAS_CLUSTER", 1: "HP_DUPLIKAT_LINTAS_CLUSTER",
                     3: "WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER", 4: "WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER",
-                    5: "WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER",
+                    5: "WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER", 6: "WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER",
                     2: "INFO_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER"}[rank]
             if rank in (0, 1):
                 n_dup += 1
-            elif rank in (3, 4, 5):
+            elif rank in (3, 4, 5, 6):
                 n_warn += 1
             else:
                 n_maybe += 1
             dup_pairs.append((h["hid"], nm, s["label"], d, rank))
             F.append({"x": h["x"], "y": h["y"], "kind": kind, "ket": ket, "val": round(d, 1),
                       "lim": {0: dup_exact, 1: (label_m if label_kind(norm_name(nm)) in ("seq", "name") else
+                                                gen_m if label_kind(norm_name(nm)) == "gen" else
                                                 (street_m if h.get("adr") and h.get("adr") == q.get("adr") else name_m)),
-                              3: fuzzy_m, 4: bldg_m, 5: label_warn_m, 2: dup_near}[rank],
+                              3: fuzzy_m, 4: bldg_m, 5: label_warn_m, 6: label_m, 2: dup_near}[rank],
                       "line": [(h["x"], h["y"]), (q["x"], q["y"])] if d > 0.05 else None,
                       "other": s["label"], "other_row": q.get("row"), "other_file": s.get("hpdb") or s.get("kmz")})
         # BOUNDARY identik (poligon yang sama disalin ke KMZ beberapa cluster; review Jambi Suka Karya 2026: 7 KMZ RT memuat

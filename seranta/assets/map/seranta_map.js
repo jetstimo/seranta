@@ -133,7 +133,7 @@ pb.addEventListener("change",function(e){var id=e.target.dataset&&e.target.datas
   if(c&&c.checked!==e.target.checked){c.checked=e.target.checked;c.dispatchEvent(new Event("change",{bubbles:true}))}});
 /* ---- kontrol kepala ---- */
 var head=$(".smap-head",box);
-var bs=$("select[data-base]",head);var b0="none";try{b0=localStorage.getItem("seranta-map-base")||"none"}catch(e){}bs.value=b0;setBase(b0);
+var bs=$("select[data-base]",head);var b0=(navigator.onLine===false)?"none":"sat";try{b0=localStorage.getItem("seranta-map-base")||b0}catch(e){}bs.value=b0;setBase(b0);
 bs.addEventListener("change",function(){setBase(bs.value)});
 var cnt={};D.F.forEach(function(f){cnt[f.s]=(cnt[f.s]||0)+1});
 var sevBox=$(".sevs",head);sevBox.innerHTML=Object.keys(SEV).filter(function(s){return cnt[s]}).map(function(s){return "<button type='button' class='sbtn on' data-sev='"+s+"' title='Tampilkan/sembunyikan: "+SEV[s][0]+"'><i class='dot' style='background:"+SEV[s][1]+"'></i>"+cnt[s]+"</button>"}).join("");

@@ -7,8 +7,10 @@ INFO / UNVERIFIED), aturan, lingkup jaringan (Feeder / Distribution) dan status 
 catatan disimpan langsung di layer temuan dan dipertahankan saat QC dijalankan ulang; ekspor CSV untuk reviewer."""
 try:
     from . import _log
+    from . import basemap as _basemap
 except ImportError:  # dijalankan sebagai modul lepas (uji unit)
     import _log
+    import basemap as _basemap
 import re
 
 from qgis.core import QgsProject, QgsRectangle, QgsVectorLayer, QgsCoordinateTransform
@@ -93,6 +95,18 @@ class QcNavigator(QDockWidget):
         flt2.addWidget(self.rule_f, 1)
         flt2.addWidget(self.scope_f)
         lay.addLayout(flt2)
+        bm = QHBoxLayout()
+        bm.addWidget(QLabel("Base map:"))
+        self.base = QComboBox()
+        for k in _basemap.CHOICES:
+            self.base.addItem(_basemap.LABELS[k], k)
+        self.base.setCurrentIndex(list(_basemap.CHOICES).index(_basemap.choice()))
+        self.base.setToolTip("Background for checking findings (duplicate houses, access, routes). One layer at the "
+                             "bottom of the layer list, reused for every cluster; only the tiles on screen are "
+                             "downloaded (internet needed). QC results do not depend on it.")
+        self.base.currentIndexChanged.connect(self._base_changed)
+        bm.addWidget(self.base, 1)
+        lay.addLayout(bm)
         self.tree = QTreeWidget()
         self.tree.setHeaderLabels(["Finding", "Value"])
         self.tree.setColumnWidth(0, 300)
@@ -157,8 +171,14 @@ class QcNavigator(QDockWidget):
             except Exception as _e:
                 _log.note(_e)
 
+    def _base_changed(self, *a):
+        kind = self.base.currentData() or "sat"
+        _basemap.set_choice(kind)
+        _basemap.ensure(kind)
+
     def _maybe_refresh(self, layers):
         if any(is_qc_layer(lyr_) for lyr_ in layers):
+            _basemap.ensure()               # satu peta dasar (pilihan tersimpan), tidak ditambah ulang per cluster
             self._timer.start(800)          # tunggu gaya & sub-grup diterapkan
             self.show()
             self.raise_()

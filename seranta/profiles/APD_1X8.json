@@ -475,6 +475,14 @@
    "severity": "ERROR",
    "unit": "m"
   },
+  "generic_label_match_m": {
+   "v": 5.0,
+   "dasar": "INTERNAL+RISET",
+   "sumber": "Label umum (kata generik + nomor unit: RUKO-1, TOKO 2, KIOS A3) dipakai ulang di tiap deret/lingkungan, jadi hanya pasti unit yang sama dalam 5 m (akurasi GPS ponsel langit terbuka 4,9 m, GPS.gov); 5-25 m WARNING cek citra (review Tomohon 2026: 'RUKO-1' L3 vs 'Ruko-1' L7 berjarak 17 m)",
+   "status": "NOT_APPROVED",
+   "severity": "ERROR",
+   "unit": "m"
+  },
   "same_street_match_m": {
    "v": 30.0,
    "dasar": "INTERNAL+RISET",
