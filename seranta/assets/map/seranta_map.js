@@ -31,12 +31,23 @@ function dms(v,pos,neg){var s=v<0?neg:pos;v=Math.abs(v);var d=Math.floor(v),m=Ma
 /* ---- peta ---- */
 var map=L.map($(".smap-map",box),{preferCanvas:true,zoomControl:true,attributionControl:true,maxZoom:22});
 var base={none:null,sat:L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-  {maxZoom:22,maxNativeZoom:19,attribution:"Citra &copy; Esri, Maxar, Earthstar Geographics, GIS User Community"}),
- osm:L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:22,maxNativeZoom:19,attribution:"&copy; kontributor OpenStreetMap"})};
+  {maxZoom:22,maxNativeZoom:17,keepBuffer:4,updateWhenZooming:false,crossOrigin:true,attribution:"Citra &copy; Esri, Maxar, Earthstar Geographics, GIS User Community"}),
+ osm:L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:22,maxNativeZoom:19,keepBuffer:4,updateWhenZooming:false,attribution:"&copy; kontributor OpenStreetMap"})};
 var curBase=null,off=$(".smap-off",box),failN=0;
 Object.keys(base).forEach(function(k){if(base[k])base[k].on("tileerror",function(){if(++failN>3)off.classList.add("on")}).on("tileload",function(){failN=0;off.classList.remove("on")})});
+/* zoom asli citra Esri di wilayah ini (Tomohon: ada s.d. 18; di zoom 19 server mengirim gambar "Map data not yet
+   available"). Tanya layanan tilemap sekali per wilayah, lalu perbesar ubin zoom asli tertinggi (tanpa tulisan pengganti). */
+var zCache={};function probeZ(){if(curBase!==base.sat)return;var c;try{c=map.getCenter()}catch(e){return}function txy(z){var n=Math.pow(2,z),la=Math.max(-85,Math.min(85,c.lat))*Math.PI/180;
+  return [Math.floor((c.lng+180)/360*n),Math.floor((1-Math.log(Math.tan(la)+1/Math.cos(la))/Math.PI)/2*n)]}
+  var k8=txy(8).join("_");function apply(z){zCache[k8]=z;if(base.sat.options.maxNativeZoom!==z){base.sat.options.maxNativeZoom=z;base.sat.redraw()}}
+  if(zCache[k8]){apply(zCache[k8]);return}
+  function ask(z){var t=txy(z);if(!window.fetch){apply(17);return}
+    fetch("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tilemap/"+z+"/"+Math.max(t[1]-1,0)+"/"+Math.max(t[0]-1,0)+"/3/3")
+    .then(function(r){return r.json()}).then(function(d){var n=(d.data||[]).filter(function(v){return v}).length;if(n>=5)apply(z);else if(z>18)ask(z-1);else apply(17)})
+    .catch(function(){apply(17)})}
+  ask(19)}
 function setBase(k){if(curBase)map.removeLayer(curBase);curBase=base[k]||null;off.classList.remove("on");failN=0;
-  box.classList.toggle("light",k==="osm");if(curBase)curBase.addTo(map).bringToBack();try{localStorage.setItem("seranta-map-base",k)}catch(e){}}
+  box.classList.toggle("light",k==="osm");if(curBase){curBase.addTo(map).bringToBack();probeZ()}try{localStorage.setItem("seranta-map-base",k)}catch(e){}}
 /* ---- objek jaringan ---- */
 var groups={},objs=[];
 Object.keys(GROUP).forEach(function(g){groups[g]=L.layerGroup()});
@@ -133,7 +144,7 @@ pb.addEventListener("change",function(e){var id=e.target.dataset&&e.target.datas
   if(c&&c.checked!==e.target.checked){c.checked=e.target.checked;c.dispatchEvent(new Event("change",{bubbles:true}))}});
 /* ---- kontrol kepala ---- */
 var head=$(".smap-head",box);
-var bs=$("select[data-base]",head);var b0=(navigator.onLine===false)?"none":"sat";try{b0=localStorage.getItem("seranta-map-base")||b0}catch(e){}bs.value=b0;setBase(b0);
+var bs=$("select[data-base]",head);var b0=(navigator.onLine===false)?"none":"sat";try{b0=localStorage.getItem("seranta-map-base")||b0}catch(e){}bs.value=b0;setBase(b0);map.on("moveend",probeZ);
 bs.addEventListener("change",function(){setBase(bs.value)});
 var cnt={};D.F.forEach(function(f){cnt[f.s]=(cnt[f.s]||0)+1});
 var sevBox=$(".sevs",head);sevBox.innerHTML=Object.keys(SEV).filter(function(s){return cnt[s]}).map(function(s){return "<button type='button' class='sbtn on' data-sev='"+s+"' title='Tampilkan/sembunyikan: "+SEV[s][0]+"'><i class='dot' style='background:"+SEV[s][1]+"'></i>"+cnt[s]+"</button>"}).join("");

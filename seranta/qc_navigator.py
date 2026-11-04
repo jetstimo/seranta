@@ -174,11 +174,22 @@ class QcNavigator(QDockWidget):
     def _base_changed(self, *a):
         kind = self.base.currentData() or "sat"
         _basemap.set_choice(kind)
-        _basemap.ensure(kind)
+        try:
+            ms = self.iface.mapCanvas().mapSettings()
+            _basemap.ensure(kind, ms.extent(), ms.destinationCrs())
+        except Exception as _e:
+            _log.note(_e)
+            _basemap.ensure(kind)
 
     def _maybe_refresh(self, layers):
-        if any(is_qc_layer(lyr_) for lyr_ in layers):
-            _basemap.ensure()               # satu peta dasar (pilihan tersimpan), tidak ditambah ulang per cluster
+        qc_ = [lyr_ for lyr_ in layers if is_qc_layer(lyr_)]
+        if qc_:
+            # satu peta dasar (pilihan tersimpan), tidak ditambah ulang per cluster; zoom asli citra disesuaikan wilayah
+            try:
+                _basemap.ensure(None, qc_[0].extent(), qc_[0].crs())
+            except Exception as _e:
+                _log.note(_e)
+                _basemap.ensure()
             self._timer.start(800)          # tunggu gaya & sub-grup diterapkan
             self.show()
             self.raise_()
