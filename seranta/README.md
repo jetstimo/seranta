@@ -65,4 +65,6 @@ Embedded fonts Inter and Poppins: SIL Open Font License 1.1 (`assets/fonts/OFL.t
 Seranta. Copies and modified versions must keep the author's name (also in the About dialog and report headers), must
 be marked as modified with a different name and logo, and must not claim authorship or ownership of Seranta.
 Official releases are digitally signed by the author (`RILIS.json`, Ed25519); every report prints whether the copy that
-made it is an ORIGINAL signed release or a MODIFIED / UNOFFICIAL copy.
+made it is an ORIGINAL signed release or a MODIFIED / UNOFFICIAL copy. **Official release key fingerprint:
+`92C4-D078-D1FC-1C5B`** – a copy showing any other key is not an official Seranta release. The About dialog can also check the copy
+online against the official release list (`RILIS_RESMI.json`) in the author's GitHub repository.

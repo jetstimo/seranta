@@ -24,10 +24,12 @@ scripts/check_neutral.py cegah nama merek/perusahaan masuk ke rilis publik
 
 ## Tanda tangan rilis (wajib sejak 3.9.0)
 Rilis resmi memuat `seranta/RILIS.json` yang ditandatangani kunci privat Ed25519 pembuat (`seranta/keaslian.py`).
-Setiap laporan mencetak status ASLI / DIMODIFIKASI / TIDAK RESMI. Sebelum membuat tag:
+Setiap laporan mencetak status ASLI / DIMODIFIKASI / TIDAK RESMI beserta sidik kunci (resmi: `92C4-D078-D1FC-1C5B`).
+`RILIS_RESMI.json` di akar repositori adalah daftar rilis resmi untuk verifikasi online (About → Verify online).
+Pemeriksa independen: `python scripts/rilis_resmi.py cek <zip> [--online]`. Sebelum membuat tag:
 ```
-python scripts/seranta_rilis.py rilis --plugin seranta --kunci <kunci privat> --keluar dist --tulis-sumber
-git add seranta/RILIS.json && git commit -m "Tanda tangan rilis <versi>"
+python scripts/rilis_resmi.py rilis --plugin seranta --kunci <kunci privat> --keluar dist --tulis-sumber --registri RILIS_RESMI.json
+git add seranta/RILIS.json RILIS_RESMI.json && git commit -m "Tanda tangan rilis <versi>"
 ```
 Kunci privat hanya dipegang pembuat dan **tidak pernah** di-commit (`*.key` ada di `.gitignore`). Setelah RILIS.json
 di-commit, jangan mengubah berkas plugin lagi sebelum tag, karena status rilis akan menjadi DIMODIFIKASI.

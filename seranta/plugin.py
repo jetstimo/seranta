@@ -139,13 +139,44 @@ class SerantaPlugin:
     def about(self):
         from qgis.PyQt.QtWidgets import QMessageBox
         from .buat_input_desain import __version__, __author__, integrity_status
-        QMessageBox.about(
-            self.iface.mainWindow(), "Seranta",
+        box = QMessageBox(self.iface.mainWindow())
+        box.setWindowTitle("Seranta")
+        box.setText(
             "<b>Seranta&trade; - FTTH Design Assistant</b> v%s<br>Author: %s<br>File integrity: %s<br><br>"
             "Four one-folder tools for FTTH/GPON access networks: survey QC and design input, FDT/FAT allocation, "
             "post-design tables, and design package QC. Reports are written in Indonesian.<br><br>"
             "Licence: GNU GPL v3 or later with the section 7 terms in LICENSE: copies and modifications must keep the "
             "author's name, modified versions must be renamed and marked as modified and may not claim authorship. "
-            "Official releases are digitally signed by the author. "
+            "Official releases are digitally signed by the author; the official release key fingerprint is "
+            "<b>92C4-D078-D1FC-1C5B</b> (also published on plugins.qgis.org and github.com/jetstimo/seranta). "
             "Seranta&trade; is a trademark of Joseph Edward Timothy Siahaan."
             % (__version__, __author__, integrity_status(en=True)))
+        role = getattr(getattr(QMessageBox, "ButtonRole", QMessageBox), "ActionRole")
+        ok = getattr(getattr(QMessageBox, "StandardButton", QMessageBox), "Ok")
+        ver_b = box.addButton("Verify online", role)
+        box.addButton(ok)
+        (box.exec if hasattr(box, "exec") else box.exec_)()
+        if box.clickedButton() is ver_b:
+            self._verify_online()
+
+    def _verify_online(self):
+        """Lapis 4: cocokkan salinan terpasang dengan RILIS_RESMI.json di GitHub pembuat (lewat proxy QGIS)."""
+        from qgis.PyQt.QtWidgets import QMessageBox
+        from . import keaslian
+
+        def fetch(url):
+            from qgis.core import QgsBlockingNetworkRequest
+            from qgis.PyQt.QtCore import QUrl
+            from qgis.PyQt.QtNetwork import QNetworkRequest
+            req = QgsBlockingNetworkRequest()
+            err = req.get(QNetworkRequest(QUrl(url)), True)
+            if err != getattr(QgsBlockingNetworkRequest, "NoError", 0):
+                raise IOError(req.errorMessage())
+            return bytes(req.reply().content())
+        try:
+            code, text = keaslian.verify_online(fetch)
+        except Exception as e:      # verifikasi tidak boleh membuat QGIS galat
+            code, text = "GAGAL", str(e)[:120]
+        title = "Official release verified" if code == "TERVERIFIKASI" else "Not verified"
+        (QMessageBox.information if code == "TERVERIFIKASI" else QMessageBox.warning)(
+            self.iface.mainWindow(), "Seranta - " + title, text)
