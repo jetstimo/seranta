@@ -1,0 +1,21 @@
+{
+ "alat": {
+  "simbol_cad_ke_titik 1.3.0": {
+   "berkas": "alat/simbol_cad_ke_titik.py",
+   "sha256": [
+    217833027,
+    4079073678,
+    3472873329,
+    683891955,
+    3457182292,
+    3665769242,
+    61909170,
+    952071894
+   ],
+   "tanggal": "2026-11-04"
+  }
+ },
+ "keterangan": "Daftar rilis resmi alat skrip tunggal karya Joseph Edward Timothy Siahaan. sha256 = SHA-256 berkas (LF), bilangan 32-bit big-endian.",
+ "kunci_sidik": "92C4-D078-D1FC-1C5B",
+ "pembuat": "Joseph Edward Timothy Siahaan"
+}

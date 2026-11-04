@@ -11,6 +11,9 @@ Perintah (Python 3 apa saja, termasuk Python bawaan QGIS / OSGeo4W Shell):
   python rilis_resmi.py rilis --plugin <folder plugin> --kunci <kunci privat> --keluar <folder> [--registri <json>]
       Membuat <nama>.<versi>.zip bertanda tangan (+ .sha256, izin berkas rw-r--r--) setelah lolos aturan repositori plugin
       QGIS, lalu menambahkan rilis itu ke daftar resmi RILIS_RESMI.json (untuk di-commit ke GitHub).
+  python rilis_resmi.py skrip <berkas.py> --kunci <kunci privat> [--keluar <berkas.py>]
+      Menandatangani SATU skrip Processing QGIS (mis. simbol_cad_ke_titik.py): baris terakhir "# RILIS-RESMI: ..."
+      memuat tanda tangan atas produk, versi, pencipta dan SHA-256 isi skrip. 'cek <berkas.py>' memeriksanya.
   python rilis_resmi.py buat-kunci --kunci <kunci privat>
       Sekali saja (sudah dibuat 3.9.0). Mencetak kunci publik & sidik untuk KUNCI_RESMI / SIDIK_RESMI.
 """
@@ -269,8 +272,97 @@ def cek_online(info):
     return "TIDAK TERDAFTAR di daftar rilis resmi github.com/%s" % repo
 
 
+# ----------------------------------------------------------------------------- skrip tunggal (.py)
+TANDA_SKRIP = "# RILIS-RESMI: "
+
+
+def _skrip_parse(text):
+    """(isi_tanpa_ttd, baris_ttd|None, versi, produk, kunci_tertanam) dari teks skrip; tidak menjalankan kodenya."""
+    i = text.rfind("\n" + TANDA_SKRIP)
+    body, line = (text[:i + 1], text[i + 1:].strip()) if i >= 0 else (text if text.endswith("\n") else text + "\n",
+                                                                     None)
+    mv = re.search(r'^VERSI = "([^"]+)"', body, re.M)
+    mp = re.search(r'^PRODUK = "([^"]+)"', body, re.M)
+    mk = re.search(r"^KUNCI_PUBLIK = \(([0-9, ]*)\)", body, re.M)
+    key = tuple(int(x) for x in mk.group(1).split(",") if x.strip()) if mk else None
+    return body, line, mv.group(1) if mv else "", mp.group(1) if mp else "", key
+
+
+def skrip_pesan(body, produk, versi):
+    h = hashlib.sha256(body.replace("\r\n", "\n").encode("utf-8")).hexdigest()
+    return ("%s|%s|%s|%s" % (produk, versi, PEMBUAT, h)).encode("utf-8")
+
+
+def periksa_skrip(path):
+    with open(path, encoding="utf-8", newline="") as fh:
+        body, line, versi, produk, key = _skrip_parse(fh.read())
+    name = os.path.basename(path)
+    if line is None:
+        return "TANPA_TANDA_TANGAN", "TANPA TANDA TANGAN - %s bukan rilis resmi" % name
+    if key is not None and key != KUNCI_RESMI:
+        return "PALSU", ("PALSU - kunci rilis di %s DIGANTI (sidik %s, kunci resmi %s): bukan rilis resmi %s"
+                         % (name, sidik(from_ints(key)), SIDIK_RESMI, PEMBUAT))
+    if ("SIDIK KUNCI RESMI: " + SIDIK_RESMI) not in body:
+        return "PALSU", "PALSU - sidik kunci resmi %s dihapus dari blok hak cipta %s" % (SIDIK_RESMI, name)
+    try:
+        kv = dict(x.split("=", 1) for x in line[len(TANDA_SKRIP):].split(";") if "=" in x)
+        sig = from_ints(int(x) for x in kv.get("ttd", "").split(",") if x)
+        v_ttd = kv.get("v", "")
+    except Exception:
+        return "TIDAK_RESMI", "TIDAK RESMI - baris tanda tangan %s rusak" % name
+    if not verify(from_ints(KUNCI_RESMI), skrip_pesan(body, produk, v_ttd), sig):
+        return "DIMODIFIKASI", ("DIMODIFIKASI / TIDAK RESMI - isi %s tidak sama dengan rilis yang ditandatangani %s "
+                                "(kunci %s)" % (name, PEMBUAT, SIDIK_RESMI))
+    if v_ttd != versi:
+        return "DIMODIFIKASI", "DIMODIFIKASI - versi kode %s beda dengan versi bertanda tangan %s" % (versi, v_ttd)
+    return "ASLI", "ASLI - rilis resmi %s %s ditandatangani %s (kunci %s)" % (produk, versi, PEMBUAT, SIDIK_RESMI)
+
+
+def skrip(a):
+    secret = _read_key(a.kunci)
+    if public_key(secret) != from_ints(KUNCI_RESMI):
+        raise SystemExit("Kunci privat ini bukan pasangan KUNCI_RESMI.")
+    with open(a.berkas, encoding="utf-8", newline="") as fh:
+        body, _line, versi, produk, key = _skrip_parse(fh.read())
+    err = []
+    if not versi or not produk:
+        err.append("VERSI / PRODUK tidak ditemukan di skrip")
+    if key != KUNCI_RESMI:
+        err.append("KUNCI_PUBLIK di skrip bukan kunci resmi")
+    if ("SIDIK KUNCI RESMI: " + SIDIK_RESMI) not in body or "Copyright (C) 2026 " + PEMBUAT not in body:
+        err.append("blok hak cipta / sidik kunci resmi tidak lengkap")
+    if err:
+        raise SystemExit("Belum bisa ditandatangani:\n  - " + "\n  - ".join(err))
+    body = body.replace("\r\n", "\n")
+    sig = sign(secret, skrip_pesan(body, produk, versi))
+    out = a.keluar or a.berkas
+    with open(out, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(body + "%sv=%s;sidik=%s;ttd=%s\n" % (TANDA_SKRIP, versi, SIDIK_RESMI, ",".join(str(x) for x in to_ints(sig))))
+    code, text = periksa_skrip(out)
+    if code != "ASLI":
+        raise SystemExit("Verifikasi setelah tanda tangan gagal: %s" % text)
+    with open(out, "rb") as fh:
+        print("Skrip      : %s\nSHA-256    : %s\nKeaslian   : %s" % (out, hashlib.sha256(fh.read()).hexdigest(), text))
+
+
 def cek(a):
     p = os.path.abspath(a.target)
+    if p.lower().endswith(".py"):
+        code, text = periksa_skrip(p)
+        print(text)
+        if a.online and code == "ASLI":
+            from urllib.request import urlopen     # nosec B310 - URL tetap ke GitHub pembuat
+            url = "https://raw.githubusercontent.com/jetstimo/seranta/main/alat/RILIS_RESMI_ALAT.json"
+            with open(p, "rb") as fh:
+                h = to_ints(hashlib.sha256(fh.read().replace(b"\r\n", b"\n")).digest())
+            try:
+                reg = json.loads(urlopen(url, timeout=15).read().decode("utf-8"))   # nosec B310
+                ok = any(list(e.get("sha256") or []) == h for e in (reg.get("alat") or {}).values())
+                print("Online     : %s di daftar rilis resmi github.com/jetstimo/seranta/alat"
+                      % ("TERDAFTAR" if ok else "TIDAK TERDAFTAR"))
+            except Exception as e:
+                print("Online     : daftar tidak terjangkau (%s)" % str(e)[:80])
+        return code
     tmp = None
     try:
         if p.lower().endswith(".zip"):
@@ -456,6 +548,10 @@ def main(argv=None):
     r.add_argument("--keluar", required=True)
     r.add_argument("--registri", default="")
     r.add_argument("--tulis-sumber", action="store_true")
+    k = sp.add_parser("skrip")
+    k.add_argument("berkas")
+    k.add_argument("--kunci", required=True)
+    k.add_argument("--keluar", default="")
     d = sp.add_parser("daftar")
     d.add_argument("zip")
     d.add_argument("--registri", required=True)
@@ -463,7 +559,7 @@ def main(argv=None):
     b.add_argument("--kunci", required=True)
     b.add_argument("--paksa", action="store_true")
     a = ap.parse_args(argv)
-    res = {"cek": cek, "rilis": rilis, "daftar": daftar, "buat-kunci": buat_kunci}[a.cmd](a)
+    res = {"cek": cek, "rilis": rilis, "daftar": daftar, "buat-kunci": buat_kunci, "skrip": skrip}[a.cmd](a)
     if a.cmd == "cek" and res != "ASLI":
         sys.exit(1)
 
