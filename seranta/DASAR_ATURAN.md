@@ -233,3 +233,41 @@ Permintaan tim QC (dokumen *improve QC QGIS*) dan kasus grup lapangan (HP > 50 m
   dibandingkan dengan jarak antarunit (median tetangga terdekat). Celah > 1,5 × jarak antarunit = deret bersambung (kemungkinan
   unit berbeda); selain itu deret saling tumpang (kemungkinan disurvei dua kali). Hanya keterangan; tingkat tetap WARNING.
 - **Peta dasar** QGIS (Esri World Imagery / OpenStreetMap) hanya latar pembuktian; tidak dipakai dalam perhitungan QC.
+
+## Tambahan 3.10.0 — strand, grup 1 PIC dan konsistensi (review strand Jambi Suka Karya, 13 cluster RT, November 2026)
+- **Strand / wilayah induk** (`grup.strands`): cluster dengan funnel cluster sama, file BAKP identik, file TSSR identik, atau
+  satu grup 1 PIC disatukan (union-find, transitif) menjadi satu strand. Strand bisa berisi beberapa sub-jaringan yang
+  terpisah jauh (Suka Karya: 10 + 3 cluster, terpisah +-300 m). Dokumen (BAKP/TSSR) dinilai di level strand, desain
+  (boundary, tiang, FDT) per sub-jaringan. Laporan `REKAP_STRAND_<nama>.txt/.csv` + remarks strand <= 255 karakter.
+  Strand tidak mengubah status cluster.
+- **TSSR strand**: TSSR yang identik (SHA-256) dengan TSSR cluster lain tidak lagi dibandingkan jumlah HP-nya dengan HPDB
+  cluster ini (dulu 13 cluster tertulis "TSSR 1242 HP vs HPDB n HP"); temuan WARN_TSSR_DIPAKAI_BERSAMA (catatan, bukan
+  penghalang, sama dengan WARN_TSSR_HP_BEDA). Rekap strand membandingkan HP TSSR dengan total HPDB strand.
+- **HP di irisan BOUNDARY**: satu sumber angka per pasangan. "n HP masuk boundary X" yang seluruhnya berada di irisan
+  dengan X digabung ke frasa "boundary tumpang tindih dgn X", memakai prioritas & sifat penghalang frasa HP di boundary.
+  Kedua cluster kini menyebut baris HP yang sama (dulu RT 03 "4 HP" karena ambang 10 m, RT 11 "8 HP"). Ambang 10 m tetap
+  menentukan ERROR per HP. Frasa irisan diurutkan dari luas terbesar dan punya tiga tingkat (rinci / ringkas / jumlah).
+- **Penyusunan remarks**: versi rinci sebuah alasan penghalang tidak dipakai bila menutup versi terpendek alasan penghalang
+  berikutnya. Diuji pada 5.200 kombinasi temuan nyata: status tidak pernah berubah; jenis temuan lain menghasilkan teks
+  identik dengan 3.9.5.
+- **Irisan vs bersinggungan (grup)**: irisan < 100 m2 tanpa HP (+-2 m x 50 m garis batas yang digambar tangan) dicatat
+  "bersinggungan", tidak dihitung sebagai pasangan tumpang tindih.
+- **Tiang ganda lintas cluster**: jenis tiang dibaca seperti cek span (EP/EXT/TE = eksisting, NP/T6/baru = baru). Tiang BARU
+  di dua KMZ = BOQ tiang baru ganda; tiang EKSISTING di kedua KMZ = catatan sewa/attachment ganda (bukan BOQ tiang baru).
+  Kode temuan & tingkat tidak berubah.
+- **Jalur berimpit simetris**: dihitung dua arah (A->B dan B->A), diambil yang terbesar, sehingga kedua cluster menyebut
+  angka yang sama.
+- **Rencana FDT grup** (`grup.fdt_plan`): colo setiap anggota satu jaringan dibandingkan; lebih dari satu rencana (FDT
+  existing berbeda dan/atau FDT baru) = TIDAK TERPADU; dua anggota ke FDT yang sama dicek terhadap kapasitas FDT. Sisa
+  kapasitas FDT grup < 5 % ditandai "cadangan tipis".
+- **CLUSTER_NAME campur** (WARN_HPDB_CLUSTER_NAME_CAMPUR, standar 3): nama dibandingkan setelah normalisasi penulisan
+  ('RT16' = 'RT 016' = 'RT 16'); cluster pemilik = nama dengan RT yang sama dengan nama folder, lalu terbanyak. Label minoritas
+  yang sama dengan cluster saudara disebut "kemungkinan HP pindahan". Variasi penulisan saja = info di laporan.
+- **BOUNDARY memotong diri** (WARN_BOUNDARY_TIDAK_VALID, standar 2): uji silang antarruas tidak bersebelahan (OGC Simple
+  Features: poligon sah tanpa sisi bersilang); titik potong dilaporkan.
+- **Nama berkas** (INFO_NAMA_FILE_HP_BEDA): jumlah HP di nama KMZ/TSSR/BAKP dibandingkan dengan isi HPDB (info, tidak masuk
+  remarks).
+- **Wilayah sheet lain** (standar 3, info): kombinasi kelurahan/kecamatan/kota sheet tiang dibandingkan dulu dengan sheet
+  homepass yang sudah sesuai FINDIM; isi kolom yang tertukar (KECAMATAN berisi nama kelurahan) dilaporkan "tertukar", tidak
+  lagi dicocokkan ke FINDIM (dulu menghasilkan wilayah jauh seperti 'Kabupaten Kerinci').
+

@@ -1,5 +1,26 @@
 # Changelog
 
+## 3.10.0 – analisis 1 PIC / cluster berdampingan lebih cerdas (review strand Jambi Suka Karya, 13 cluster RT, November 2026)
+
+Status review tidak bergeser: batch Suka Karya 3.9.5 vs 3.10.0 hanya berubah pada temuan yang dimaksud; 5.200 kombinasi
+temuan nyata memberi status yang sama, dan teks remarks identik untuk jenis temuan yang tidak diubah.
+
+- **Strand / wilayah induk** (`grup.strands`, `REKAP_STRAND_*.txt/.csv`): cluster dengan funnel sama, BAKP identik atau
+  TSSR identik disatukan di atas grup 1 PIC (Suka Karya: 13 cluster, 2 sub-jaringan). Isinya sub-jaringan, rekonsiliasi
+  HP TSSR/BAKP/HPDB (TSSR 1.242 HP vs HPDB 1.029 HP) dan remarks strand <= 255 karakter.
+- **TSSR strand**: TSSR identik di beberapa cluster -> WARN_TSSR_DIPAKAI_BERSAMA, menggantikan "TSSR 1242 HP vs HPDB n HP".
+- **Rekap grup**: irisan BOUNDARY per pasangan dengan baris HP di irisan; irisan < 100 m2 tanpa HP = bersinggungan;
+  tiang bersama baru (BOQ ganda) vs eksisting (dicatat dua kali); rencana FDT grup terpadu/tidak terpadu + kapasitas colo
+  bersama + sisa kapasitas; remarks grup <= 255 karakter; "file BAKP identik" per pasangan diringkas sekali.
+- **Remarks**: HP di boundary tetangga yang seluruhnya di irisan digabung ke frasa tumpang tindih (kedua cluster menyebut
+  baris yang sama); irisan urut luas terbesar dengan tiga tingkat; versi rinci tidak menggeser alasan reject berikutnya;
+  nama cluster seragam (bug "dgn cluster X" / "dgn X").
+- **Jalur berimpit simetris** (A->B = B->A).
+- **Cek baru**: WARN_HPDB_CLUSTER_NAME_CAMPUR (label cluster campur, HP pindahan), WARN_BOUNDARY_TIDAK_VALID (poligon
+  memotong diri), INFO_NAMA_FILE_HP_BEDA (jumlah HP di nama berkas), kolom wilayah sheet lain yang tertukar (tidak lagi
+  dicocokkan ke FINDIM wilayah jauh).
+- Modul baru `konsistensi.py` (murni Python); uji `tests/test_v310.py` (29 pemeriksaan).
+
 ## 3.9.5 – cek tambahan dari review Jambi, Tegal, Minahasa dan Cianjur (November 2026)
 
 Semua cek lama tetap sama (diuji ulang pada 7 set data: hasil 3.9.4 vs 3.9.5 hanya bertambah temuan baru).

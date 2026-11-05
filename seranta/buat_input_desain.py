@@ -21,7 +21,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.9.5"
+__version__ = "3.10.0"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -58,6 +58,7 @@ try:
     from . import geodesi as _geo
     from . import laporan_grup as _lgrup
     from . import tssr as _tssr
+    from . import konsistensi as _kons
 except ImportError:          # dijalankan sebagai skrip tunggal
     import bakp as _bakp
     import qc_core as _qc
@@ -69,6 +70,7 @@ except ImportError:          # dijalankan sebagai skrip tunggal
     import geodesi as _geo
     import laporan_grup as _lgrup
     import tssr as _tssr
+    import konsistensi as _kons
 
 # Kompatibilitas: QGIS 3.36+ (termasuk 3.40 Bratislava) memindahkan enum ke kelas Qgis.
 try:
@@ -416,6 +418,22 @@ def bakp_sha(folder):
             return ""
         h = hashlib.sha256()
         with open(max(fl, key=os.path.getmtime), "rb") as fh:
+            for blk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(blk)
+        return h.hexdigest()
+    except Exception:
+        return ""
+
+
+def tssr_sha(folder):
+    """SHA-256 file TSSR di folder cluster ('' bila tidak ada) - TSSR yang sama dipakai beberapa cluster = TSSR strand."""
+    import hashlib
+    try:
+        fl = _tssr.find_tssr(folder)
+        if not fl:
+            return ""
+        h = hashlib.sha256()
+        with open(sorted(fl)[0], "rb") as fh:
             for blk in iter(lambda: fh.read(1 << 20), b""):
                 h.update(blk)
         return h.hexdigest()
@@ -1565,6 +1583,15 @@ QC_LABELS = [
      "kelengkapan dokumen survei: TSSR milik cluster ini"),
     (r"^WARN_TSSR_HP_BEDA", 4, "Jumlah HP di TSSR beda dengan HPDB", "W4_TSSR_HP_BEDA",
      "kelengkapan dokumen survei: TSSR = HPDB"),
+    # --- 3.10.0: dari review strand Jambi Suka Karya (13 cluster RT, Nov 2026) ---
+    (r"^WARN_TSSR_DIPAKAI_BERSAMA", 4, "TSSR yang sama dipakai beberapa cluster (TSSR strand)", "W4_TSSR_STRAND",
+     "kelengkapan dokumen survei: TSSR atau lampiran rincian per cluster"),
+    (r"^WARN_HPDB_CLUSTER_NAME_CAMPUR", 3, "CLUSTER_NAME tidak seragam di satu HPDB", "W3_CLUSTER_NAME_CAMPUR",
+     "format HPDB: satu HPDB satu cluster (FINDIM / Funnel); HP pindahan harus diberi label cluster baru"),
+    (r"^WARN_BOUNDARY_TIDAK_VALID", 2, "BOUNDARY KMZ memotong dirinya sendiri", "W2_BOUNDARY_TIDAK_VALID",
+     "geometri poligon sah (OGC Simple Features): tanpa sisi bersilang"),
+    (r"^INFO_NAMA_FILE_HP_BEDA", 4, "Jumlah HP di nama berkas beda dengan isi HPDB", "I4_NAMA_FILE_HP",
+     "konsistensi dokumen survei setelah revisi"),
     (r"^INFO_TSSR_", 3, "Alamat TSSR tidak memuat kelurahan HPDB", "I3_TSSR_WILAYAH", "konsistensi dokumen survei"),
     (r"^WARN_HP_KOORDINAT_BEDA_FOTO", 4, "Titik HP jauh dari foto evidence berlabel sama", "W4_HP_KOORDINAT_BEDA_FOTO",
      "foto survei = lokasi rumah; > 30 m (2x galat GPS urban 7-13 m, PLOS ONE 2019)"),
@@ -3184,7 +3211,13 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                    + [("Cluster", ", ".join(sm_["ids"])), ("Total HP", sm_["n_hp"]), ("Splitter", sm_["spl"]),
                                       ("FDT", sm_["fdt"]), ("Tiang di dua cluster", sm_["shared"])]
                                    + ([("BOUNDARY identik", "%d cluster" % sm_["bnd_same"])] if sm_["bnd_same"] else [])
-                                   + ([("BAKP identik", "%d cluster" % sm_["bakp_same"])] if sm_["bakp_same"] else [])})
+                                   + ([("BAKP identik", "%d cluster" % sm_["bakp_same"])] if sm_["bakp_same"] else [])
+                                   + ([("TSSR identik", "%d cluster" % sm_["tssr_same"])] if sm_.get("tssr_same") else [])
+                                   + ([("BOUNDARY tumpang tindih", "%d pasang, %d HP di irisan" % (
+                                       sm_["overlap_pairs"], sm_["overlap_hp"]))] if sm_.get("overlap_pairs") else [])
+                                   + ([("Rencana FDT grup", "tidak terpadu (%d rencana)" % sm_["plan"]["n_target"])]
+                                      if sm_["plan"]["terpadu"] is False else [])
+                                   + [("Remarks grup", sm_["remarks"])]})
                 st_ = [((r_.get("remarks") or {}).get("status") or "-") for r_ in res_]
                 n_hp_ = sum(int(r_.get("hp") or 0) for r_ in res_)
                 when_ = _dt.datetime.now().strftime("%d-%m-%Y %H:%M")
@@ -3264,6 +3297,28 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     except Exception as e:
                         feedback.reportError("Group HTML not written: %s" % e, fatalError=False)
             out.extend(sm["lines"])
+        # 3.10.0: strand / wilayah induk (funnel sama, BAKP/TSSR identik) di atas grup 1 PIC
+        try:
+            gsum_ = [(g_, _grup.summarize(g_, hp_per_spl=o.get("hp_per_spl", 32), fdt_cap=prof.get("fdt_cap", 384),
+                                          ratio=prof.get("ratio", 4))) for g_ in _grup.groups(results)]
+            for st_ in _grup.strands(results):
+                ss_ = _grup.summarize_strand(st_, gsum_, hp_per_spl=o.get("hp_per_spl", 32), fdt_cap=prof.get("fdt_cap", 384))
+                if ss_["groups"] + ss_["alone"] < 2 and not any(k_ in st_["basis"] for k_ in ("bakp", "tssr")):
+                    continue                     # strand = satu grup saja tanpa dokumen bersama: sudah di rekap grup
+                name_ = "REKAP_STRAND_%s.txt" % re.sub(r"[^A-Za-z0-9 _-]+", "_", ss_["name"])[:80].strip()
+                when_ = _dt.datetime.now().strftime("%d-%m-%Y %H:%M")
+                tg_ = [r_.get("inp") for r_ in st_["members"] if r_.get("inp")] + ([outdir] if outdir else [])
+                for t_ in tg_:
+                    try:
+                        _grup.write_strand(os.path.join(t_, name_), ss_, "%s v%s" % (__product__, __version__), when_)
+                    except Exception as e:
+                        feedback.reportError("Strand summary not written in %s: %s" % (t_, e), fatalError=False)
+                for ln_ in ss_["lines"]:
+                    feedback.pushInfo(ln_)
+                out.append("")
+                out.extend(ss_["lines"])
+        except Exception as e:
+            feedback.reportError("Strand summary not written: %s" % e, fatalError=False)
         return out
 
     @staticmethod
@@ -4732,6 +4787,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     if best["reg"] and reg and reg != {best["reg"]}:
                         rep.append("      info: BUSINESS_AREA HPDB %s, region FINDIM %s" % (", ".join(sorted(reg)), best["reg"]))
             # sheet tiang di HPDB (kolom PROVINSI/KOTA/KECAMATAN/KELURAHAN)
+            hp_cmb_ = sorted(combos([r for r, _ in data], ixk).items(), key=lambda kv: -kv[1])
+            # hanya bila wilayah mayoritas sheet homepass sendiri sesuai FINDIM (bila tidak, sheet lain tetap dicek ke FINDIM)
+            hp_admin_ = hp_cmb_[0][0][:3] if hp_cmb_ and hp_cmb_[0][1] >= 0.5 * len(data) and \
+                check_admin(att, *hp_cmb_[0][0])[0] == "OK" else None
             for sname, srows in getattr(self, "_sheets", []):
                 if sname == getattr(self, "_hp_sheet", None):
                     continue          # sheet homepass sudah dicek di atas
@@ -4747,6 +4806,17 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 ix = [nr.index(k) if k in nr else None for k in ("KELURAHAN", "KECAMATAN", "KOTA", "PROVINSI")]
                 for (kel, kec, city, prov), n in combos(srows[hi + 1:], ix).items():
                     if self._norm(kel) in ("KELURAHAN", "SUBDISTRICT"):
+                        continue
+                    # 3.10.0: bandingkan dulu dengan wilayah sheet homepass (sudah dicek ke FINDIM). Kolom yang tertukar
+                    # (KECAMATAN berisi nama kelurahan) dulu dicocokkan ke FINDIM dan menghasilkan wilayah jauh (review
+                    # Suka Karya 2026: sheet tiang RT 16 -> 'Kabupaten Kerinci, Air Hangat Barat').
+                    st_hp_, tx_hp_ = _kons.admin_vs_hp_sheet((kel, kec, city), hp_admin_) if hp_admin_ else ("", "")
+                    if st_hp_ == "SAMA":
+                        continue
+                    if st_hp_ == "TERTUKAR":
+                        other_bad.append((sname.strip(), n, "(%s)" % tx_hp_))
+                        rep.append("  Sheet %s, %d baris: %s / %s / %s / %s -> %s" % (
+                            sname.strip(), n, kel, kec, city, prov, tx_hp_))
                         continue
                     stt, best, diff, sug = check_admin(att, kel, kec, city, prov)
                     if stt != "OK":
@@ -5115,6 +5185,20 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         # cluster lain, BOUNDARY yang tumpang tindih dan ID cluster yang terpakai dua kali.
         cross_scene = None
         pic_group, bakp_shared = [], []
+        tssr_shared, sib_labels_ = [], []
+        # ===== 3.10.0: BOUNDARY KMZ memotong dirinya sendiri (luas irisan & uji 'di dalam BOUNDARY' jadi tidak andal) =====
+        try:
+            for bx_, by_, bk_, bxs_ in _kons.boundary_problems(own_bnd or []):
+                txt_ = ("BOUNDARY KMZ%s memotong dirinya sendiri di %d titik (%s): bagian poligon terlipat sehingga luas, "
+                        "irisan dengan cluster lain dan uji 'HP di dalam BOUNDARY' tidak andal. Perbaiki poligon (titik "
+                        "sudut berurutan mengikuti batas, tanpa garis bersilang)." % (
+                            (" '%s'" % own_bnd_name) if own_bnd_name and bk_ == 0 else (" #%d" % (bk_ + 1) if bk_ else ""),
+                            len(bxs_), "; ".join("%.6f, %.6f" % (q_[1], q_[0]) for q_ in bxs_[:3]) +
+                            (" ..." if len(bxs_) > 3 else "")))
+                rep.append("  ! " + txt_)
+                qc.append((QgsPointXY(bx_, by_), "WARN_BOUNDARY_TIDAK_VALID", txt_, None, len(bxs_), 0))
+        except Exception as e:
+            _log.note(e)
         rep.append("")
         if opt.get("cross", True):
             feedback.setProgressText("Cross-cluster check")
@@ -5126,7 +5210,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     return find_hpdb(d_) if hpdb_candidates(d_) else None
                 helpers_ = {"find_hpdb": _sib_hpdb if kmz_only else find_hpdb, "find_kmz": find_kmz,
                             "read_xlsx": read_xlsx, "kode_wilayah": kode_wilayah, "cluster_label": cluster_label,
-                            "bakp_sha": bakp_sha}
+                            "bakp_sha": bakp_sha, "tssr_sha": tssr_sha}
                 own_bb = (min(p_.x() for _r, p_ in data), min(p_.y() for _r, p_ in data),
                           max(p_.x() for _r, p_ in data), max(p_.y() for _r, p_ in data))
                 sib_dirs = _lintas.sibling_dirs(
@@ -5160,7 +5244,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                          "bnd_name": own_bnd_name,
                          "poles": [(p_.x(), p_.y(), nm_) for p_, nm_ in zip(poles, names)],
                          "lines": [[(q_.x(), q_.y()) for q_ in ln_] for ln_ in (rlines or [])],
-                         "folder_ids": dict(kmz_sub), "bakp_sha": bakp_sha(outdir),
+                         "folder_ids": dict(kmz_sub), "bakp_sha": bakp_sha(outdir), "tssr_sha": tssr_sha(outdir),
+                         "pole_kinds": list(kinds),
                          "ids_hpdb": ids_h_, "ids_other": _lintas.ids_in(cluster_kmz, kmz_doc_, outdir) - ids_h_,
                          "hp": [{"x": p_.x(), "y": p_.y(), "hid": _hpname(k_), "row": meta[k_][0],
                                  "adr": _lintas.norm_street(r_[i_adr[0]] if i_adr[0] is not None and i_adr[0] < len(r_) else ""),
@@ -5181,6 +5266,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 pic_group = cres.get("pic") or []
                 bakp_shared = [s_["label"] for s_ in cres["used"]
                                if s_.get("bakp_sha") and s_["bakp_sha"] == own_c.get("bakp_sha")]
+                # 3.10.0: TSSR yang sama persis di cluster lain (juga yang jauh) = TSSR strand/wilayah induk
+                tssr_shared = sorted({os.path.basename(str(s_.get("dir") or "").rstrip("\\/")) for s_ in sibs_
+                                      if s_ and s_.get("tssr_sha") and s_["tssr_sha"] == own_c.get("tssr_sha")})
+                sib_labels_ = [s_.get("label") or "" for s_ in sibs_ if s_ and not s_.get("far")]
                 rep.extend(cres["report"])
                 for f_ in cres["findings"]:
                     ln_ = [QgsPointXY(a_, b_) for a_, b_ in f_["line"]] if f_.get("line") else None
@@ -5587,6 +5676,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             ok2, t2 = std.get(2, (None, ""))
             std[2] = (False, (t2 + "; " if t2 else "") + "double tagging Design Lite: HP %d, tiang %d" % std_dt)
         # ===== 3.9.5: TSSR (Site Profile Survey Report) vs HPDB: ID cluster, jumlah HP, kelurahan =====
+        tssr_hp_ = None
         if not kmz_only:
             try:
                 ts_files = _tssr.find_tssr(outdir)
@@ -5605,11 +5695,60 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         rep.append("  %s: nama '%s', %s HP, ID %s" % (
                             t_["file"], t_["name"] or "-", t_["hp"] if t_["hp"] is not None else "-",
                             ", ".join(t_["ids_name"] or t_["ids_text"]) or "-"))
+                        tssr_hp_ = t_["hp"] if tssr_hp_ is None else tssr_hp_
                         for k_, txt_, v_, l_ in _tssr.compare(t_, cl_id, len(data), kel_):
+                            if k_ == "WARN_TSSR_HP_BEDA" and tssr_shared:
+                                # 3.10.0: TSSR identik dipakai beberapa cluster = TSSR strand; akar masalahnya TSSR belum
+                                # dirinci per cluster, bukan jumlah HP cluster ini (review Suka Karya 2026: 13 cluster
+                                # memakai satu TSSR 1.242 HP dan semuanya tertulis 'TSSR 1242 HP vs HPDB n HP')
+                                k_ = "WARN_TSSR_DIPAKAI_BERSAMA"
+                                txt_ = ("TSSR %s identik dengan TSSR %d cluster lain (%s): TSSR mencatat %s HP untuk wilayah "
+                                        "induk/strand, HPDB cluster ini %d HP. Minta TSSR per cluster atau lampiran rincian ID "
+                                        "& HP setiap cluster." % (
+                                            t_["file"], len(tssr_shared), ", ".join(tssr_shared[:4]) +
+                                            (" ..." if len(tssr_shared) > 4 else ""), t_["hp"], len(data)))
                             rep.append("  %s %s" % ("[i]  " if k_.startswith("INFO_") else "[CEK]", txt_))
                             qc.append((data[0][1], k_, txt_, None, v_, l_))
             except Exception as e:
                 rep.append("  ! Cek TSSR gagal: %s" % str(e)[:120])
+        # ===== 3.10.0: keseragaman CLUSTER_NAME di HPDB & jumlah HP di nama berkas =====
+        label_mix_n = 0
+        if not kmz_only:
+            try:
+                ci_ = _col("CLUSTER_NAME")
+                if ci_ is not None:
+                    ri_ = _col("NEIGHBORHOOD_NO_RT")
+                    sib_short_ = sorted({_remarks.short_label(x_) for x_ in sib_labels_ if x_})
+                    mix_ = _kons.label_mix([r_[ci_] if ci_ < len(r_) else "" for r_, _p in data],
+                                           [meta[k_][0] for k_ in range(len(data))],
+                                           [r_[ri_] if ri_ is not None and ri_ < len(r_) else "" for r_, _p in data],
+                                           cluster_label(outdir, hpdb), sib_short_)
+                    texts_ = _kons.label_mix_text(mix_)
+                    if texts_ or mix_["format_only"]:
+                        rep.append("")
+                        rep.append("KESERAGAMAN CLUSTER_NAME HPDB")
+                    for txt_, n_, rows_ in texts_:
+                        label_mix_n += n_
+                        rep.append("  [CEK] " + txt_)
+                        k0_ = next((k_ for k_ in range(len(data)) if meta[k_][0] == rows_[0]), 0)
+                        qc.append((data[k0_][1], "WARN_HPDB_CLUSTER_NAME_CAMPUR", txt_, None, n_, 0))
+                    for var_ in mix_["format_only"]:
+                        rep.append("  [i]   penulisan CLUSTER_NAME tidak seragam (isi sama): %s" % " / ".join(
+                            "'%s'" % v_ for v_ in var_))
+            except Exception as e:
+                rep.append("  ! Cek CLUSTER_NAME gagal: %s" % str(e)[:120])
+            try:
+                fl_hp_ = [("KMZ", cluster_kmz or "")]
+                fl_hp_ += [("TSSR", f_) for f_ in (_tssr.find_tssr(outdir) or [])[:2]]
+                fl_hp_ += [("BAKP", f_) for f_ in (_bakp.find_bakp(outdir) or [])[:2]]
+                mm_ = _kons.filename_hp_mismatch(fl_hp_, len(data))
+                if mm_:
+                    txt_ = ("jumlah HP di nama berkas tidak sesuai isi HPDB (%d HP): %s - perbarui nama berkas setelah revisi"
+                            % (len(data), "; ".join("%s '%s' = %d HP" % m_ for m_ in mm_)))
+                    rep.append("  [i]   " + txt_)
+                    qc.append((data[0][1], "INFO_NAMA_FILE_HP_BEDA", txt_, None, len(mm_), 0))
+            except Exception as e:
+                _log.note(e)
         # ===== 8. BAKP (izin warga) =====
         bk_mode = opt.get("bakp", 0)
         bres = None
@@ -5948,8 +6087,21 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 "word": os.path.join(inp, word_name) if word_name and not os.path.isabs(str(word_name)) else word_name,
                 "pic": [g_["label"] for g_ in pic_group], "dir": outdir,
                 "pic_info": [{"dir": g_.get("dir"), "label": g_["label"], "one_net": g_["one_net"],
-                              "signals": g_["signals"], "shared": g_.get("shared") or [], "n_hp": g_.get("n_hp")}
+                              "signals": g_["signals"], "shared": g_.get("shared") or [], "n_hp": g_.get("n_hp"),
+                              "overlap": g_.get("overlap"), "gap_m": g_.get("gap_m"), "route_m": g_.get("route_m", 0),
+                              "pole_kinds": g_.get("pole_kinds") or [], "same_bakp": g_.get("same_bakp", False),
+                              "same_tssr": g_.get("same_tssr", False)}
                              for g_ in pic_group],
+                # 3.10.0: bahan rekap grup & strand (wilayah induk): sidik dokumen, funnel, colo, HP TSSR, label HPDB
+                "bakp_sha": bakp_sha(outdir) if not kmz_only else "", "tssr_sha": tssr_sha(outdir) if not kmz_only else "",
+                "tssr_hp": tssr_hp_, "tssr_shared": list(tssr_shared),
+                "funnel": (locals().get("mine") or (None, "", ""))[1] or "",
+                "colo_info": ({"code": rec["code"], "d_entry": round(rec["d_entry"]), "spare": rec["spare"],
+                               "hp_total": rec["hp_total"]} if rec else None),
+                "label_mix": label_mix_n,
+                "commercial": (lambda c_: Counter(r_[c_].strip() for r_, _p in data if c_ < len(r_) and r_[c_].strip()
+                                                  not in ("", "-")).most_common(1)[0][0]
+                               if c_ is not None and data else "")(_col("CLUSTER_COMMERCIAL_NAME")) if not kmz_only else "",
                 "bakp": {True: "OK", False: "CEK", None: "--"}[b8[0]],
                 "qc": "%d+%di" % (n_cek, len(qc) - n_cek),
                 "colo": rec["code"] if rec else ("FDT baru" if std.get(7, (None,))[0] is False else "-")}

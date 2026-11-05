@@ -371,6 +371,18 @@ TOOL1_KIND = [
      "ikut tersalin.", "Minta TSSR cluster ini dan cocokkan nama, ID, dan jumlah HP-nya."),
     ("WARN_TSSR_HP_BEDA", "Jumlah homepass di TSSR berbeda dengan jumlah baris HPDB.",
      "Samakan TSSR dengan HPDB (atau sebaliknya) sebelum review."),
+    ("WARN_TSSR_DIPAKAI_BERSAMA", "File TSSR cluster ini identik dengan TSSR beberapa cluster lain: TSSR dibuat untuk wilayah "
+     "induk (strand), sehingga jumlah HP dan nama cluster di dalamnya bukan milik cluster ini.",
+     "Minta TSSR per cluster, atau lampiran yang merinci ID cluster dan jumlah HP setiap cluster di strand."),
+    ("WARN_HPDB_CLUSTER_NAME_CAMPUR", "Satu HPDB memuat CLUSTER_NAME lebih dari satu cluster (mis. HP pindahan dari cluster "
+     "saudara yang labelnya belum diganti, atau HP RT lain yang ikut masuk).",
+     "Samakan CLUSTER_NAME sesuai cluster pemilik; bila HP memang milik cluster lain, keluarkan dari HPDB ini dan pastikan tidak "
+     "terdaftar ganda."),
+    ("WARN_BOUNDARY_TIDAK_VALID", "Poligon BOUNDARY di KMZ memotong dirinya sendiri (garis tepinya bersilang), sehingga luas, "
+     "irisan dengan cluster lain dan uji 'HP di dalam BOUNDARY' tidak andal.",
+     "Gambar ulang poligon dengan titik sudut berurutan mengikuti batas, tanpa garis bersilang."),
+    ("INFO_NAMA_FILE_HP_BEDA", "Jumlah HP yang tertulis di nama berkas (KMZ/TSSR/BAKP) tidak sama dengan isi HPDB, biasanya "
+     "karena nama berkas tidak diperbarui setelah revisi.", "Perbarui nama berkas agar sesuai jumlah HP terakhir."),
     ("INFO_TSSR_WILAYAH_BEDA", "Alamat di TSSR tidak menyebut kelurahan yang tertulis di HPDB.",
      "Cek nama kelurahan/kecamatan di TSSR; nama lama (sebelum pemekaran) juga perlu diperbarui."),
     ("WARN_HP_KOORDINAT_BEDA_FOTO", "Rumah tidak punya foto di dekat titiknya, tetapi ada foto evidence berlabel sama yang "
