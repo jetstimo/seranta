@@ -1,5 +1,26 @@
 # Changelog
 
+## 3.9.5 – cek tambahan dari review Jambi, Tegal, Minahasa dan Cianjur (November 2026)
+
+Semua cek lama tetap sama (diuji ulang pada 7 set data: hasil 3.9.4 vs 3.9.5 hanya bertambah temuan baru).
+
+- **TSSR vs HPDB** (baru, `tssr.py`): ID cluster di nama file TSSR, jumlah homepass ("Home Pass and Occupation", juga
+  format ribuan `1,242 HP`), dan kelurahan di alamat dibandingkan dengan HPDB. Contoh: TSSR Argenta 6 ber-ID 21100218859
+  (HPDB 21100232646); TSSR Nyalindung 177 HP (HPDB 169); TSSR Suka Karya 1.242 HP (TSSR induk RT 014).
+- **Area tanpa izin di folder BOUNDARY**: poligon bernama/ber-subfolder `TIDAK DAPAT IZIN`, `NO SPACE`, `tanpa izin`,
+  `dilarang`, dsb. tidak lagi dihitung sebagai cakupan cluster. HP di dalamnya = ERROR (standar 5), tiang di dalamnya =
+  ERROR, jalur kabel >= 5 m melintasinya = WARNING.
+- **Foto evidence**: HP tanpa foto di dekatnya tetapi ada foto berlabel SAMA berjarak > 30 m = WARNING "koordinat HP
+  kemungkinan salah" (Minahasa: '?-28' 150 m, '?-29' 202 m). Foto rumah tanpa pasangan HP di HPDB = INFO (Minahasa: 7
+  foto). Label dibandingkan ketat ('?-1' bukan '1').
+- **Karakter tak terlihat di HPDB** (zero-width space, U+FFFD, kontrol) = WARNING (Tegal: 5 baris).
+- **BAKP hasil scan**: INFO + catatan REMARKS bahwa tulisan tangan (Cluster ID/HP, RT/RW, kompensasi, centang verifikasi,
+  tanda tangan) wajib dibaca manual. Status remarks tidak berubah karena catatan ini.
+- **NP bisa dihapus**: bila dua NP calon hapus bersebelahan dan rentang gabungannya > 60 m, keterangannya diberi
+  "jangan dihapus bersamaan dengan ...". Jumlah temuan tetap.
+- Daftar periksa BAKP: nama vendor juga diambil dari nama folder cluster (`..._50HP_EKSPANINDO IOH PULSAR`).
+- Versi aturan 2026.11-r13.
+
 ## 3.9.4 – peta dasar satelit tanpa tulisan "Map data not yet available"
 - Penyebab: Esri World Imagery tidak punya citra di semua zoom (Tomohon: ada s.d. zoom 18). Untuk ubin yang tidak ada,
   server mengirim gambar pengganti bertulisan "Map data not yet available"; layer 3.9.2–3.9.3 (zmax 19) menampilkannya.

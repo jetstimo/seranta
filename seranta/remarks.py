@@ -28,11 +28,13 @@ PRIORITY = [
     "CLUSTER_LAIN_DIGABUNG", "BOUNDARY_MEMUAT_CLUSTER_LAIN", "HP_DUPLIKAT_LINTAS_CLUSTER", "HP_DI_RFS_DONE", "HP_DI_RFS_EXTENSION", "HP_DI_FUNNEL_LAIN",
     "HP_DI_BOUNDARY_CLUSTER_LAIN", "WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "BAKP_HP_KURANG", "BAKP_STEMPEL_TTD_TEMPELAN_DIGITAL",
     "BAKP_ADA_GAMBAR_TEMPELAN", "BAKP_NAMA_FILE_ID_BEDA", "WARN_BAKP_ID_METADATA_BEDA", "BAKP_DIEDIT_APLIKASI_GRAFIS", "FUNNEL_SENDIRI_REJECT",
-    "HP_LUAR_FUNNEL", "HP_LUAR_BOUNDARY", "HP_JAUH_DARI_TIANG", "RENTANG_NP_NP", "RENTANG_NP_EP",
+    "HP_LUAR_FUNNEL", "HP_LUAR_BOUNDARY", "HP_DI_AREA_TANPA_IZIN", "TIANG_DI_AREA_TANPA_IZIN", "HP_JAUH_DARI_TIANG", "RENTANG_NP_NP", "RENTANG_NP_EP",
     "HP_DUPLIKAT_KOORDINAT", "HP_DUPLIKAT_ID", "HP_DUPLIKAT_LABEL", "HP_HPDB_TIDAK_ADA_DI_KMZ", "HP_KMZ_TIDAK_ADA_DI_HPDB",
     "HP_SUDAH_ADA_DI_DESIGN_LITE", "TIANG_BARU_SUDAH_ADA", "WARN_TIANG_GANDA_LINTAS_CLUSTER", "WARN_ID_CLUSTER_GANDA",
     "ADMIN_", "WARN_TIANG_DUPLIKAT_KMZ", "WARN_BELOKAN_TANPA_TIANG", "WARN_POLE_SHEET_BEDA_KMZ", "WARN_CLUSTER_NAME_KOSONG",
+    "WARN_HP_KOORDINAT_BEDA_FOTO", "WARN_JALUR_LEWAT_AREA_TANPA_IZIN",
     "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
+    "WARN_TSSR_ID_BEDA", "WARN_TSSR_HP_BEDA", "WARN_HPDB_KARAKTER_TERSEMBUNYI", "INFO_BAKP_HASIL_SCAN",      # hanya catatan (bukan alasan reject, tidak mengubah status)
 ]
 
 
@@ -399,6 +401,37 @@ def phrases(findings, rowmap=None, findim_stale=False):
                 "sheet Pole beda dgn KMZ")
         elif key == "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR":
             notes.append("ID cluster belum terdaftar di FINDIM OLT CLUSTER (cek FINDIM terbaru)")
+        # ---- 3.9.5 (review Jambi Argenta, Tegal, Minahasa, Cianjur November 2026) ----
+        elif key == "HP_DI_AREA_TANPA_IZIN":
+            m = re.search(r"di dalam area '([^']*)'", L[0]["ket"] or "")
+            add(key, "%d HP di area %s (baris %s)" % (n, ("'%s'" % m.group(1)) if m else "tanpa izin", rows_compact(rows, 4)),
+                "%d HP di area tanpa izin" % n)
+        elif key == "TIANG_DI_AREA_TANPA_IZIN":
+            nm = [re.match(r"^(.+?) di dalam area", f["ket"]).group(1) for f in L if re.match(r"^(.+?) di dalam area", f["ket"] or "")]
+            add(key, "%s di area tanpa izin" % (", ".join(nm[:3]) if n <= 3 else "%d tiang" % n), "%d tiang di area tanpa izin" % n)
+        elif key == "WARN_JALUR_LEWAT_AREA_TANPA_IZIN":
+            m = re.search(r"\+-(\d+) m", L[0]["ket"] or "")
+            add(key, "jalur %s m lewat area tanpa izin" % (m.group(1) if m else "?"))
+        elif key == "WARN_TSSR_ID_BEDA":
+            m = re.search(r"memuat ID ([\d, ]+), sedangkan HPDB/KMZ (\d+)", L[0]["ket"] or "")
+            add(key, "TSSR ID %s, bukan %s" % (m.group(1).strip(), m.group(2)) if m else "TSSR milik cluster lain",
+                "TSSR ID beda")
+        elif key == "WARN_TSSR_HP_BEDA":
+            m = re.search(r"TSSR mencatat (\d+) HP, HPDB (\d+) HP", L[0]["ket"] or "")
+            add(key, "TSSR %s HP vs HPDB %s HP" % (m.group(1), m.group(2)) if m else "HP TSSR beda HPDB")
+        elif key == "WARN_HP_KOORDINAT_BEDA_FOTO":
+            dd = sorted(f.get("val") or 0 for f in L)
+            jar = num(dd[0], 0) if num(dd[0], 0) == num(dd[-1], 0) else "%s-%s" % (num(dd[0], 0), num(dd[-1], 0))
+            add(key, "HP baris %s %s m dari foto evidence label sama (cek koordinat)" % (rows_compact(rows, 3), jar),
+                "%d HP jauh dari fotonya" % n)
+        elif key == "WARN_HPDB_KARAKTER_TERSEMBUNYI":
+            m = re.match(r"^(\d+) baris", L[0]["ket"] or "")
+            rr = re.search(r"\(baris ([^)]+)\)", L[0]["ket"] or "")
+            add(key, "karakter tersembunyi di %s baris HPDB%s" % (m.group(1) if m else n,
+                                                                (" (baris %s)" % rr.group(1)) if rr else ""),
+                "karakter tersembunyi di HPDB")
+        elif key == "INFO_BAKP_HASIL_SCAN":
+            notes.append("BAKP hasil scan: baca manual Cluster ID/HP, RT/RW, kompensasi, centang verifikasi & ttd")
     out.sort(key=lambda t: t[0])
     return out, notes
 

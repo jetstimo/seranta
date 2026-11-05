@@ -19,6 +19,13 @@ try:
 except ImportError:          # diuji tanpa paket
     import geodesi as _geo
 
+# 3.9.5: poligon di folder BOUNDARY yang menandai area TANPA izin / tanpa ruang (review Cianjur Nyalindung 2026:
+# 'TIDAK DAPAT IZIN', 'NO SPACE'). Bukan bagian cakupan cluster: HP/tiang di dalamnya = temuan, bukan "di dalam BOUNDARY".
+EXCL_AREA_RX = re.compile(r"tidak\s*(dapat|ada|boleh|bisa|dapet)\s*(izin|ijin)|tanpa\s*(izin|ijin)|\bno[\s_-]*(space|permit|access)\b"
+                          r"|not\s*(allowed|permitted)|\bexclu|\blarangan\b|\bdilarang\b|\bditolak\b|\bwarga\s*menolak",
+                          re.IGNORECASE)
+# karakter tak terlihat di sel HPDB (zero-width, arah teks, BOM, karakter pengganti U+FFFD, kontrol selain tab/baris baru)
+HIDDEN_CHAR_RX = re.compile("[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff\ufffd\x00-\x08\x0b\x0c\x0e-\x1f]")
 ID_RX = re.compile(r"(?<!\d)(\d{9,12})(?!\d)")
 
 
@@ -104,9 +111,82 @@ def evidence_from_sheets(sheets):
 def evidence_missing(hps, evs, near_m=5.0, label_m=30.0, norm=None):
     """hps: [dict(x, y, hn, row)], evs: [(x, y, label)]. Satu foto evidence dipakai satu HP saja.
     HP punya evidence bila ada titik foto <= near_m, atau label sama (ternormal) <= label_m. -> [hp tanpa evidence]"""
-    norm = norm or (lambda v: re.sub(r"[^A-Z0-9]", "", str(v or "").upper()).lstrip("0"))
+    return _evidence_match(hps, evs, near_m, label_m, norm)[0]
+
+
+def _norm_default(v):
+    return re.sub(r"[^A-Z0-9]", "", str(v or "").upper()).lstrip("0")
+
+
+def evidence_extra(hps, evs, near_m=5.0, label_m=30.0, norm=None, far_max_m=1000.0, orphan_m=15.0, dup_m=5.0):
+    """Temuan tambahan foto evidence (3.9.5, review Minahasa Tataaran Satu 2026):
+      * far  : HP tanpa foto, tetapi ada foto berlabel SAMA (label unik di HP dan di foto) berjarak > label_m s/d far_max_m
+               dan foto itu tidak dipakai HP lain -> koordinat HP kemungkinan salah (foto '?-28' 150 m dari titik HP '?-28');
+      * orphan: foto yang tidak dipakai HP mana pun, tidak ada HP <= orphan_m, dan labelnya tidak ada di HP -> rumah
+               difoto tetapi tidak masuk HPDB (atau label foto salah). Salinan foto yang sama (label sama <= dup_m) dihitung
+               sekali.
+    -> (far=[(hp, (x, y, label), jarak_m)], orphan=[(x, y, label)])"""
+    norm = norm or _norm_default
+    miss, used = _evidence_match(hps, evs, near_m, label_m, norm)
+    # label dibandingkan KETAT (hanya spasi/huruf besar/karakter tak terlihat yang diabaikan): '?-1' (foto) bukan '1' (HP
+    # blok A no. 1) - review Minahasa 2026; nomor rumah polos yang sama di jalan lain tidak boleh dianggap rumah yang sama
+    norm = _norm_strict
+    hp_lab = {}
+    for h in hps:
+        k = norm(h.get("hn"))
+        if k:
+            hp_lab[k] = hp_lab.get(k, 0) + 1
+    ev_lab = {}
+    for j, (_x, _y, lab) in enumerate(evs):
+        k = norm(lab)
+        if k:
+            ev_lab.setdefault(k, []).append(j)
+    far, far_j = [], set()
+    for h in miss:
+        k = norm(h.get("hn"))
+        if not k or hp_lab.get(k, 0) != 1:
+            continue
+        js = [j for j in ev_lab.get(k, []) if j not in used and j not in far_j]
+        # label yang sama boleh muncul dua kali di foto bila keduanya salinan (xlsx + KMZ EVIDENCE) di tempat yang sama
+        pos = []
+        for j in js:
+            if not any(dist_m(evs[j][0], evs[j][1], q[0], q[1]) <= dup_m for q in pos):
+                pos.append(evs[j][:2])
+        if len(pos) != 1:
+            continue
+        j = min(js, key=lambda j_: dist_m(h["x"], h["y"], evs[j_][0], evs[j_][1]))
+        d = dist_m(h["x"], h["y"], evs[j][0], evs[j][1])
+        if label_m < d <= far_max_m:
+            far.append((h, evs[j], d))
+            far_j.update(js)
+    orphan = []
+    for j, (x, y, lab) in enumerate(evs):
+        if j in used or j in far_j:
+            continue
+        k = norm(lab)
+        if k and k in hp_lab:
+            continue
+        if any(dist_m(x, y, h["x"], h["y"]) <= orphan_m for h in hps):
+            continue
+        if any(dist_m(x, y, o[0], o[1]) <= dup_m and norm(o[2]) == k for o in orphan):
+            continue
+        orphan.append((x, y, lab))
+    return far, orphan
+
+
+def _norm_strict(v):
+    if isinstance(v, float) and v.is_integer():
+        v = int(v)
+    t = re.sub("[\u200b-\u200f\u2060\ufeff]", "", str(v if v is not None else ""))
+    t = re.sub(r"\s+", "", t.upper())
+    return "" if t in ("", "-", "0") else t
+
+
+def _evidence_match(hps, evs, near_m=5.0, label_m=30.0, norm=None):
+    """-> ([hp tanpa evidence], {indeks foto yang dipakai})"""
+    norm = norm or _norm_default
     if not evs:
-        return []
+        return [], set()
     cell = _geo.cell_deg(max(near_m, label_m), [e[1] for e in evs] + [h["y"] for h in hps])
     g = {}
     for j, (x, y, _l) in enumerate(evs):
@@ -134,7 +214,7 @@ def evidence_missing(hps, evs, near_m=5.0, label_m=30.0, norm=None):
     for i, h in enumerate(hps):
         if i not in got:
             miss.append(h)
-    return miss
+    return miss, used
 
 
 # ------------------------------------------------------------------------------------------- sheet tiang

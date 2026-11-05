@@ -21,7 +21,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.9.4"
+__version__ = "3.9.5"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -57,6 +57,7 @@ try:
     from . import grup as _grup
     from . import geodesi as _geo
     from . import laporan_grup as _lgrup
+    from . import tssr as _tssr
 except ImportError:          # dijalankan sebagai skrip tunggal
     import bakp as _bakp
     import qc_core as _qc
@@ -67,6 +68,7 @@ except ImportError:          # dijalankan sebagai skrip tunggal
     import grup as _grup
     import geodesi as _geo
     import laporan_grup as _lgrup
+    import tssr as _tssr
 
 # Kompatibilitas: QGIS 3.36+ (termasuk 3.40 Bratislava) memindahkan enum ke kelas Qgis.
 try:
@@ -650,6 +652,9 @@ def read_xlsx(path, max_empty=200, max_scan=20000, want=None):
 # ---------- Cek boundary terhadap Funnel ----------
 BOUNDARY_RX = re.compile(r"\b(boundary|boundry|boundari|bondary|batas)\b", re.IGNORECASE)   # juga salah ketik vendor
 INACTIVE_RX = re.compile(r"reject|drop|ny macro|cancel|batal", re.IGNORECASE)
+# 3.9.5: pola area tanpa izin & karakter tak terlihat ada di qc_tambahan (murni Python, diuji otomatis)
+EXCL_AREA_RX = _tambah.EXCL_AREA_RX
+HIDDEN_CHAR_RX = _tambah.HIDDEN_CHAR_RX
 
 
 def _pip(x, y, ring):
@@ -1549,6 +1554,24 @@ def write_pole_kmz(path, doc_name, recs):
 # ---------- QC_TEMUAN.kmz ditulis sendiri (tanpa GDAL/LIBKML) ----------
 QC_LABELS = [
     # (pola kode, nomor standar, label, nama file kategori, dasar aturan)
+    # --- 3.9.5: dari review Jambi Argenta 6, Tegal Karangmangu, Minahasa Tataaran Satu, Cianjur Nyalindung (Nov 2026) ---
+    (r"^HP_DI_AREA_TANPA_IZIN", 5, "HP di area tanpa izin / tanpa ruang (poligon di folder BOUNDARY)",
+     "S5_HP_AREA_TANPA_IZIN", "Standar Review Strand: izin warga (BAKP); area ditandai vendor di KMZ"),
+    (r"^TIANG_DI_AREA_TANPA_IZIN", None, "Tiang di area tanpa izin / tanpa ruang", "T_TIANG_AREA_TANPA_IZIN",
+     "Standar Review Strand: izin warga (BAKP); area ditandai vendor di KMZ"),
+    (r"^WARN_JALUR_LEWAT_AREA_TANPA_IZIN", None, "Jalur kabel melewati area tanpa izin / tanpa ruang",
+     "W_JALUR_AREA_TANPA_IZIN", "Standar Review Strand: izin warga (BAKP); area ditandai vendor di KMZ"),
+    (r"^WARN_TSSR_ID_BEDA", 4, "TSSR memuat ID cluster lain", "W4_TSSR_ID_BEDA",
+     "kelengkapan dokumen survei: TSSR milik cluster ini"),
+    (r"^WARN_TSSR_HP_BEDA", 4, "Jumlah HP di TSSR beda dengan HPDB", "W4_TSSR_HP_BEDA",
+     "kelengkapan dokumen survei: TSSR = HPDB"),
+    (r"^INFO_TSSR_", 3, "Alamat TSSR tidak memuat kelurahan HPDB", "I3_TSSR_WILAYAH", "konsistensi dokumen survei"),
+    (r"^WARN_HP_KOORDINAT_BEDA_FOTO", 4, "Titik HP jauh dari foto evidence berlabel sama", "W4_HP_KOORDINAT_BEDA_FOTO",
+     "foto survei = lokasi rumah; > 30 m (2x galat GPS urban 7-13 m, PLOS ONE 2019)"),
+    (r"^INFO_FOTO_EVIDENCE_TANPA_HP", 4, "Foto evidence tanpa pasangan HP di HPDB", "I4_FOTO_TANPA_HP",
+     "kelengkapan HPDB vs foto survei"),
+    (r"^WARN_HPDB_KARAKTER_TERSEMBUNYI", 4, "Karakter tak terlihat di HPDB", "W4_HPDB_KARAKTER_TERSEMBUNYI",
+     "format HPDB: teks bersih agar nomor rumah/alamat bisa dicocokkan"),
     # --- 3.6.0: dari review Jambi, Tegal, Minahasa (Oktober 2026) ---
     (r"^BOUNDARY_MEMUAT_CLUSTER_LAIN", 2, "BOUNDARY memuat sebagian besar HP cluster lain (BOUNDARY induk)",
      "S2_BOUNDARY_INDUK", "Standar Review Strand: satu rumah satu cluster; BOUNDARY dipotong per cluster setelah split"),
@@ -3846,10 +3869,18 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         e_["hp"] += 1
                     elif classify(folders) == "pole":
                         e_["pole"] += 1
-            own_bnd = [geom for folders, nm, kind, geom in feats
+            def _excl(folders, nm):
+                # nama poligon atau subfolder DI BAWAH folder BOUNDARY menandai area tanpa izin / tanpa ruang
+                ib_ = next((i_ for i_, f_ in enumerate(folders) if BOUNDARY_RX.search(f_)), len(folders))
+                return any(EXCL_AREA_RX.search(t_ or "") for t_ in list(folders[ib_ + 1:]) + [nm])
+            bnd_all = [(geom, nm, _excl(folders, nm)) for folders, nm, kind, geom in feats
                        if kind == "polygon" and any(BOUNDARY_RX.search(f) for f in folders)]
-            own_bnd_name = next((nm for folders, nm, kind, geom in feats
-                                 if kind == "polygon" and any(BOUNDARY_RX.search(f) for f in folders) and nm), "")
+            excl_bnd = [(g_, n_) for g_, n_, x_ in bnd_all if x_]
+            own_bnd = [g_ for g_, n_, x_ in bnd_all if not x_]
+            if not own_bnd and excl_bnd:
+                own_bnd, excl_bnd = [g_ for g_, _n in excl_bnd], []      # hanya ada poligon 'larangan': perlakukan seperti dulu
+            own_bnd_name = next((n_ for g_, n_, x_ in bnd_all if not x_ and n_), "") or \
+                next((n_ for g_, n_, x_ in bnd_all if n_), "")
             for folders, nm, kind, geom in feats:
                 cls = classify(folders)
                 label = " / ".join(folders) or "(akar)"
@@ -3873,6 +3904,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             pole_path = road_path = cluster_kmz
         else:
             own_bnd, kmz_hp = [], []
+            excl_bnd = []
             own_bnd_name = ""
             kmz_ev0 = 0
             ev_misc = {}
@@ -4261,7 +4293,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
 
         def node_pt(k):
             return poles[k[1]] if k[0] == "P" else QgsPointXY(k[1], k[2])
-        removable = []
+        removable, rm_cand = [], []
         for k, nb in adj.items():
             if k[0] != "P" or len(nb) != 2 or kinds[k[1]] != "new":
                 continue
@@ -4286,7 +4318,21 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     break
             if ok:
                 removable.append(k[1])
-                qc.append((c, "INFO_TIANG_BISA_DIHAPUS", "NP di jalan lurus, rentang gabungan %.0f m <= %.0f m" % (l1 + l2, span_max)))
+                rm_cand.append((k, c, (k1, l1), (k2, l2)))
+        # 3.9.5 (review Cianjur 2026): dua NP 'bisa dihapus' yang bersebelahan tidak boleh dihapus BERSAMAAN bila rentang
+        # gabungannya > batas. Jumlah & posisi temuan tetap; hanya keterangannya diberi peringatan.
+        rm_set = {k_[1] for k_, *_r in rm_cand}
+        for k, c, (k1, l1), (k2, l2) in rm_cand:
+            txt_ = "NP di jalan lurus, rentang gabungan %.0f m <= %.0f m" % (l1 + l2, span_max)
+            conf_ = []
+            for kn, ln, ko, lo in ((k1, l1, k2, l2), (k2, l2, k1, l1)):
+                if kn[0] == "P" and kn[1] in rm_set:
+                    far_ = next((L_ for kk_, L_ in adj.get(kn, []) if kk_ != k), None)
+                    if far_ is not None and lo + ln + far_ > span_max:
+                        conf_.append("%s (gabungan %.0f m)" % (names[kn[1]] or "NP tetangga", lo + ln + far_))
+            if conf_:
+                txt_ += "; jangan dihapus bersamaan dengan %s > %.0f m" % (" / ".join(conf_), span_max)
+            qc.append((c, "INFO_TIANG_BISA_DIHAPUS", txt_))
         loops = 0
         for k, nb in adj.items():
             if len(nb) != 1:
@@ -4528,6 +4574,28 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                "Lengkapi foto rumah sebelum review" % (len(miss_), rr_),
                                [QgsPointXY(m_["x"], m_["y"]) for m_ in miss_] if len(miss_) > 1 else None,
                                len(miss_), 0))
+                # 3.9.5 (review Minahasa 2026): foto berlabel sama jauh dari titik HP = koordinat HP kemungkinan salah;
+                # foto tanpa pasangan HP = rumah difoto tetapi tidak masuk HPDB
+                far_, orph_ = _tambah.evidence_extra(hp_pts_, ev_pts + k_ev,
+                                                     norm=lambda v: _lintas.norm_name(v).lstrip("?"))
+                for h_, e_, d_ in far_:
+                    qc.append((QgsPointXY(h_["x"], h_["y"]), "WARN_HP_KOORDINAT_BEDA_FOTO",
+                               "baris %s HPDB: titik HP '%s' berjarak %.0f m dari foto evidence berlabel sama (foto di "
+                               "%.6f, %.6f): koordinat HP kemungkinan salah - samakan dengan lokasi rumah di foto"
+                               % (h_["row"], h_["hn"], d_, e_[1], e_[0]),
+                               [QgsPointXY(h_["x"], h_["y"]), QgsPointXY(e_[0], e_[1])], round(d_, 1), 30.0))
+                if far_:
+                    rep.append("    HP berlabel sama dengan foto tetapi berjauhan (> 30 m): %d (baris %s)" % (
+                        len(far_), _tambah.rows_compact([h_["row"] for h_, _e, _d in far_], 12)))
+                if orph_:
+                    labs_ = [str(o_[2]).strip() for o_ in orph_ if str(o_[2] or "").strip()]
+                    rep.append("    Foto evidence tanpa HP di HPDB (> 15 m dari HP, label tidak ada di HPDB): %d%s" % (
+                        len(orph_), (" (label %s)" % ", ".join(labs_[:8])) if labs_ else ""))
+                    qc.append((QgsPointXY(orph_[0][0], orph_[0][1]), "INFO_FOTO_EVIDENCE_TANPA_HP",
+                               "%d foto evidence tanpa pasangan HP di HPDB%s (> 15 m dari HP mana pun): rumah terlewat "
+                               "di HPDB atau label foto salah - cek" % (
+                                   len(orph_), (" (label %s)" % ", ".join(labs_[:8])) if labs_ else ""),
+                               [QgsPointXY(o_[0], o_[1]) for o_ in orph_] if len(orph_) > 1 else None, len(orph_), 0))
             elif ev_misc:
                 rep.append("  Foto evidence      : tidak ada foto per HP (laporan *Evidence*.xlsx / folder EVIDENCE di dalam "
                            "folder HP); folder foto umum di KMZ: %s - bukan foto per rumah, cek manual"
@@ -4545,6 +4613,26 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 qc.append((data[0][1], "WARN_CLUSTER_NAME_KOSONG",
                            "CLUSTER_NAME kosong/'-' di %d baris HPDB: isi nama cluster sesuai FINDIM/Funnel" % n_empty_,
                            None, n_empty_, 0))
+        # -- 3.9.5 (review Tegal 2026): karakter tak terlihat (zero-width space, BOM, karakter pengganti U+FFFD, kontrol)
+        #    di HPDB; tidak tampak di Excel, tetapi membuat nomor rumah/alamat tidak cocok saat dicari atau dibandingkan
+        try:
+            bad_rows_, bad_cols_ = [], set()
+            for k_, (r_, _p) in enumerate(data):
+                hit_ = [headers[c_] if c_ < len(headers) else str(c_) for c_, v_ in enumerate(r_)
+                        if isinstance(v_, str) and HIDDEN_CHAR_RX.search(v_)]
+                if hit_:
+                    bad_rows_.append(meta[k_][0])
+                    bad_cols_.update(hit_)
+            if bad_rows_:
+                rr_ = _tambah.rows_compact(bad_rows_, 12)
+                rep.append("  ! Karakter tak terlihat di HPDB: %d baris (baris %s; kolom %s)" % (
+                    len(bad_rows_), rr_, ", ".join(sorted(bad_cols_)[:4])))
+                qc.append((data[0][1], "WARN_HPDB_KARAKTER_TERSEMBUNYI",
+                           "%d baris HPDB (baris %s) memuat karakter tak terlihat (zero-width space/karakter rusak) di kolom "
+                           "%s: hapus karakter itu agar nomor rumah/alamat terbaca benar" % (
+                               len(bad_rows_), rr_, ", ".join(sorted(bad_cols_)[:4])), None, len(bad_rows_), 0))
+        except Exception as e:
+            rep.append("  ! Cek karakter HPDB gagal: %s" % str(e)[:120])
         # -- sheet daftar tiang di HPDB vs tiang KMZ
         try:
             ps_name, ps_rows = _tambah.pole_sheet(getattr(self, "_sheets", []), getattr(self, "_hp_sheet", None))
@@ -4754,10 +4842,46 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         else:
             out_own = []
             rep.append("  BOUNDARY di KMZ cluster      : tidak ditemukan (cek dilewati)")
+        # 3.9.5: area tanpa izin / tanpa ruang yang digambar vendor di folder BOUNDARY (mis. 'TIDAK DAPAT IZIN', 'NO SPACE')
+        hp_excl = []
+        if excl_bnd:
+            names_x_ = sorted({n_ or "(tanpa nama)" for _g, n_ in excl_bnd})
+            for x, y, hid in hp_xy:
+                hit_ = next((n_ for g_, n_ in excl_bnd if in_poly(x, y, g_)), None)
+                if hit_ is not None:
+                    hp_excl.append(hid)
+                    qc.append((QgsPointXY(x, y), "HP_DI_AREA_TANPA_IZIN",
+                               "%s di dalam area '%s' (ditandai vendor di folder BOUNDARY): rumah di area tanpa izin/"
+                               "tanpa ruang tidak boleh masuk HPDB - keluarkan HP atau perbarui izin" % (hid, hit_ or "-")))
+            pole_excl_ = []
+            for k_, pp_ in enumerate(poles):
+                hit_ = next((n_ for g_, n_ in excl_bnd if in_poly(pp_.x(), pp_.y(), g_)), None)
+                if hit_ is not None:
+                    pole_excl_.append(names[k_] or "tiang")
+                    qc.append((pp_, "TIANG_DI_AREA_TANPA_IZIN",
+                               "%s di dalam area '%s' (ditandai vendor di folder BOUNDARY): pindahkan tiang keluar area "
+                               "tanpa izin" % (names[k_] or "tiang", hit_ or "-")))
+            len_x_ = 0.0
+            first_x_ = None
+            for _ka, _kb, L_, a_, b_ in seg_list:
+                n_s = max(1, int(L_ // 2.0))
+                for i_ in range(n_s):
+                    t_ = (i_ + 0.5) / n_s
+                    mx_, my_ = a_.x() + (b_.x() - a_.x()) * t_, a_.y() + (b_.y() - a_.y()) * t_
+                    if any(in_poly(mx_, my_, g_) for g_, _n in excl_bnd):
+                        len_x_ += L_ / n_s
+                        first_x_ = first_x_ or QgsPointXY(mx_, my_)
+            if len_x_ >= 5.0:
+                qc.append((first_x_, "WARN_JALUR_LEWAT_AREA_TANPA_IZIN",
+                           "jalur kabel +-%.0f m melewati area tanpa izin/tanpa ruang (%s): pastikan izin lintasan atau "
+                           "geser jalur" % (len_x_, ", ".join(names_x_[:3])), None, round(len_x_, 1), 0))
+            rep.append("  Area tanpa izin di BOUNDARY  : %d poligon (%s): HP di dalam %d, tiang %d, jalur +-%.0f m" % (
+                len(excl_bnd), ", ".join(names_x_[:4]), len(hp_excl), len(pole_excl_), len_x_))
         near, mine, out_fun, edge_fun, mine_status = [], None, [], [], ""
         std[2] = (None, "Funnel tidak diisi")
-        std[5] = (len(out_own) == 0 if own_bnd else None, "%d HP di luar BOUNDARY KMZ (> %.0f m), %d di tepi"
-                  % (len(out_own), bnd_tol, len(edge_own)))
+        std[5] = (len(out_own) == 0 and not hp_excl if own_bnd else None,
+                  "%d HP di luar BOUNDARY KMZ (> %.0f m), %d di tepi%s"
+                  % (len(out_own), bnd_tol, len(edge_own), (", %d di area tanpa izin" % len(hp_excl)) if hp_excl else ""))
         if funnel_files:
             feedback.setProgressText("4/4 Checking service boundaries")
             xs = [h[0] for h in hp_xy]
@@ -4878,10 +5002,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             else:
                 rep.append("  Funnel cluster ini           : tidak ditemukan (tidak ada HP di dalam Boundary Funnel)")
             if mine:
-                std[5] = (not out_own and not out_fun and not merged_hp,
-                          "%d HP di luar Funnel, %d di tepi (<= %.0f m), %d di luar BOUNDARY KMZ (> %.0f m), %d di tepi BOUNDARY%s"
+                std[5] = (not out_own and not out_fun and not merged_hp and not hp_excl,
+                          "%d HP di luar Funnel, %d di tepi (<= %.0f m), %d di luar BOUNDARY KMZ (> %.0f m), %d di tepi BOUNDARY%s%s"
                           % (len(out_fun), len(edge_fun), fun_tol, len(out_own), bnd_tol, len(edge_own),
-                             ("; %d HP milik cluster lain yang digabung (lihat standar 2)" % len(merged_hp)) if merged_hp else ""))
+                             ("; %d HP milik cluster lain yang digabung (lihat standar 2)" % len(merged_hp)) if merged_hp else "",
+                             ("; %d HP di area tanpa izin" % len(hp_excl)) if hp_excl else ""))
             elif not near:
                 std[5] = (False, "File Funnel tidak mencakup lokasi cluster (0 poligon dalam 1 km)%s; "
                                  "tambahkan Funnel kota ini" % ("; file rusak: " + fun_err[0] if fun_err else ""))
@@ -4977,8 +5102,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             rep.append("  Funnel/boundary layanan      : %s -> cek Funnel DILEWATI" % why)
             std[2] = (None, "Funnel tidak dicek: " + why)
             if own_bnd:
-                std[5] = (False if out_own else None,
-                          "%d HP di luar BOUNDARY KMZ; Funnel tidak dicek (%s)" % (len(out_own), why))
+                std[5] = (False if out_own or hp_excl else None,
+                          "%d HP di luar BOUNDARY KMZ%s; Funnel tidak dicek (%s)" % (
+                              len(out_own), (", %d di area tanpa izin" % len(hp_excl)) if hp_excl else "", why))
             else:
                 std[5] = (None, "Funnel tidak dicek: " + why)
             getattr(feedback, "pushWarning", feedback.pushInfo)("SERVICE BOUNDARY NOT CHECKED: %s" % why_en)
@@ -5460,6 +5586,30 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         if "std_dt" in locals() and (std_dt[0] or std_dt[1]):
             ok2, t2 = std.get(2, (None, ""))
             std[2] = (False, (t2 + "; " if t2 else "") + "double tagging Design Lite: HP %d, tiang %d" % std_dt)
+        # ===== 3.9.5: TSSR (Site Profile Survey Report) vs HPDB: ID cluster, jumlah HP, kelurahan =====
+        if not kmz_only:
+            try:
+                ts_files = _tssr.find_tssr(outdir)
+                if ts_files:
+                    ci_kel = _col("SUBDISTRICT") if _col("SUBDISTRICT") is not None else _col("KELURAHAN")
+                    kc_ = Counter(r_[ci_kel].strip() for r_, _p in data
+                                  if ci_kel is not None and ci_kel < len(r_) and r_[ci_kel].strip() not in ("", "-"))
+                    kel_ = kc_.most_common(1)[0][0] if kc_ else ""
+                    rep.append("")
+                    rep.append("TSSR (SITE PROFILE SURVEY REPORT) vs HPDB")
+                    for tp_ in ts_files[:3]:
+                        t_ = _tssr.parse(tp_)
+                        if not t_["readable"]:
+                            rep.append("  %s: tidak terbaca (bukan .docx yang sah) - cek manual" % t_["file"])
+                            continue
+                        rep.append("  %s: nama '%s', %s HP, ID %s" % (
+                            t_["file"], t_["name"] or "-", t_["hp"] if t_["hp"] is not None else "-",
+                            ", ".join(t_["ids_name"] or t_["ids_text"]) or "-"))
+                        for k_, txt_, v_, l_ in _tssr.compare(t_, cl_id, len(data), kel_):
+                            rep.append("  %s %s" % ("[i]  " if k_.startswith("INFO_") else "[CEK]", txt_))
+                            qc.append((data[0][1], k_, txt_, None, v_, l_))
+            except Exception as e:
+                rep.append("  ! Cek TSSR gagal: %s" % str(e)[:120])
         # ===== 8. BAKP (izin warga) =====
         bk_mode = opt.get("bakp", 0)
         bres = None
@@ -5478,8 +5628,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                             cnt_[v_] = cnt_.get(v_, 0) + 1
                     return max(cnt_, key=cnt_.get) if cnt_ else ""
                 # nama vendor dari nama file HPDB TANPA ekstensi (dulu 'HPDB_..._83HP_AIA.xlsx' -> vendor 'AIA.xlsx')
+                # 3.9.5: juga dari nama folder cluster ('..._50HP_EKSPANINDO IOH PULSAR', '... - (38HP) RPS'); review
+                # Jambi Argenta 2026: HPDB tanpa akhiran vendor -> daftar periksa BAKP tertulis 'Mitra / vendor: -'
                 vm = re.search(r"_\d+\s*HP[_\s]+([A-Za-z][A-Za-z.\s]*)", os.path.splitext(os.path.basename(hpdb))[0]) or \
-                    re.search(r"PT[.\s_]+([A-Za-z]+)", os.path.basename(outdir.rstrip("\\/")))
+                    re.search(r"PT[.\s_]+([A-Za-z]+)", os.path.basename(outdir.rstrip("\\/"))) or \
+                    re.search(r"[_\s(]\d+\s*HP\)?[_\s]+([A-Za-z][A-Za-z._\s]*)$", os.path.basename(outdir.rstrip("\\/")))
                 def _grp(*names):
                     i_ = self._pick(headers, list(names), "\x00")
                     if i_ is None:
@@ -5499,7 +5652,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                           "cluster_name": cluster_label(outdir, hpdb),
                           "kota": _maj("CITY", "KOTA"), "kecamatan": _maj("DISTRICT", "KECAMATAN"),
                           "kelurahan": _maj("SUBDISTRICT", "KELURAHAN"),
-                          "vendor": vm.group(1).strip(" ._") if vm else ""}
+                          "vendor": vm.group(1).replace("_", " ").strip(" .") if vm else ""}
                 if att and att.get("findim") and exp_bk["kelurahan"]:
                     _st, _best, _d, _s = check_admin(att, exp_bk["kelurahan"], exp_bk["kecamatan"], exp_bk["kota"], "")
                     if _best and _st != "OK":
