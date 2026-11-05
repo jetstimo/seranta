@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.12.0 – jalur ditumpu tiang cluster saudara 1 PIC, setiap aturan bersumber (kajian REVIEW STRAND Suka Karya, November 2026)
+
+- **Rentang lewat tiang saudara**: bentang = jarak titik tumpu berurutan (USDA RUS Bulletin 1751F-630 "Span Length";
+  Corning AEN 14). Tiang cluster saudara 1 PIC/satu funnel yang dilewati jalurnya (<= 5 m) dan <= 3 m dari garis rentang
+  (aturan tiang sendiri) memecah rentang; rentang terpanjang dinilai ulang. Suka Karya: KOTA RT 04 240 m -> 53 m; RT 10
+  547 m -> 154 m.
+- **Belokan/ujung/percabangan di tiang saudara** (<= snap_m) -> INFO_TITIK_JALUR_DI_TIANG_SAUDARA + pengingat treklam/tambat
+  (USDA RUS 1751F-650). Suka Karya: 23 titik.
+- Tiang saudara dihitung bila <= 5 m dari jalurnya (GPS.gov 4,9 m; data: 98 % tiang <= 5 m, 68 % <= 2 m). HP > 50 m:
+  39 HP tercover (3.11: 27 dengan syarat 2 m yang terlalu ketat).
+- Pengaman: bila bagian 1 PIC gagal, temuan dikembalikan dan cek inti tetap utuh (bug akar negatif ditemukan di RT 03).
+- Saklar profil baru `cross_1pic_route_support`; semua saklar 1 PIC false = identik 3.10.0.
+- Sumber setiap aturan 1 PIC dicantumkan di DASAR_ATURAN.md dan profil (kebijakan internal ditandai INTERNAL).
+
 ## 3.11.0 – 1 PIC / berdampingan dinilai sebagai satu wilayah (revisi pembuat, 5 November 2026)
 
 - **Boundary bertumpuk diterima**: irisan BOUNDARY dan HP di BOUNDARY cluster saudara dalam 1 PIC / berdampingan yang satu

@@ -388,6 +388,12 @@ TOOL1_KIND = [
     ("INFO_BOUNDARY_BERIRISAN_1PIC", "BOUNDARY cluster ini bertumpuk dengan BOUNDARY cluster saudara dalam 1 PIC / berdampingan "
      "dan satu funnel (atau satu wilayah induk): diterima, bukan alasan reject. Yang tetap salah adalah boundary yang masuk "
      "funnel lain.", "Tidak wajib dirapikan; cukup pastikan rumah di area bertumpuk hanya ada di satu HPDB."),
+    ("INFO_RENTANG_DITUMPU_TIANG_SAUDARA", "Rentang antartiang cluster ini panjang, tetapi jalurnya melewati tiang cluster saudara "
+     "1 PIC / berdampingan yang menumpu kabel; diukur antar titik tumpu berurutan, rentang terpanjang masih dalam batas.",
+     "Pastikan kabel memang diikat di tiang saudara itu (tiang bersama) dan dicatat sekali di BOQ."),
+    ("INFO_TITIK_JALUR_DI_TIANG_SAUDARA", "Belokan, ujung, atau percabangan jalur cluster ini berada di tiang cluster saudara 1 PIC "
+     "/ berdampingan (tiang itu dilewati jalur cluster saudara): titik itu ditumpu tiang, bukan tanpa tiang.",
+     "Pastikan tiang itu dipasang treklam / tambat akhir sesuai sudut, dan tercatat sebagai tiang bersama."),
     ("INFO_HP_TERCOVER_TIANG_SAUDARA", "Rumah lebih dari batas jarak ke tiang cluster ini, tetapi ada tiang cluster saudara "
      "1 PIC / berdampingan (satu funnel) dalam batas jarak: drop bisa ditarik dari tiang itu, bukan alasan reject.",
      "Rencanakan drop/FAT dari tiang cluster saudara (catat sebagai tiang bersama) atau pindahkan rumah ke cluster itu."),

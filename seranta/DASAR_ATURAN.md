@@ -285,11 +285,42 @@ Permintaan tim QC (dokumen *improve QC QGIS*) dan kasus grup lapangan (HP > 50 m
   di dua cluster atau boundary yang belum dibuat per cluster.
 - **HP > 50 m tercover tiang saudara** (INFO_HP_TERCOVER_TIANG_SAUDARA): HP yang garis lurusnya > batas (hp_pole_max_m) ke
   semua tiang cluster sendiri, tetapi <= batas yang sama ke tiang cluster saudara yang ditoleransi (satu funnel/wilayah induk)
-  **yang dilewati jalur kabel cluster itu (<= 2 m dari ruas)**, menjadi catatan dengan nama tiang, jenis tiang dan saran desain
+  **yang dilewati jalur kabel cluster itu (<= 5 m dari ruas sejak 3.12.0; 3.11.0: 2 m)**, menjadi catatan dengan nama tiang, jenis tiang dan saran desain
   (drop dari tiang bersama atau pindahkan HP). Tiang saudara yang tidak dilewati jalur tidak dihitung (review Suka Karya: 39
   HP > 50 m; 27 tercover tiang ber-jalur, 12 tetap reject; tanpa syarat jalur 39 akan lolos semua). Standar 1 dihitung ulang.
 - **Akses lewat jalur** (WARN_HP_JAUH_LEWAT_JALUR) tetap peringatan, karena graf akses hanya memuat jalur cluster sendiri;
   tiang saudara <= batas dicatat sebagai alternatif.
 - Saklar profil `cross_1pic_overlap_ok` dan `cross_1pic_pole_cover` (bawaan true). Bila false, hasil identik dengan 3.10.0
   (diuji pada batch Suka Karya).
+
+## Tambahan 3.12.0 — jalur cluster ditumpu tiang cluster saudara 1 PIC (kajian folder REVIEW STRAND Suka Karya, 5 Nov 2026)
+Dasar (sumber dapat diperiksa):
+- **Bentang = jarak dua titik tumpu kabel berurutan.** USDA Rural Utilities Service, Bulletin 1751F-630 *Design of Aerial
+  Plant* (1996), Definitions: "Span Length: The horizontal distance between two adjacent supporting points of a cable";
+  Corning Cable Systems, Application Engineering Note AEN 14 *Sag and Tension - General* (rev. 5): "Span length - the
+  straight line-of-sight distance between consecutive poles". Tiang cluster saudara yang menumpu kabel memutus bentang.
+- **Tiang sudut & ujung bertreklam.** USDA RUS Bulletin 1751F-650 *Aerial Plant Guying and Anchoring* (1996) ps. 3.1-3.5
+  (guy untuk sudut 5-60 derajat, dua head guy >= 60 derajat; "deadend guy ... to hold the pole at the end of a line"). Standar
+  tidak mensyaratkan tiang milik cluster/penyelenggara yang sama.
+- **Pemanfaatan bersama tiang.** UU 36/1999 tentang Telekomunikasi ps. 34A-34B (sisipan UU 11/2020 Cipta Kerja jo. UU 6/2023):
+  pemilik infrastruktur pasif wajib membuka akses pemanfaatan bersama; SE Kepala Otorita IKN 011/SE/Kepala-Otorita IKN/X/2023
+  Lampiran I B.4: tiang "dimanfaatkan secara bersama".
+- **Batas bentang regulasi daerah 50 m**: contoh Peraturan Wali Kota Tangerang Selatan 47/2019 ps. 5J ("jarak antara tiang
+  penyangga fiber optik paling jauh 50 meter").
+- **Toleransi posisi**: GPS ponsel 4,9 m di langit terbuka (GPS.gov), 7-13 m di permukiman (Merry & Bettinger, PLOS ONE
+  14(7) e0219890, 2019). Data REVIEW STRAND: 296 dari 303 tiang (98 %) <= 5 m dari jalur KMZ-nya sendiri, hanya 68 % <= 2 m.
+
+Aturan (saklar profil `cross_1pic_route_support`, bawaan true; berlaku hanya untuk pasangan yang ditoleransi 3.11:
+1 PIC/berdampingan & satu funnel/wilayah induk):
+- Tiang cluster saudara dihitung bila <= 5 m (POLE_ROUTE_M) dari jalur cluster saudara itu (bagian jaringannya).
+- **Rentang**: tiang saudara <= 3 m (POLE_ON_LINE_M, sama dengan tiang cluster sendiri) dari garis rentang memecah rentang;
+  rentang terpanjang yang tersisa dinilai ulang dengan batas yang sama (<= 50 m INFO_RENTANG_DITUMPU_TIANG_SAUDARA,
+  50-60 m WARN_RENTANG_REGULASI, > 60 m RENTANG_* dengan nilai baru dan panjang tanpa tiang saudara di keterangan).
+- **Belokan / ujung jalur / percabangan tanpa tiang**: simpul <= snap_m (parameter snap yang sama untuk tiang cluster sendiri)
+  dari tiang saudara -> INFO_TITIK_JALUR_DI_TIANG_SAUDARA dengan pengingat treklam/tambat akhir di tiang itu.
+- Bila bagian 1 PIC gagal dihitung, semua temuan dikembalikan seperti sebelum bagian itu (cek inti tidak ikut gagal).
+Hasil REVIEW STRAND: KOTA RT 04 NP-08 - NP-06 240 m -> 53 m (5 tiang RT 05); RT 10 NP6-10 - NP6-12 547 m -> 154 m (6 tiang
+RT 07); 23 belokan/ujung jalur di tiang saudara; tidak ada rentang lain yang lolos, karena tiang saudara terdekat 3,2-5,8 m dari
+garis (di luar toleransi 3 m tiang sendiri).
+Saklar ketiga aturan 1 PIC false -> hasil identik dengan 3.10.0 (diuji pada batch Suka Karya).
 

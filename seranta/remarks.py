@@ -35,7 +35,8 @@ PRIORITY = [
     "WARN_HPDB_CLUSTER_NAME_CAMPUR", "WARN_BOUNDARY_TIDAK_VALID",
     "WARN_HP_KOORDINAT_BEDA_FOTO", "WARN_JALUR_LEWAT_AREA_TANPA_IZIN",
     "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
-    "WARN_TSSR_ID_BEDA", "WARN_TSSR_HP_BEDA", "WARN_TSSR_DIPAKAI_BERSAMA", "INFO_HP_TERCOVER_TIANG_SAUDARA", "INFO_HP_DI_BOUNDARY_SAUDARA_1PIC",
+    "WARN_TSSR_ID_BEDA", "WARN_TSSR_HP_BEDA", "WARN_TSSR_DIPAKAI_BERSAMA", "INFO_HP_TERCOVER_TIANG_SAUDARA", "INFO_HP_DI_BOUNDARY_SAUDARA_1PIC", "INFO_RENTANG_DITUMPU_TIANG_SAUDARA",
+    "INFO_TITIK_JALUR_DI_TIANG_SAUDARA",
     "INFO_BOUNDARY_BERIRISAN_1PIC", "WARN_HPDB_KARAKTER_TERSEMBUNYI", "INFO_BAKP_HASIL_SCAN",      # hanya catatan (bukan alasan reject, tidak mengubah status)
 ]
 
@@ -510,6 +511,12 @@ def phrases(findings, rowmap=None, findim_stale=False):
             add(key, "karakter tersembunyi di %s baris HPDB%s" % (m.group(1) if m else n,
                                                                 (" (baris %s)" % rr.group(1)) if rr else ""),
                 "karakter tersembunyi di HPDB")
+        elif key in ("INFO_RENTANG_DITUMPU_TIANG_SAUDARA", "INFO_TITIK_JALUR_DI_TIANG_SAUDARA"):
+            if key == "INFO_RENTANG_DITUMPU_TIANG_SAUDARA":
+                notes.append("%d rentang ditumpu tiang cluster saudara (terpanjang %s m): bukan alasan reject, catat tiang bersama"
+                             % (n, num(max(f.get("val") or 0 for f in L))))
+            else:
+                notes.append("%d belokan/ujung jalur di tiang cluster saudara: pastikan treklam/tambat di tiang itu" % n)
         elif key == "INFO_HP_TERCOVER_TIANG_SAUDARA":
             # 3.11.0: catatan saja (bukan alasan reject): drop ditarik dari tiang cluster saudara 1 PIC/berdampingan
             grp = {}

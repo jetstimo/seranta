@@ -38,7 +38,7 @@ try:
 except ImportError:  # pragma: no cover
     import xml.etree.ElementTree as ET  # nosec B405
 
-RULE_VERSION = "2026.11-r15"
+RULE_VERSION = "2026.11-r16"
 
 HP_RX = re.compile(r"\b(hp|homepass|home ?pass|rumah)\b", re.IGNORECASE)
 # 'EVIDEN' (tanpa -CE) dipakai vendor di KMZ 1 PIC Tomohon 2026; dulu tidak dikenali sebagai folder foto
@@ -56,6 +56,9 @@ SKIP_DIR_RX = re.compile(r"^(INPUT|HASIL|QC_|_|~)", re.IGNORECASE)
 EXIST_POLE_RX = re.compile(r"\b(ep|ext|exs|exist\w*|eksist\w*|existing|te|tiang ?eksisting)\b|^(ep|te|ext)[\s\-_]?\d",
                            re.IGNORECASE)
 NEW_POLE_RX = re.compile(r"\b(np|new|baru)\b|^np[\s\-_]?\d", re.IGNORECASE)
+
+
+POLE_ROUTE_M = 5.0     # tiang cluster saudara <= 5 m dari jalur cluster itu = bagian jalurnya (GPS.gov 4,9 m)
 
 
 def pole_kind_of(name, dirs=""):
@@ -1156,7 +1159,9 @@ def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, n
                                "pole_kinds": sp_kinds, "same_bakp": same_bakp,
                                "same_tssr": same_tssr, "tolerated": tol, "beda_funnel": beda_funnel,
                                "funnel": s.get("funnel") or "", "poles": list(s.get("poles") or []),
-                               "pole_on_route": [any(_pt_seg_m(px_, py_, ln_[i_ - 1], ln_[i_]) <= 2.0
+                               # tiang <= 5 m dari jalur cluster saudara = dilewati jalurnya (akurasi GPS ponsel 4,9 m,
+                               # GPS.gov; review Suka Karya: 98% tiang KMZ <= 5 m dari jalurnya sendiri, hanya 68% <= 2 m)
+                               "pole_on_route": [any(_pt_seg_m(px_, py_, ln_[i_ - 1], ln_[i_]) <= POLE_ROUTE_M
                                                      for ln_ in (s.get("lines") or []) for i_ in range(1, len(ln_)))
                                                  for px_, py_, _n in (s.get("poles") or [])] if tol else [],
                                "pole_kinds_sib": list(s.get("pole_kinds") or [])})
