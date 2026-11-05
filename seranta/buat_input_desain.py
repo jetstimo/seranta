@@ -21,7 +21,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.9.5"
+__version__ = "3.12.0"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -58,6 +58,7 @@ try:
     from . import geodesi as _geo
     from . import laporan_grup as _lgrup
     from . import tssr as _tssr
+    from . import konsistensi as _kons
 except ImportError:          # dijalankan sebagai skrip tunggal
     import bakp as _bakp
     import qc_core as _qc
@@ -69,6 +70,7 @@ except ImportError:          # dijalankan sebagai skrip tunggal
     import geodesi as _geo
     import laporan_grup as _lgrup
     import tssr as _tssr
+    import konsistensi as _kons
 
 # Kompatibilitas: QGIS 3.36+ (termasuk 3.40 Bratislava) memindahkan enum ke kelas Qgis.
 try:
@@ -416,6 +418,22 @@ def bakp_sha(folder):
             return ""
         h = hashlib.sha256()
         with open(max(fl, key=os.path.getmtime), "rb") as fh:
+            for blk in iter(lambda: fh.read(1 << 20), b""):
+                h.update(blk)
+        return h.hexdigest()
+    except Exception:
+        return ""
+
+
+def tssr_sha(folder):
+    """SHA-256 file TSSR di folder cluster ('' bila tidak ada) - TSSR yang sama dipakai beberapa cluster = TSSR strand."""
+    import hashlib
+    try:
+        fl = _tssr.find_tssr(folder)
+        if not fl:
+            return ""
+        h = hashlib.sha256()
+        with open(sorted(fl)[0], "rb") as fh:
             for blk in iter(lambda: fh.read(1 << 20), b""):
                 h.update(blk)
         return h.hexdigest()
@@ -1565,6 +1583,26 @@ QC_LABELS = [
      "kelengkapan dokumen survei: TSSR milik cluster ini"),
     (r"^WARN_TSSR_HP_BEDA", 4, "Jumlah HP di TSSR beda dengan HPDB", "W4_TSSR_HP_BEDA",
      "kelengkapan dokumen survei: TSSR = HPDB"),
+    # --- 3.10.0: dari review strand Jambi Suka Karya (13 cluster RT, Nov 2026) ---
+    (r"^WARN_TSSR_DIPAKAI_BERSAMA", 4, "TSSR yang sama dipakai beberapa cluster (TSSR strand)", "W4_TSSR_STRAND",
+     "kelengkapan dokumen survei: TSSR atau lampiran rincian per cluster"),
+    (r"^WARN_HPDB_CLUSTER_NAME_CAMPUR", 3, "CLUSTER_NAME tidak seragam di satu HPDB", "W3_CLUSTER_NAME_CAMPUR",
+     "format HPDB: satu HPDB satu cluster (FINDIM / Funnel); HP pindahan harus diberi label cluster baru"),
+    (r"^WARN_BOUNDARY_TIDAK_VALID", 2, "BOUNDARY KMZ memotong dirinya sendiri", "W2_BOUNDARY_TIDAK_VALID",
+     "geometri poligon sah (OGC Simple Features): tanpa sisi bersilang"),
+    (r"^INFO_NAMA_FILE_HP_BEDA", 4, "Jumlah HP di nama berkas beda dengan isi HPDB", "I4_NAMA_FILE_HP",
+     "konsistensi dokumen survei setelah revisi"),
+    # --- 3.11.0: revisi pembuat 5 Nov 2026 (1 PIC / berdampingan) ---
+    (r"^INFO_HP_DI_BOUNDARY_SAUDARA_1PIC", 2, "HP di BOUNDARY cluster saudara 1 PIC (boundary bertumpuk diterima)",
+     "I2_HP_BOUNDARY_SAUDARA_1PIC", "boundary wilayah dalam 1 PIC/berdampingan boleh bertumpuk; yang salah = lintas funnel"),
+    (r"^INFO_BOUNDARY_BERIRISAN_1PIC", 2, "BOUNDARY bertumpuk dengan cluster saudara 1 PIC (diterima)",
+     "I2_BOUNDARY_BERTUMPUK_1PIC", "boundary wilayah dalam 1 PIC/berdampingan boleh bertumpuk; yang salah = lintas funnel"),
+    (r"^INFO_RENTANG_DITUMPU_TIANG_SAUDARA", 9, "Rentang ditumpu tiang cluster saudara 1 PIC (<= batas)",
+     "I9_RENTANG_TIANG_SAUDARA", "bentang = jarak titik tumpu berurutan (USDA RUS 1751F-630); tiang bersama (UU 36/1999 ps. 34B)"),
+    (r"^INFO_TITIK_JALUR_DI_TIANG_SAUDARA", None, "Belokan/ujung/percabangan jalur di tiang cluster saudara 1 PIC",
+     "I_TITIK_JALUR_TIANG_SAUDARA", "tiang sudut/ujung bertreklam (USDA RUS 1751F-650); tiang bersama (UU 36/1999 ps. 34B)"),
+    (r"^INFO_HP_TERCOVER_TIANG_SAUDARA", 1, "HP > batas ke tiang sendiri, tercover tiang cluster saudara 1 PIC",
+     "I1_HP_TERCOVER_TIANG_SAUDARA", "Handbook internal 50 m; drop boleh dari tiang wilayah sebelah dalam 1 PIC/berdampingan"),
     (r"^INFO_TSSR_", 3, "Alamat TSSR tidak memuat kelurahan HPDB", "I3_TSSR_WILAYAH", "konsistensi dokumen survei"),
     (r"^WARN_HP_KOORDINAT_BEDA_FOTO", 4, "Titik HP jauh dari foto evidence berlabel sama", "W4_HP_KOORDINAT_BEDA_FOTO",
      "foto survei = lokasi rumah; > 30 m (2x galat GPS urban 7-13 m, PLOS ONE 2019)"),
@@ -3184,7 +3222,13 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                    + [("Cluster", ", ".join(sm_["ids"])), ("Total HP", sm_["n_hp"]), ("Splitter", sm_["spl"]),
                                       ("FDT", sm_["fdt"]), ("Tiang di dua cluster", sm_["shared"])]
                                    + ([("BOUNDARY identik", "%d cluster" % sm_["bnd_same"])] if sm_["bnd_same"] else [])
-                                   + ([("BAKP identik", "%d cluster" % sm_["bakp_same"])] if sm_["bakp_same"] else [])})
+                                   + ([("BAKP identik", "%d cluster" % sm_["bakp_same"])] if sm_["bakp_same"] else [])
+                                   + ([("TSSR identik", "%d cluster" % sm_["tssr_same"])] if sm_.get("tssr_same") else [])
+                                   + ([("BOUNDARY tumpang tindih", "%d pasang, %d HP di irisan" % (
+                                       sm_["overlap_pairs"], sm_["overlap_hp"]))] if sm_.get("overlap_pairs") else [])
+                                   + ([("Rencana FDT grup", "tidak terpadu (%d rencana)" % sm_["plan"]["n_target"])]
+                                      if sm_["plan"]["terpadu"] is False else [])
+                                   + [("Remarks grup", sm_["remarks"])]})
                 st_ = [((r_.get("remarks") or {}).get("status") or "-") for r_ in res_]
                 n_hp_ = sum(int(r_.get("hp") or 0) for r_ in res_)
                 when_ = _dt.datetime.now().strftime("%d-%m-%Y %H:%M")
@@ -3264,6 +3308,28 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     except Exception as e:
                         feedback.reportError("Group HTML not written: %s" % e, fatalError=False)
             out.extend(sm["lines"])
+        # 3.10.0: strand / wilayah induk (funnel sama, BAKP/TSSR identik) di atas grup 1 PIC
+        try:
+            gsum_ = [(g_, _grup.summarize(g_, hp_per_spl=o.get("hp_per_spl", 32), fdt_cap=prof.get("fdt_cap", 384),
+                                          ratio=prof.get("ratio", 4))) for g_ in _grup.groups(results)]
+            for st_ in _grup.strands(results):
+                ss_ = _grup.summarize_strand(st_, gsum_, hp_per_spl=o.get("hp_per_spl", 32), fdt_cap=prof.get("fdt_cap", 384))
+                if ss_["groups"] + ss_["alone"] < 2 and not any(k_ in st_["basis"] for k_ in ("bakp", "tssr")):
+                    continue                     # strand = satu grup saja tanpa dokumen bersama: sudah di rekap grup
+                name_ = "REKAP_STRAND_%s.txt" % re.sub(r"[^A-Za-z0-9 _-]+", "_", ss_["name"])[:80].strip()
+                when_ = _dt.datetime.now().strftime("%d-%m-%Y %H:%M")
+                tg_ = [r_.get("inp") for r_ in st_["members"] if r_.get("inp")] + ([outdir] if outdir else [])
+                for t_ in tg_:
+                    try:
+                        _grup.write_strand(os.path.join(t_, name_), ss_, "%s v%s" % (__product__, __version__), when_)
+                    except Exception as e:
+                        feedback.reportError("Strand summary not written in %s: %s" % (t_, e), fatalError=False)
+                for ln_ in ss_["lines"]:
+                    feedback.pushInfo(ln_)
+                out.append("")
+                out.extend(ss_["lines"])
+        except Exception as e:
+            feedback.reportError("Strand summary not written: %s" % e, fatalError=False)
         return out
 
     @staticmethod
@@ -4732,6 +4798,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     if best["reg"] and reg and reg != {best["reg"]}:
                         rep.append("      info: BUSINESS_AREA HPDB %s, region FINDIM %s" % (", ".join(sorted(reg)), best["reg"]))
             # sheet tiang di HPDB (kolom PROVINSI/KOTA/KECAMATAN/KELURAHAN)
+            hp_cmb_ = sorted(combos([r for r, _ in data], ixk).items(), key=lambda kv: -kv[1])
+            # hanya bila wilayah mayoritas sheet homepass sendiri sesuai FINDIM (bila tidak, sheet lain tetap dicek ke FINDIM)
+            hp_admin_ = hp_cmb_[0][0][:3] if hp_cmb_ and hp_cmb_[0][1] >= 0.5 * len(data) and \
+                check_admin(att, *hp_cmb_[0][0])[0] == "OK" else None
             for sname, srows in getattr(self, "_sheets", []):
                 if sname == getattr(self, "_hp_sheet", None):
                     continue          # sheet homepass sudah dicek di atas
@@ -4747,6 +4817,17 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 ix = [nr.index(k) if k in nr else None for k in ("KELURAHAN", "KECAMATAN", "KOTA", "PROVINSI")]
                 for (kel, kec, city, prov), n in combos(srows[hi + 1:], ix).items():
                     if self._norm(kel) in ("KELURAHAN", "SUBDISTRICT"):
+                        continue
+                    # 3.10.0: bandingkan dulu dengan wilayah sheet homepass (sudah dicek ke FINDIM). Kolom yang tertukar
+                    # (KECAMATAN berisi nama kelurahan) dulu dicocokkan ke FINDIM dan menghasilkan wilayah jauh (review
+                    # Suka Karya 2026: sheet tiang RT 16 -> 'Kabupaten Kerinci, Air Hangat Barat').
+                    st_hp_, tx_hp_ = _kons.admin_vs_hp_sheet((kel, kec, city), hp_admin_) if hp_admin_ else ("", "")
+                    if st_hp_ == "SAMA":
+                        continue
+                    if st_hp_ == "TERTUKAR":
+                        other_bad.append((sname.strip(), n, "(%s)" % tx_hp_))
+                        rep.append("  Sheet %s, %d baris: %s / %s / %s / %s -> %s" % (
+                            sname.strip(), n, kel, kec, city, prov, tx_hp_))
                         continue
                     stt, best, diff, sug = check_admin(att, kel, kec, city, prov)
                     if stt != "OK":
@@ -5115,6 +5196,22 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         # cluster lain, BOUNDARY yang tumpang tindih dan ID cluster yang terpakai dua kali.
         cross_scene = None
         pic_group, bakp_shared = [], []
+        tssr_shared, sib_labels_ = [], []
+        hp_cover_sib = (0, [])
+        node_span_sib = (0, 0)
+        # ===== 3.10.0: BOUNDARY KMZ memotong dirinya sendiri (luas irisan & uji 'di dalam BOUNDARY' jadi tidak andal) =====
+        try:
+            for bx_, by_, bk_, bxs_ in _kons.boundary_problems(own_bnd or []):
+                txt_ = ("BOUNDARY KMZ%s memotong dirinya sendiri di %d titik (%s): bagian poligon terlipat sehingga luas, "
+                        "irisan dengan cluster lain dan uji 'HP di dalam BOUNDARY' tidak andal. Perbaiki poligon (titik "
+                        "sudut berurutan mengikuti batas, tanpa garis bersilang)." % (
+                            (" '%s'" % own_bnd_name) if own_bnd_name and bk_ == 0 else (" #%d" % (bk_ + 1) if bk_ else ""),
+                            len(bxs_), "; ".join("%.6f, %.6f" % (q_[1], q_[0]) for q_ in bxs_[:3]) +
+                            (" ..." if len(bxs_) > 3 else "")))
+                rep.append("  ! " + txt_)
+                qc.append((QgsPointXY(bx_, by_), "WARN_BOUNDARY_TIDAK_VALID", txt_, None, len(bxs_), 0))
+        except Exception as e:
+            _log.note(e)
         rep.append("")
         if opt.get("cross", True):
             feedback.setProgressText("Cross-cluster check")
@@ -5126,7 +5223,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     return find_hpdb(d_) if hpdb_candidates(d_) else None
                 helpers_ = {"find_hpdb": _sib_hpdb if kmz_only else find_hpdb, "find_kmz": find_kmz,
                             "read_xlsx": read_xlsx, "kode_wilayah": kode_wilayah, "cluster_label": cluster_label,
-                            "bakp_sha": bakp_sha}
+                            "bakp_sha": bakp_sha, "tssr_sha": tssr_sha}
                 own_bb = (min(p_.x() for _r, p_ in data), min(p_.y() for _r, p_ in data),
                           max(p_.x() for _r, p_ in data), max(p_.y() for _r, p_ in data))
                 sib_dirs = _lintas.sibling_dirs(
@@ -5160,14 +5257,34 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                          "bnd_name": own_bnd_name,
                          "poles": [(p_.x(), p_.y(), nm_) for p_, nm_ in zip(poles, names)],
                          "lines": [[(q_.x(), q_.y()) for q_ in ln_] for ln_ in (rlines or [])],
-                         "folder_ids": dict(kmz_sub), "bakp_sha": bakp_sha(outdir),
+                         "folder_ids": dict(kmz_sub), "bakp_sha": bakp_sha(outdir), "tssr_sha": tssr_sha(outdir),
+                         "pole_kinds": list(kinds),
                          "ids_hpdb": ids_h_, "ids_other": _lintas.ids_in(cluster_kmz, kmz_doc_, outdir) - ids_h_,
                          "hp": [{"x": p_.x(), "y": p_.y(), "hid": _hpname(k_), "row": meta[k_][0],
                                  "adr": _lintas.norm_street(r_[i_adr[0]] if i_adr[0] is not None and i_adr[0] < len(r_) else ""),
                                  "blk": _lintas.norm_block(r_[i_adr[2]] if i_adr[2] is not None and i_adr[2] < len(r_) else ""),
                                  "hn": _lbl(r_)}
                                 for k_, (r_, p_) in enumerate(data)]}
-                cres = _lintas.compare(own_c, sibs_, dup_near=dup_near, bnd_tol=bnd_tol,
+                # 3.11.0: funnel tiap cluster saudara dari data referensi (poligon funnel di sekitar, sama dengan cara memilih
+                # funnel cluster ini: funnel aktif/RFS EXT yang memuat HP terbanyak). Kosong bila data referensi tidak ada.
+                own_c["funnel"] = mine[1] if mine else ""
+                own_c["funnel_key"] = _base(mine[1]) if mine else ""
+                for s_ in sibs_:
+                    if not s_ or s_.get("far"):
+                        continue
+                    cnt_f = {}
+                    pts_f = s_.get("hp") or []
+                    for q_ in pts_f[::max(1, len(pts_f) // 150)]:
+                        for f_ in near:
+                            if f_["grp"].upper().startswith("RFS DONE"):
+                                continue
+                            bb_ = f_["bb"]
+                            if bb_[0] <= q_["x"] <= bb_[2] and bb_[1] <= q_["y"] <= bb_[3] and in_poly(q_["x"], q_["y"], f_["poly"]):
+                                cnt_f[f_["name"]] = cnt_f.get(f_["name"], 0) + 1
+                    fn_ = max(cnt_f, key=lambda k_: (cnt_f[k_], k_)) if cnt_f else ""
+                    s_["funnel"], s_["funnel_key"] = fn_, _base(fn_) if fn_ else ""
+                tol_1pic_ = bool(qcp("cross_1pic_overlap_ok", True))
+                cres = _lintas.compare(own_c, sibs_, dup_near=dup_near, bnd_tol=bnd_tol, tol_1pic=tol_1pic_,
                                        name_m=float(qcp("cross_name_match_m", 15.0)),
                                        label_m=float(qcp("cross_label_match_m", 25.0)),
                                        label_warn_m=float(qcp("label_review_m", 50.0)),
@@ -5181,6 +5298,183 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 pic_group = cres.get("pic") or []
                 bakp_shared = [s_["label"] for s_ in cres["used"]
                                if s_.get("bakp_sha") and s_["bakp_sha"] == own_c.get("bakp_sha")]
+                # 3.10.0: TSSR yang sama persis di cluster lain (juga yang jauh) = TSSR strand/wilayah induk
+                tssr_shared = sorted({os.path.basename(str(s_.get("dir") or "").rstrip("\\/")) for s_ in sibs_
+                                      if s_ and s_.get("tssr_sha") and s_["tssr_sha"] == own_c.get("tssr_sha")})
+                sib_labels_ = [s_.get("label") or "" for s_ in sibs_ if s_ and not s_.get("far")]
+                # ===== 3.11.0: HP > batas ke tiang cluster ini, tetapi terlayani tiang cluster saudara 1 PIC/berdampingan =====
+                # (revisi pembuat 5 Nov 2026) Dalam satu PIC / wilayah berdampingan drop boleh ditarik dari tiang wilayah
+                # sebelah: HP > 50 m ke tiang sendiri yang punya tiang cluster saudara (satu funnel/wilayah induk) <= 50 m
+                # bukan alasan reject. Jarak garis lurus, aturan sama dengan cek HP-tiang cluster sendiri.
+                pole_cover_ = bool(qcp("cross_1pic_pole_cover", True))
+                route_sup_ = bool(qcp("cross_1pic_route_support", True))
+                qc_before_1pic_ = list(qc)
+                std1_before_ = std.get(1)
+                ll_before_ = (list(long_list), long_n)
+                try:
+                    if pole_cover_ or route_sup_:
+                        cov_sib = [g_ for g_ in pic_group if g_.get("tolerated") and g_.get("poles")]
+                        if cov_sib:
+                            cover_n, cover_rows, still_ = 0, [], 0
+                            for i_q, it_ in enumerate(list(qc) if pole_cover_ else []):
+                                if it_[1] not in ("HP_JAUH_DARI_TIANG", "WARN_HP_JAUH_LEWAT_JALUR"):
+                                    continue
+                                px_, py_ = it_[0].x(), it_[0].y()
+                                best_ = None
+                                for g_ in cov_sib:
+                                    kd_ = g_.get("pole_kinds_sib") or []
+                                    onr_ = g_.get("pole_on_route") or []
+                                    for j_, (x_, y_, n_) in enumerate(g_["poles"]):
+                                        if j_ < len(onr_) and not onr_[j_]:
+                                            continue        # tiang saudara yang tidak dilewati jalur kabel tidak bisa melayani drop
+                                        d_ = _lintas.dist_m(px_, py_, x_, y_)
+                                        if best_ is None or d_ < best_[0]:
+                                            best_ = (d_, n_, g_["label"], kd_[j_] if j_ < len(kd_) else "", x_, y_)
+                                if best_ is None:
+                                    continue
+                                ket_ = it_[2]
+                                if it_[1] == "WARN_HP_JAUH_LEWAT_JALUR":
+                                    # akses lewat jalur tidak bisa dinilai ke tiang saudara (graf akses hanya jalur cluster ini):
+                                    # peringatan tetap, tiang saudara dicatat sebagai alternatif
+                                    if best_[0] <= hp_max:
+                                        qc[i_q] = (it_[0], it_[1], ket_ + "; alternatif: tiang %s cluster saudara %s %.1f m garis "
+                                                   "lurus (cek akses ke tiang itu)" % (best_[1] or "-", best_[2], best_[0])) \
+                                            + tuple(it_[3:])
+                                    continue
+                                if best_[0] <= hp_max:
+                                    cover_n += 1
+                                    rr_ = re.search(r"baris (\d+)", ket_)
+                                    if rr_:
+                                        cover_rows.append(int(rr_.group(1)))
+                                    jn_ = {"new": "tiang baru", "existing": "tiang eksisting"}.get(best_[3], "tiang")
+                                    qc[i_q] = (it_[0], "INFO_HP_TERCOVER_TIANG_SAUDARA",
+                                               "%s -> TERCOVER %s %s cluster %s %.1f m (<= %.0f m; 1 PIC/berdampingan, satu funnel/"
+                                               "wilayah induk): bukan alasan reject. Desain drop dari tiang itu (FAT/kabel cluster "
+                                               "%s, catat sebagai tiang bersama) atau pindahkan HP ke cluster %s%s." % (
+                                                   ket_, jn_, best_[1] or "-", best_[2], best_[0], hp_max, best_[2], best_[2],
+                                                   ""),
+                                               [it_[0], QgsPointXY(best_[4], best_[5])],
+                                               round(best_[0], 1), hp_max)
+                                elif it_[1] == "HP_JAUH_DARI_TIANG" and it_[4] is not None and best_[0] < it_[4]:
+                                    still_ += 1
+                                    qc[i_q] = (it_[0], it_[1], ket_ + "; tiang terdekat cluster saudara %s: %s %.1f m (juga > %.0f m)"
+                                               % (best_[2], best_[1] or "-", best_[0], hp_max)) + tuple(it_[3:])
+                            if cover_n:
+                                hp_cover_sib = (cover_n, sorted(cover_rows))
+                                rep.append("  HP > %.0f m ke tiang sendiri tetapi TERCOVER tiang cluster saudara 1 PIC: %d (baris %s) - "
+                                           "catatan, bukan alasan reject" % (hp_max, cover_n, _tambah.rows_compact(sorted(cover_rows))))
+                            # ===== 3.12.0: jalur cluster ini ditumpu tiang cluster saudara 1 PIC (satu funnel/wilayah induk) =====
+                            # Dasar: bentang = jarak dua TITIK TUMPU kabel berurutan ("Span Length: the horizontal distance between
+                            # two adjacent supporting points of a cable", USDA RUS Bulletin 1751F-630; Corning AEN 14 "between
+                            # consecutive poles"); tiang boleh dipakai bersama (UU 36/1999 ps. 34B sisipan UU Cipta Kerja; SE Kepala
+                            # OIKN 011/2023). Toleransi sama dengan tiang cluster sendiri: tiang <= POLE_ON_LINE_M dari garis jalur
+                            # menumpu kabel; simpul jalur <= snap_m dari tiang = titik tiang. Tiang saudara harus dilewati jalur
+                            # cluster saudara itu (<= 2 m), agar benar-benar bagian jaringan 1 PIC. Review Suka Karya 2026: bentang
+                            # KOTA RT 04 NP-08 - NP-06 240 m melewati 5 tiang RT 05 (celah terpanjang 53 m).
+                            sib_on = [(x_, y_, n_ or "-", g_["label"], (g_.get("pole_kinds_sib") or [""] * (j_ + 1))[j_]
+                                       if j_ < len(g_.get("pole_kinds_sib") or []) else "")
+                                      for g_ in cov_sib for j_, (x_, y_, n_) in enumerate(g_["poles"])
+                                      if j_ < len(g_.get("pole_on_route") or []) and g_["pole_on_route"][j_]]
+                            n_node_sib = n_span_sib = 0
+                            if sib_on and route_sup_:
+                                node_kinds_ = {"WARN_BELOKAN_TANPA_TIANG": "belokan", "INFO_BELOKAN_KECIL_TANPA_TIANG": "belokan kecil",
+                                               "UJUNG_JALUR_TANPA_TIANG": "ujung jalur", "WARN_SIMPANG_TANPA_TIANG": "percabangan"}
+                                for i_q, it_ in enumerate(list(qc)):
+                                    k_ = it_[1]
+                                    if k_ in node_kinds_:
+                                        px_, py_ = it_[0].x(), it_[0].y()
+                                        d_, t_ = min(((_lintas.dist_m(px_, py_, t[0], t[1]), t) for t in sib_on), key=lambda z: z[0])
+                                        if d_ <= snap_m:
+                                            n_node_sib += 1
+                                            qc[i_q] = (it_[0], "INFO_TITIK_JALUR_DI_TIANG_SAUDARA",
+                                                       "%s -> %s ini %.1f m dari tiang %s cluster %s (dilewati jalur cluster itu, "
+                                                       "<= snap %.0f m): ditumpu tiang saudara 1 PIC, bukan alasan reject. Pastikan "
+                                                       "tiang itu dipasang %s." % (
+                                                           it_[2], node_kinds_[k_], d_, t_[2], t_[3], snap_m,
+                                                           "tambat akhir (dead-end) + treklam" if k_ == "UJUNG_JALUR_TANPA_TIANG"
+                                                           else "treklam/tambat sudut sesuai sudut belok" if "belokan" in node_kinds_[k_]
+                                                           else "tambat di percabangan"),
+                                                       [it_[0], QgsPointXY(t_[0], t_[1])], round(d_, 1), snap_m)
+                                    elif k_ in ("RENTANG_NP_NP", "RENTANG_NP_EP", "WARN_RENTANG_REGULASI") and it_[3]:
+                                        line_ = list(it_[3])
+                                        cum_, acc_ = [0.0], 0.0
+                                        for a_, b_ in zip(line_, line_[1:]):
+                                            acc_ += _lintas.dist_m(a_.x(), a_.y(), b_.x(), b_.y())
+                                            cum_.append(acc_)
+                                        L0_ = acc_
+                                        if L0_ <= 0:
+                                            continue
+                                        cuts_, used_ = [], set()
+                                        for t in sib_on:
+                                            best_ = None
+                                            for si_, (a_, b_) in enumerate(zip(line_, line_[1:])):
+                                                seg_ = cum_[si_ + 1] - cum_[si_]
+                                                dd_ = _lintas._pt_seg_m(t[0], t[1], (a_.x(), a_.y()), (b_.x(), b_.y()))
+                                                if dd_ <= POLE_ON_LINE_M and (best_ is None or dd_ < best_[0]):
+                                                    da_ = _lintas.dist_m(a_.x(), a_.y(), t[0], t[1])
+                                                    best_ = (dd_, cum_[si_] + min(seg_, max(0.0, da_ * da_ - dd_ * dd_) ** 0.5))
+                                            if best_ and 1.0 < best_[1] < L0_ - 1.0:
+                                                cuts_.append(best_[1])
+                                                used_.add(t[3])
+                                        if not cuts_:
+                                            continue
+                                        pos_ = sorted([0.0, L0_] + cuts_)
+                                        Lmax_ = max(b_ - a_ for a_, b_ in zip(pos_, pos_[1:]))
+                                        pn_ = it_[2].split(":")[0]
+                                        jenis_ = "NP-EP" if k_ == "RENTANG_NP_EP" else ("NP-NP" if k_ == "RENTANG_NP_NP" else
+                                                                                        (it_[2].split("rentang ")[1].split(" ")[0]
+                                                                                         if "rentang " in it_[2] else "NP-NP"))
+                                        tail_ = ("%d tiang cluster saudara %s menumpu jalur ini (<= %.0f m dari garis); tanpa tiang "
+                                                 "saudara %.1f m" % (len(cuts_), ", ".join(sorted(used_)), POLE_ON_LINE_M, L0_))
+                                        n_span_sib += 1
+                                        if k_ != "WARN_RENTANG_REGULASI":
+                                            for e_ in list(long_list):
+                                                if e_[1] == pn_ and abs(e_[0] - round(L0_, 1)) < 1.0 + 0.02 * L0_:
+                                                    long_list.remove(e_)
+                                                    long_n -= 1
+                                                    break
+                                        if Lmax_ <= span_reg:
+                                            qc[i_q] = (it_[0], "INFO_RENTANG_DITUMPU_TIANG_SAUDARA",
+                                                       "%s: rentang terpanjang %.1f m <= %.0f m setelah %s - bukan alasan reject"
+                                                       % (pn_, Lmax_, span_reg, tail_), it_[3], round(Lmax_, 1), span_reg)
+                                        elif Lmax_ <= span_max:
+                                            qc[i_q] = (it_[0], "WARN_RENTANG_REGULASI",
+                                                       "%s: rentang %s %.1f m, di atas batas regulasi daerah %.0f m tetapi <= %.0f m "
+                                                       "Handbook (%s): perlu justifikasi/izin pemda" % (
+                                                           pn_, jenis_, Lmax_, span_reg, span_max, tail_), it_[3],
+                                                       round(Lmax_, 1), span_reg)
+                                        else:
+                                            long_list.append((round(Lmax_, 1), pn_, jenis_))
+                                            long_n += 1
+                                            qc[i_q] = (it_[0], k_ if k_ != "WARN_RENTANG_REGULASI" else "RENTANG_NP_NP",
+                                                       "%s: rentang %s %.1f m > %.0f m (sepanjang jalur; %s); sisipkan tiang di "
+                                                       "tengah%s" % (pn_, jenis_, Lmax_, span_max, tail_,
+                                                                     (" - selisih %.1f m masih di bawah akurasi GPS ponsel +-%.0f m: "
+                                                                      "ukur ulang di lapangan dulu" % (Lmax_ - span_max, hp_tol))
+                                                                     if Lmax_ - span_max < hp_tol else ""),
+                                                       it_[3], round(Lmax_, 1), span_max)
+                                if n_node_sib or n_span_sib:
+                                    rep.append("  Jalur ditumpu tiang cluster saudara 1 PIC: %d titik belok/ujung/simpang, %d rentang "
+                                               "dihitung ulang dengan tiang saudara" % (n_node_sib, n_span_sib))
+                            node_span_sib = (n_node_sib, n_span_sib)
+                            # standar 1 dihitung ulang dari HP yang masih > batas setelah tiang saudara diperhitungkan
+                            far_left = [it_ for it_ in qc if it_[1] == "HP_JAUH_DARI_TIANG"]
+                            if cover_n:
+                                std[1] = (not far_left, ("%d HP lebih dari %.0f m ke tiang (%d lain tercover tiang cluster saudara)"
+                                                         % (len(far_left), hp_max, cover_n)) if far_left else
+                                          "semua HP <= %.0f m ke tiang cluster ini atau tiang cluster saudara 1 PIC (%d HP lewat "
+                                          "tiang saudara)" % (hp_max, cover_n))
+                except Exception as e_1pic:
+                    # bagian 1 PIC gagal: kembalikan temuan & standar seperti sebelum bagian ini (cek inti tetap utuh)
+                    qc[:] = qc_before_1pic_
+                    if std1_before_ is not None:
+                        std[1] = std1_before_
+                    long_list[:] = ll_before_[0]
+                    long_n = ll_before_[1]
+                    hp_cover_sib, node_span_sib = (0, []), (0, 0)
+                    rep.append("  ! Cek tiang cluster saudara 1 PIC dilewati (galat: %s) - temuan per cluster tidak diubah"
+                               % str(e_1pic)[:120])
+                    _log.note(e_1pic)
                 rep.extend(cres["report"])
                 for f_ in cres["findings"]:
                     ln_ = [QgsPointXY(a_, b_) for a_, b_ in f_["line"]] if f_.get("line") else None
@@ -5587,6 +5881,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             ok2, t2 = std.get(2, (None, ""))
             std[2] = (False, (t2 + "; " if t2 else "") + "double tagging Design Lite: HP %d, tiang %d" % std_dt)
         # ===== 3.9.5: TSSR (Site Profile Survey Report) vs HPDB: ID cluster, jumlah HP, kelurahan =====
+        tssr_hp_ = None
         if not kmz_only:
             try:
                 ts_files = _tssr.find_tssr(outdir)
@@ -5605,11 +5900,60 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         rep.append("  %s: nama '%s', %s HP, ID %s" % (
                             t_["file"], t_["name"] or "-", t_["hp"] if t_["hp"] is not None else "-",
                             ", ".join(t_["ids_name"] or t_["ids_text"]) or "-"))
+                        tssr_hp_ = t_["hp"] if tssr_hp_ is None else tssr_hp_
                         for k_, txt_, v_, l_ in _tssr.compare(t_, cl_id, len(data), kel_):
+                            if k_ == "WARN_TSSR_HP_BEDA" and tssr_shared:
+                                # 3.10.0: TSSR identik dipakai beberapa cluster = TSSR strand; akar masalahnya TSSR belum
+                                # dirinci per cluster, bukan jumlah HP cluster ini (review Suka Karya 2026: 13 cluster
+                                # memakai satu TSSR 1.242 HP dan semuanya tertulis 'TSSR 1242 HP vs HPDB n HP')
+                                k_ = "WARN_TSSR_DIPAKAI_BERSAMA"
+                                txt_ = ("TSSR %s identik dengan TSSR %d cluster lain (%s): TSSR mencatat %s HP untuk wilayah "
+                                        "induk/strand, HPDB cluster ini %d HP. Minta TSSR per cluster atau lampiran rincian ID "
+                                        "& HP setiap cluster." % (
+                                            t_["file"], len(tssr_shared), ", ".join(tssr_shared[:4]) +
+                                            (" ..." if len(tssr_shared) > 4 else ""), t_["hp"], len(data)))
                             rep.append("  %s %s" % ("[i]  " if k_.startswith("INFO_") else "[CEK]", txt_))
                             qc.append((data[0][1], k_, txt_, None, v_, l_))
             except Exception as e:
                 rep.append("  ! Cek TSSR gagal: %s" % str(e)[:120])
+        # ===== 3.10.0: keseragaman CLUSTER_NAME di HPDB & jumlah HP di nama berkas =====
+        label_mix_n = 0
+        if not kmz_only:
+            try:
+                ci_ = _col("CLUSTER_NAME")
+                if ci_ is not None:
+                    ri_ = _col("NEIGHBORHOOD_NO_RT")
+                    sib_short_ = sorted({_remarks.short_label(x_) for x_ in sib_labels_ if x_})
+                    mix_ = _kons.label_mix([r_[ci_] if ci_ < len(r_) else "" for r_, _p in data],
+                                           [meta[k_][0] for k_ in range(len(data))],
+                                           [r_[ri_] if ri_ is not None and ri_ < len(r_) else "" for r_, _p in data],
+                                           cluster_label(outdir, hpdb), sib_short_)
+                    texts_ = _kons.label_mix_text(mix_)
+                    if texts_ or mix_["format_only"]:
+                        rep.append("")
+                        rep.append("KESERAGAMAN CLUSTER_NAME HPDB")
+                    for txt_, n_, rows_ in texts_:
+                        label_mix_n += n_
+                        rep.append("  [CEK] " + txt_)
+                        k0_ = next((k_ for k_ in range(len(data)) if meta[k_][0] == rows_[0]), 0)
+                        qc.append((data[k0_][1], "WARN_HPDB_CLUSTER_NAME_CAMPUR", txt_, None, n_, 0))
+                    for var_ in mix_["format_only"]:
+                        rep.append("  [i]   penulisan CLUSTER_NAME tidak seragam (isi sama): %s" % " / ".join(
+                            "'%s'" % v_ for v_ in var_))
+            except Exception as e:
+                rep.append("  ! Cek CLUSTER_NAME gagal: %s" % str(e)[:120])
+            try:
+                fl_hp_ = [("KMZ", cluster_kmz or "")]
+                fl_hp_ += [("TSSR", f_) for f_ in (_tssr.find_tssr(outdir) or [])[:2]]
+                fl_hp_ += [("BAKP", f_) for f_ in (_bakp.find_bakp(outdir) or [])[:2]]
+                mm_ = _kons.filename_hp_mismatch(fl_hp_, len(data))
+                if mm_:
+                    txt_ = ("jumlah HP di nama berkas tidak sesuai isi HPDB (%d HP): %s - perbarui nama berkas setelah revisi"
+                            % (len(data), "; ".join("%s '%s' = %d HP" % m_ for m_ in mm_)))
+                    rep.append("  [i]   " + txt_)
+                    qc.append((data[0][1], "INFO_NAMA_FILE_HP_BEDA", txt_, None, len(mm_), 0))
+            except Exception as e:
+                _log.note(e)
         # ===== 8. BAKP (izin warga) =====
         bk_mode = opt.get("bakp", 0)
         bres = None
@@ -5948,8 +6292,22 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 "word": os.path.join(inp, word_name) if word_name and not os.path.isabs(str(word_name)) else word_name,
                 "pic": [g_["label"] for g_ in pic_group], "dir": outdir,
                 "pic_info": [{"dir": g_.get("dir"), "label": g_["label"], "one_net": g_["one_net"],
-                              "signals": g_["signals"], "shared": g_.get("shared") or [], "n_hp": g_.get("n_hp")}
+                              "signals": g_["signals"], "shared": g_.get("shared") or [], "n_hp": g_.get("n_hp"),
+                              "overlap": g_.get("overlap"), "gap_m": g_.get("gap_m"), "route_m": g_.get("route_m", 0),
+                              "pole_kinds": g_.get("pole_kinds") or [], "same_bakp": g_.get("same_bakp", False),
+                              "same_tssr": g_.get("same_tssr", False)}
                              for g_ in pic_group],
+                # 3.10.0: bahan rekap grup & strand (wilayah induk): sidik dokumen, funnel, colo, HP TSSR, label HPDB
+                "bakp_sha": bakp_sha(outdir) if not kmz_only else "", "tssr_sha": tssr_sha(outdir) if not kmz_only else "",
+                "tssr_hp": tssr_hp_, "tssr_shared": list(tssr_shared),
+                "funnel": (locals().get("mine") or (None, "", ""))[1] or "",
+                "colo_info": ({"code": rec["code"], "d_entry": round(rec["d_entry"]), "spare": rec["spare"],
+                               "hp_total": rec["hp_total"]} if rec else None),
+                "label_mix": label_mix_n,
+                "hp_cover_sib": hp_cover_sib[0], "node_sib": node_span_sib[0], "span_sib": node_span_sib[1], "funnel_key": _base(mine[1]) if locals().get("mine") else "",
+                "commercial": (lambda c_: Counter(r_[c_].strip() for r_, _p in data if c_ < len(r_) and r_[c_].strip()
+                                                  not in ("", "-")).most_common(1)[0][0]
+                               if c_ is not None and data else "")(_col("CLUSTER_COMMERCIAL_NAME")) if not kmz_only else "",
                 "bakp": {True: "OK", False: "CEK", None: "--"}[b8[0]],
                 "qc": "%d+%di" % (n_cek, len(qc) - n_cek),
                 "colo": rec["code"] if rec else ("FDT baru" if std.get(7, (None,))[0] is False else "-")}

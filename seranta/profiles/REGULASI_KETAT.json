@@ -514,6 +514,30 @@
    "status": "NOT_APPROVED",
    "severity": "WARNING",
    "unit": "m"
+  },
+  "cross_1pic_overlap_ok": {
+   "v": true,
+   "dasar": "INTERNAL",
+   "sumber": "Revisi pembuat 5 Nov 2026 (kebijakan internal tim; tidak ditemukan standar publik): boundary wilayah RT/RW/lingkungan dalam 1 PIC desain / berdampingan boleh bertumpuk; yang tetap salah adalah boundary yang masuk funnel lain (LINTAS FUNNEL) dan rumah yang tercatat di dua HPDB. false = perilaku <= 3.10",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "ya/tidak"
+  },
+  "cross_1pic_pole_cover": {
+   "v": true,
+   "dasar": "INTERNAL",
+   "sumber": "Revisi pembuat 5 Nov 2026 (kebijakan internal): HP > batas jarak ke tiang cluster sendiri tidak langsung reject bila tiang cluster saudara 1 PIC/berdampingan (satu funnel/wilayah induk) <= batas yang sama (garis lurus) dan tiang itu <= 5 m dari jalur cluster itu (akurasi GPS ponsel 4,9 m, GPS.gov); batas 50 m tetap dari Handbook internal; tiang boleh dipakai bersama (UU 36/1999 ps. 34B sisipan UU Cipta Kerja). false = perilaku <= 3.10",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "ya/tidak"
+  },
+  "cross_1pic_route_support": {
+   "v": true,
+   "dasar": "STANDAR",
+   "sumber": "Bentang = jarak dua titik tumpu kabel berurutan (USDA RUS Bulletin 1751F-630 Definitions 'Span Length'; Corning AEN 14); tiang sudut/ujung bertreklam (USDA RUS 1751F-650 ps. 3.1-3.5); pemanfaatan bersama infrastruktur pasif (UU 36/1999 ps. 34B sisipan UU 11/2020 jo. UU 6/2023; SE Kepala OIKN 011/SE/2023). Tiang cluster saudara 1 PIC/satu funnel yang dilewati jalurnya dan <= 3 m dari garis jalur (= aturan tiang cluster sendiri) menumpu rentang; simpul jalur <= snap_m dari tiang itu = titik tiang. false = perilaku 3.11",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "ya/tidak"
   }
  }
 }

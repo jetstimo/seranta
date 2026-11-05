@@ -233,3 +233,94 @@ Permintaan tim QC (dokumen *improve QC QGIS*) dan kasus grup lapangan (HP > 50 m
   dibandingkan dengan jarak antarunit (median tetangga terdekat). Celah > 1,5 × jarak antarunit = deret bersambung (kemungkinan
   unit berbeda); selain itu deret saling tumpang (kemungkinan disurvei dua kali). Hanya keterangan; tingkat tetap WARNING.
 - **Peta dasar** QGIS (Esri World Imagery / OpenStreetMap) hanya latar pembuktian; tidak dipakai dalam perhitungan QC.
+
+## Tambahan 3.10.0 — strand, grup 1 PIC dan konsistensi (review strand Jambi Suka Karya, 13 cluster RT, November 2026)
+- **Strand / wilayah induk** (`grup.strands`): cluster dengan funnel cluster sama, file BAKP identik, file TSSR identik, atau
+  satu grup 1 PIC disatukan (union-find, transitif) menjadi satu strand. Strand bisa berisi beberapa sub-jaringan yang
+  terpisah jauh (Suka Karya: 10 + 3 cluster, terpisah +-300 m). Dokumen (BAKP/TSSR) dinilai di level strand, desain
+  (boundary, tiang, FDT) per sub-jaringan. Laporan `REKAP_STRAND_<nama>.txt/.csv` + remarks strand <= 255 karakter.
+  Strand tidak mengubah status cluster.
+- **TSSR strand**: TSSR yang identik (SHA-256) dengan TSSR cluster lain tidak lagi dibandingkan jumlah HP-nya dengan HPDB
+  cluster ini (dulu 13 cluster tertulis "TSSR 1242 HP vs HPDB n HP"); temuan WARN_TSSR_DIPAKAI_BERSAMA (catatan, bukan
+  penghalang, sama dengan WARN_TSSR_HP_BEDA). Rekap strand membandingkan HP TSSR dengan total HPDB strand.
+- **HP di irisan BOUNDARY**: satu sumber angka per pasangan. "n HP masuk boundary X" yang seluruhnya berada di irisan
+  dengan X digabung ke frasa "boundary tumpang tindih dgn X", memakai prioritas & sifat penghalang frasa HP di boundary.
+  Kedua cluster kini menyebut baris HP yang sama (dulu RT 03 "4 HP" karena ambang 10 m, RT 11 "8 HP"). Ambang 10 m tetap
+  menentukan ERROR per HP. Frasa irisan diurutkan dari luas terbesar dan punya tiga tingkat (rinci / ringkas / jumlah).
+- **Penyusunan remarks**: versi rinci sebuah alasan penghalang tidak dipakai bila menutup versi terpendek alasan penghalang
+  berikutnya. Diuji pada 5.200 kombinasi temuan nyata: status tidak pernah berubah; jenis temuan lain menghasilkan teks
+  identik dengan 3.9.5.
+- **Irisan vs bersinggungan (grup)**: irisan < 100 m2 tanpa HP (+-2 m x 50 m garis batas yang digambar tangan) dicatat
+  "bersinggungan", tidak dihitung sebagai pasangan tumpang tindih.
+- **Tiang ganda lintas cluster**: jenis tiang dibaca seperti cek span (EP/EXT/TE = eksisting, NP/T6/baru = baru). Tiang BARU
+  di dua KMZ = BOQ tiang baru ganda; tiang EKSISTING di kedua KMZ = catatan sewa/attachment ganda (bukan BOQ tiang baru).
+  Kode temuan & tingkat tidak berubah.
+- **Jalur berimpit simetris**: dihitung dua arah (A->B dan B->A), diambil yang terbesar, sehingga kedua cluster menyebut
+  angka yang sama.
+- **Rencana FDT grup** (`grup.fdt_plan`): colo setiap anggota satu jaringan dibandingkan; lebih dari satu rencana (FDT
+  existing berbeda dan/atau FDT baru) = TIDAK TERPADU; dua anggota ke FDT yang sama dicek terhadap kapasitas FDT. Sisa
+  kapasitas FDT grup < 5 % ditandai "cadangan tipis".
+- **CLUSTER_NAME campur** (WARN_HPDB_CLUSTER_NAME_CAMPUR, standar 3): nama dibandingkan setelah normalisasi penulisan
+  ('RT16' = 'RT 016' = 'RT 16'); cluster pemilik = nama dengan RT yang sama dengan nama folder, lalu terbanyak. Label minoritas
+  yang sama dengan cluster saudara disebut "kemungkinan HP pindahan". Variasi penulisan saja = info di laporan.
+- **BOUNDARY memotong diri** (WARN_BOUNDARY_TIDAK_VALID, standar 2): uji silang antarruas tidak bersebelahan (OGC Simple
+  Features: poligon sah tanpa sisi bersilang); titik potong dilaporkan.
+- **Nama berkas** (INFO_NAMA_FILE_HP_BEDA): jumlah HP di nama KMZ/TSSR/BAKP dibandingkan dengan isi HPDB (info, tidak masuk
+  remarks).
+- **Wilayah sheet lain** (standar 3, info): kombinasi kelurahan/kecamatan/kota sheet tiang dibandingkan dulu dengan sheet
+  homepass yang sudah sesuai FINDIM; isi kolom yang tertukar (KECAMATAN berisi nama kelurahan) dilaporkan "tertukar", tidak
+  lagi dicocokkan ke FINDIM (dulu menghasilkan wilayah jauh seperti 'Kabupaten Kerinci').
+
+## Tambahan 3.11.0 — 1 PIC / berdampingan sebagai satu wilayah (revisi pembuat, 5 November 2026)
+- **Boundary bertumpuk diterima**: dalam pasangan cluster 1 PIC / berdampingan (satu jaringan, BOUNDARY bersinggungan/
+  berdampingan <= 5 m, atau BAKP identik dalam 300 m) yang **satu funnel** (funnel cluster = funnel aktif/RFS EXT yang memuat
+  HP terbanyak, dari data referensi), irisan BOUNDARY (INFO_BOUNDARY_BERIRISAN_1PIC) dan HP di BOUNDARY saudara
+  (INFO_HP_DI_BOUNDARY_SAUDARA_1PIC) menjadi catatan, bukan alasan reject. Tanpa data referensi funnel, toleransi hanya
+  berlaku bila ada bukti satu wilayah induk (BAKP identik, TSSR identik, atau BOUNDARY induk sama).
+- **Lintas funnel tetap salah**: funnel kedua cluster diketahui dan berbeda -> HP_DI_BOUNDARY_CLUSTER_LAIN /
+  WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN tetap (ERROR/penghalang) dengan keterangan "LINTAS FUNNEL". Cek HP di funnel lain,
+  cluster lain digabung, RFS DONE/EXT tidak berubah.
+- **Tetap dikaji**: HP duplikat lintas cluster (rumah sama di dua HPDB), tiang ganda, BOUNDARY induk yang memuat sebagian
+  besar HP cluster lain (belum dipotong) dan BOUNDARY identik tetap seperti 3.10 - itu bukan "bertumpuk", melainkan satu rumah
+  di dua cluster atau boundary yang belum dibuat per cluster.
+- **HP > 50 m tercover tiang saudara** (INFO_HP_TERCOVER_TIANG_SAUDARA): HP yang garis lurusnya > batas (hp_pole_max_m) ke
+  semua tiang cluster sendiri, tetapi <= batas yang sama ke tiang cluster saudara yang ditoleransi (satu funnel/wilayah induk)
+  **yang dilewati jalur kabel cluster itu (<= 5 m dari ruas sejak 3.12.0; 3.11.0: 2 m)**, menjadi catatan dengan nama tiang, jenis tiang dan saran desain
+  (drop dari tiang bersama atau pindahkan HP). Tiang saudara yang tidak dilewati jalur tidak dihitung (review Suka Karya: 39
+  HP > 50 m; 27 tercover tiang ber-jalur, 12 tetap reject; tanpa syarat jalur 39 akan lolos semua). Standar 1 dihitung ulang.
+- **Akses lewat jalur** (WARN_HP_JAUH_LEWAT_JALUR) tetap peringatan, karena graf akses hanya memuat jalur cluster sendiri;
+  tiang saudara <= batas dicatat sebagai alternatif.
+- Saklar profil `cross_1pic_overlap_ok` dan `cross_1pic_pole_cover` (bawaan true). Bila false, hasil identik dengan 3.10.0
+  (diuji pada batch Suka Karya).
+
+## Tambahan 3.12.0 — jalur cluster ditumpu tiang cluster saudara 1 PIC (kajian folder REVIEW STRAND Suka Karya, 5 Nov 2026)
+Dasar (sumber dapat diperiksa):
+- **Bentang = jarak dua titik tumpu kabel berurutan.** USDA Rural Utilities Service, Bulletin 1751F-630 *Design of Aerial
+  Plant* (1996), Definitions: "Span Length: The horizontal distance between two adjacent supporting points of a cable";
+  Corning Cable Systems, Application Engineering Note AEN 14 *Sag and Tension - General* (rev. 5): "Span length - the
+  straight line-of-sight distance between consecutive poles". Tiang cluster saudara yang menumpu kabel memutus bentang.
+- **Tiang sudut & ujung bertreklam.** USDA RUS Bulletin 1751F-650 *Aerial Plant Guying and Anchoring* (1996) ps. 3.1-3.5
+  (guy untuk sudut 5-60 derajat, dua head guy >= 60 derajat; "deadend guy ... to hold the pole at the end of a line"). Standar
+  tidak mensyaratkan tiang milik cluster/penyelenggara yang sama.
+- **Pemanfaatan bersama tiang.** UU 36/1999 tentang Telekomunikasi ps. 34A-34B (sisipan UU 11/2020 Cipta Kerja jo. UU 6/2023):
+  pemilik infrastruktur pasif wajib membuka akses pemanfaatan bersama; SE Kepala Otorita IKN 011/SE/Kepala-Otorita IKN/X/2023
+  Lampiran I B.4: tiang "dimanfaatkan secara bersama".
+- **Batas bentang regulasi daerah 50 m**: contoh Peraturan Wali Kota Tangerang Selatan 47/2019 ps. 5J ("jarak antara tiang
+  penyangga fiber optik paling jauh 50 meter").
+- **Toleransi posisi**: GPS ponsel 4,9 m di langit terbuka (GPS.gov), 7-13 m di permukiman (Merry & Bettinger, PLOS ONE
+  14(7) e0219890, 2019). Data REVIEW STRAND: 296 dari 303 tiang (98 %) <= 5 m dari jalur KMZ-nya sendiri, hanya 68 % <= 2 m.
+
+Aturan (saklar profil `cross_1pic_route_support`, bawaan true; berlaku hanya untuk pasangan yang ditoleransi 3.11:
+1 PIC/berdampingan & satu funnel/wilayah induk):
+- Tiang cluster saudara dihitung bila <= 5 m (POLE_ROUTE_M) dari jalur cluster saudara itu (bagian jaringannya).
+- **Rentang**: tiang saudara <= 3 m (POLE_ON_LINE_M, sama dengan tiang cluster sendiri) dari garis rentang memecah rentang;
+  rentang terpanjang yang tersisa dinilai ulang dengan batas yang sama (<= 50 m INFO_RENTANG_DITUMPU_TIANG_SAUDARA,
+  50-60 m WARN_RENTANG_REGULASI, > 60 m RENTANG_* dengan nilai baru dan panjang tanpa tiang saudara di keterangan).
+- **Belokan / ujung jalur / percabangan tanpa tiang**: simpul <= snap_m (parameter snap yang sama untuk tiang cluster sendiri)
+  dari tiang saudara -> INFO_TITIK_JALUR_DI_TIANG_SAUDARA dengan pengingat treklam/tambat akhir di tiang itu.
+- Bila bagian 1 PIC gagal dihitung, semua temuan dikembalikan seperti sebelum bagian itu (cek inti tidak ikut gagal).
+Hasil REVIEW STRAND: KOTA RT 04 NP-08 - NP-06 240 m -> 53 m (5 tiang RT 05); RT 10 NP6-10 - NP6-12 547 m -> 154 m (6 tiang
+RT 07); 23 belokan/ujung jalur di tiang saudara; tidak ada rentang lain yang lolos, karena tiang saudara terdekat 3,2-5,8 m dari
+garis (di luar toleransi 3 m tiang sendiri).
+Saklar ketiga aturan 1 PIC false -> hasil identik dengan 3.10.0 (diuji pada batch Suka Karya).
+

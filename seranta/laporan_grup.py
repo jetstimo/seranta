@@ -529,7 +529,13 @@ def from_group(path, g, s, tool="Seranta", when="", ratio=4, hp_per_spl=32):
         ("Splitter 1x%d" % ratio, "%d (%d HP/splitter)" % (s["spl"], hp_per_spl)), ("FDT", s["fdt"]),
         ("Tiang di dua cluster", s["shared"])] + (
         [("BOUNDARY identik", "%d cluster" % s["bnd_same"])] if s.get("bnd_same") else []) + (
-        [("BAKP identik", "%d cluster" % s["bakp_same"])] if s.get("bakp_same") else []) + [("Dibuat", when)]
+        [("BAKP identik", "%d cluster" % s["bakp_same"])] if s.get("bakp_same") else []) + (
+        [("TSSR identik", "%d cluster" % s["tssr_same"])] if s.get("tssr_same") else []) + (
+        [("BOUNDARY tumpang tindih", "%d pasang, %d HP di irisan" % (s["overlap_pairs"], s["overlap_hp"]))]
+        if s.get("overlap_pairs") else []) + (
+        [("Rencana FDT grup", "tidak terpadu (%d rencana)" % s["plan"]["n_target"])]
+        if (s.get("plan") or {}).get("terpadu") is False else []) + (
+        [("Remarks grup", s["remarks"])] if s.get("remarks") else []) + [("Dibuat", when)]
     title = "%s: %s" % (kind_t, s["wilayah"] or " + ".join(s["ids"]))
     if len(title) > 160:
         title = "%s: %s + %d cluster lain" % (kind_t, " + ".join(s["ids"][:3]), len(s["ids"]) - 3)

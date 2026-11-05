@@ -1,5 +1,53 @@
 # Changelog
 
+## 3.12.0 – jalur ditumpu tiang cluster saudara 1 PIC, setiap aturan bersumber (kajian REVIEW STRAND Suka Karya, November 2026)
+
+- **Rentang lewat tiang saudara**: bentang = jarak titik tumpu berurutan (USDA RUS Bulletin 1751F-630 "Span Length";
+  Corning AEN 14). Tiang cluster saudara 1 PIC/satu funnel yang dilewati jalurnya (<= 5 m) dan <= 3 m dari garis rentang
+  (aturan tiang sendiri) memecah rentang; rentang terpanjang dinilai ulang. Suka Karya: KOTA RT 04 240 m -> 53 m; RT 10
+  547 m -> 154 m.
+- **Belokan/ujung/percabangan di tiang saudara** (<= snap_m) -> INFO_TITIK_JALUR_DI_TIANG_SAUDARA + pengingat treklam/tambat
+  (USDA RUS 1751F-650). Suka Karya: 23 titik.
+- Tiang saudara dihitung bila <= 5 m dari jalurnya (GPS.gov 4,9 m; data: 98 % tiang <= 5 m, 68 % <= 2 m). HP > 50 m:
+  39 HP tercover (3.11: 27 dengan syarat 2 m yang terlalu ketat).
+- Pengaman: bila bagian 1 PIC gagal, temuan dikembalikan dan cek inti tetap utuh (bug akar negatif ditemukan di RT 03).
+- Saklar profil baru `cross_1pic_route_support`; semua saklar 1 PIC false = identik 3.10.0.
+- Sumber setiap aturan 1 PIC dicantumkan di DASAR_ATURAN.md dan profil (kebijakan internal ditandai INTERNAL).
+
+## 3.11.0 – 1 PIC / berdampingan dinilai sebagai satu wilayah (revisi pembuat, 5 November 2026)
+
+- **Boundary bertumpuk diterima**: irisan BOUNDARY dan HP di BOUNDARY cluster saudara dalam 1 PIC / berdampingan yang satu
+  funnel (atau, tanpa data referensi, satu wilayah induk: BAKP/TSSR identik, BOUNDARY induk sama) menjadi catatan
+  (INFO_BOUNDARY_BERIRISAN_1PIC, INFO_HP_DI_BOUNDARY_SAUDARA_1PIC), bukan alasan reject.
+- **Lintas funnel tetap ERROR**: boundary/HP yang masuk funnel lain tetap penghalang, ditandai "LINTAS FUNNEL".
+- **HP > 50 m tercover tiang saudara** (INFO_HP_TERCOVER_TIANG_SAUDARA): HP > batas ke tiang sendiri tetapi <= batas ke
+  tiang cluster saudara yang dilewati jalur kabel -> catatan + saran desain; standar 1 dihitung ulang. Suka Karya: 39 HP
+  > 50 m, 27 tercover, 12 tetap reject. Peringatan akses lewat jalur tetap, dengan tiang saudara sebagai alternatif.
+- Rekap grup/strand memisahkan irisan diterima vs perlu diperbaiki, dan menghitung HP tercover tiang saudara.
+- Saklar profil `cross_1pic_overlap_ok`, `cross_1pic_pole_cover` (bawaan true); false = hasil identik 3.10.0.
+- Uji `tests/test_v311.py` (sama funnel, lintas funnel, tanpa data funnel, saklar mati, remarks, rekap grup).
+
+## 3.10.0 – analisis 1 PIC / cluster berdampingan lebih cerdas (review strand Jambi Suka Karya, 13 cluster RT, November 2026)
+
+Status review tidak bergeser: batch Suka Karya 3.9.5 vs 3.10.0 hanya berubah pada temuan yang dimaksud; 5.200 kombinasi
+temuan nyata memberi status yang sama, dan teks remarks identik untuk jenis temuan yang tidak diubah.
+
+- **Strand / wilayah induk** (`grup.strands`, `REKAP_STRAND_*.txt/.csv`): cluster dengan funnel sama, BAKP identik atau
+  TSSR identik disatukan di atas grup 1 PIC (Suka Karya: 13 cluster, 2 sub-jaringan). Isinya sub-jaringan, rekonsiliasi
+  HP TSSR/BAKP/HPDB (TSSR 1.242 HP vs HPDB 1.029 HP) dan remarks strand <= 255 karakter.
+- **TSSR strand**: TSSR identik di beberapa cluster -> WARN_TSSR_DIPAKAI_BERSAMA, menggantikan "TSSR 1242 HP vs HPDB n HP".
+- **Rekap grup**: irisan BOUNDARY per pasangan dengan baris HP di irisan; irisan < 100 m2 tanpa HP = bersinggungan;
+  tiang bersama baru (BOQ ganda) vs eksisting (dicatat dua kali); rencana FDT grup terpadu/tidak terpadu + kapasitas colo
+  bersama + sisa kapasitas; remarks grup <= 255 karakter; "file BAKP identik" per pasangan diringkas sekali.
+- **Remarks**: HP di boundary tetangga yang seluruhnya di irisan digabung ke frasa tumpang tindih (kedua cluster menyebut
+  baris yang sama); irisan urut luas terbesar dengan tiga tingkat; versi rinci tidak menggeser alasan reject berikutnya;
+  nama cluster seragam (bug "dgn cluster X" / "dgn X").
+- **Jalur berimpit simetris** (A->B = B->A).
+- **Cek baru**: WARN_HPDB_CLUSTER_NAME_CAMPUR (label cluster campur, HP pindahan), WARN_BOUNDARY_TIDAK_VALID (poligon
+  memotong diri), INFO_NAMA_FILE_HP_BEDA (jumlah HP di nama berkas), kolom wilayah sheet lain yang tertukar (tidak lagi
+  dicocokkan ke FINDIM wilayah jauh).
+- Modul baru `konsistensi.py` (murni Python); uji `tests/test_v310.py` (29 pemeriksaan).
+
 ## 3.9.5 – cek tambahan dari review Jambi, Tegal, Minahasa dan Cianjur (November 2026)
 
 Semua cek lama tetap sama (diuji ulang pada 7 set data: hasil 3.9.4 vs 3.9.5 hanya bertambah temuan baru).

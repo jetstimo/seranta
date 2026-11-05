@@ -32,9 +32,12 @@ PRIORITY = [
     "HP_DUPLIKAT_KOORDINAT", "HP_DUPLIKAT_ID", "HP_DUPLIKAT_LABEL", "HP_HPDB_TIDAK_ADA_DI_KMZ", "HP_KMZ_TIDAK_ADA_DI_HPDB",
     "HP_SUDAH_ADA_DI_DESIGN_LITE", "TIANG_BARU_SUDAH_ADA", "WARN_TIANG_GANDA_LINTAS_CLUSTER", "WARN_ID_CLUSTER_GANDA",
     "ADMIN_", "WARN_TIANG_DUPLIKAT_KMZ", "WARN_BELOKAN_TANPA_TIANG", "WARN_POLE_SHEET_BEDA_KMZ", "WARN_CLUSTER_NAME_KOSONG",
+    "WARN_HPDB_CLUSTER_NAME_CAMPUR", "WARN_BOUNDARY_TIDAK_VALID",
     "WARN_HP_KOORDINAT_BEDA_FOTO", "WARN_JALUR_LEWAT_AREA_TANPA_IZIN",
     "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
-    "WARN_TSSR_ID_BEDA", "WARN_TSSR_HP_BEDA", "WARN_HPDB_KARAKTER_TERSEMBUNYI", "INFO_BAKP_HASIL_SCAN",      # hanya catatan (bukan alasan reject, tidak mengubah status)
+    "WARN_TSSR_ID_BEDA", "WARN_TSSR_HP_BEDA", "WARN_TSSR_DIPAKAI_BERSAMA", "INFO_HP_TERCOVER_TIANG_SAUDARA", "INFO_HP_DI_BOUNDARY_SAUDARA_1PIC", "INFO_RENTANG_DITUMPU_TIANG_SAUDARA",
+    "INFO_TITIK_JALUR_DI_TIANG_SAUDARA",
+    "INFO_BOUNDARY_BERIRISAN_1PIC", "WARN_HPDB_KARAKTER_TERSEMBUNYI", "INFO_BAKP_HASIL_SCAN",      # hanya catatan (bukan alasan reject, tidak mengubah status)
 ]
 
 
@@ -104,12 +107,40 @@ def short_cluster(label):
     return short_label(label)
 
 
+def compress_names(names):
+    """['SUKA KARYA RT 07', 'SUKA KARYA RT 06', 'SUKA KARYA KOTA RT 04'] -> ['SUKA KARYA RT 07', 'RT 06', 'KOTA RT 04']:
+    kata depan yang sama dengan nama pertama dibuang (label RT/RW/LK tetap), untuk daftar ringkas di remarks."""
+    if not names:
+        return []
+    first = names[0].split()
+    out = [names[0]]
+    for nm in names[1:]:
+        w = nm.split()
+        k = 0
+        while k < min(len(w), len(first)) - 1 and w[k] == first[k]:
+            k += 1
+        while k > 0 and k < len(w) and re.match(r"^\d", w[k]):
+            k -= 1                                  # jangan sisakan angka saja: 'RT 06', bukan '06'
+        out.append(" ".join(w[k:]) or nm)
+    return out
+
+
 def _rows_of(ket, rowmap):
     """Nomor baris HPDB dari keterangan: 'baris 26' langsung, atau ID H00021 lewat rowmap."""
     rs = [int(x) for x in re.findall(r"baris (\d+)", ket or "")]
     if not rs and rowmap:
         rs = [rowmap[h] for h in re.findall(r"\bH\d{5,}\b", ket or "") if h in rowmap]
     return rs
+
+
+def parse_rows(txt):
+    """'2, 10, 11, 48-52 dst' -> {2, 10, 11, 48, 49, 50, 51, 52} (tanpa bagian setelah 'dst')."""
+    out = set()
+    for a_, b_ in re.findall(r"(\d+)(?:\s*-\s*(\d+))?", (txt or "").split("dst")[0]):
+        a_, b_ = int(a_), int(b_ or a_)
+        if b_ - a_ <= 5000:
+            out.update(range(a_, b_ + 1))
+    return out
 
 
 def _group_key(kind):
@@ -134,10 +165,22 @@ def phrases(findings, rowmap=None, findim_stale=False):
                  if f.get("val") is None or f.get("lim") is None or f["val"] - f["lim"] > MARGIN_M
                  for r in _rows_of(f["ket"], rowmap)}
 
-    def add(key, long_, short_=None, blocking=None):
+    def add(key, long_, short_=None, blocking=None, prio_key=None, tiny=None):
         sev = by[key][0]["sev"]
         blk = blocking if blocking is not None else (sev == "ERROR" or key in BLOCKING_WARN)
-        out.append((PRIORITY.index(key), blk, long_, short_ or long_))
+        out.append((PRIORITY.index(prio_key or key), blk, long_, short_ or long_) + ((tiny,) if tiny else ()))
+
+    # 3.10.0: irisan BOUNDARY per cluster tetangga (nama pendek -> baris HP cluster ini di irisan). 'n HP masuk boundary X'
+    # untuk HP yang SEMUANYA ada di irisan dengan X digabung ke frasa tumpang tindih X, supaya kedua cluster menyebut
+    # angka yang sama (review Suka Karya 2026: RT 03 '4 HP masuk boundary RT 11' sedangkan RT 11 menyebut 8 HP RT 03)
+    ov_rows = {}
+    for f in by.get("WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", []):
+        m = re.search(r"(?:dengan )?BOUNDARY cluster (?!ini )(.+?): luas irisan \+-(\d+) m2.*?ada (\d+) HP cluster ini"
+                      r"(?: \(baris ([^)]+)\))? dan (\d+) HP cluster .+?(?: \(baris ([^)]+)\))?\. ", f["ket"])
+        if m:
+            ov_rows[short_cluster(m.group(1))] = (parse_rows(m.group(4)) if m.group(4) and "dst" not in m.group(4)
+                                                  else None)
+    merged = {}
 
     for key in PRIORITY:
         L = by.get(key)
@@ -214,9 +257,14 @@ def phrases(findings, rowmap=None, findim_stale=False):
             for f in L:
                 m = re.search(r"BOUNDARY cluster (.+?) \(>", f["ket"])
                 grp.setdefault(short_cluster(m.group(1)) if m else "?", []).append(f)
-            add(key, "; ".join("%d HP masuk boundary %s (baris %s)" % (
-                len(v), nm, rows_compact([r for f in v for r in _rows_of(f["ket"], rowmap)], 3)) for nm, v in grp.items()),
-                "; ".join("%d HP masuk boundary %s" % (len(v), nm) for nm, v in grp.items()))
+            for nm in list(grp):
+                rr = {r for f in grp[nm] for r in _rows_of(f["ket"], None)}
+                if ov_rows.get(nm) and rr and rr <= ov_rows[nm]:
+                    merged[nm] = len(grp.pop(nm))        # disebut di frasa tumpang tindih nm (prioritas frasa ini)
+            if grp:
+                add(key, "; ".join("%d HP masuk boundary %s (baris %s)" % (
+                    len(v), nm, rows_compact([r for f in v for r in _rows_of(f["ket"], rowmap)], 3)) for nm, v in grp.items()),
+                    "; ".join("%d HP masuk boundary %s" % (len(v), nm) for nm, v in grp.items()))
         elif key == "HP_DUPLIKAT_LINTAS_CLUSTER":
             grp = {}
             for f in L:
@@ -226,23 +274,37 @@ def phrases(findings, rowmap=None, findim_stale=False):
                 len(v), nm, rows_compact([r for f in v for r in _rows_of(f["ket"].split(" juga ")[0], rowmap)], 3))
                 for nm, v in grp.items()), "; ".join("%d HP double dgn %s" % (len(v), nm) for nm, v in grp.items()))
         elif key == "WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN":
-            parts, sh = [], []
+            # 3.10.0: satu frasa untuk semua irisan, urut luas terbesar; tiga tingkat (rinci / ringkas / sangat ringkas)
+            # agar alasan lain (BAKP, span) tetap muat 255 karakter. Bila ada HP 'masuk boundary X' yang digabung ke sini,
+            # frasa ini memakai prioritas HP di boundary.
+            items = []
             for f in L:
-                m = re.search(r"BOUNDARY cluster (.+?): luas irisan \+-(\d+) m2.*?ada (\d+) HP cluster ini"
+                m = re.search(r"(?:dengan )?BOUNDARY cluster (?!ini )(.+?): luas irisan \+-(\d+) m2.*?ada (\d+) HP cluster ini"
                               r"(?: \(baris ([^)]+)\))? dan (\d+) HP cluster .+?(?: \(baris ([^)]+)\))?\. ", f["ket"])
                 if m:
-                    nm = short_cluster(m.group(1))
+                    items.append((-int(m.group(2)), short_cluster(m.group(1)), int(m.group(3)), int(m.group(5)),
+                                  m.group(4), m.group(6)))
+            if items:
+                items.sort()
+                longs, meds = [], []
+                for (neg, nm, n_o, n_s, r_o, r_s), cn in zip(items, compress_names([t[1] for t in items])):
                     det = []
-                    if m.group(6):
-                        det.append("HP %s baris %s masuk boundary ini" % (nm, m.group(6)))
-                    if m.group(4):
-                        det.append("HP baris %s masuk boundary %s" % (m.group(4), nm))
-                    parts.append("boundary tumpang tindih dgn %s (+-%s m2%s)" % (
-                        nm, num(int(m.group(2)), 0), (", " + ", ".join(det)) if det else
-                        ", HP di irisan %s/%s" % (m.group(3), m.group(5))))
-                    sh.append("boundary tumpang tindih dgn %s (+-%s m2)" % (nm, num(int(m.group(2)), 0)))
-            if parts:
-                add(key, "; ".join(parts), "; ".join(sh))
+                    if r_s:
+                        det.append("HP %s baris %s masuk boundary ini" % (nm, r_s))
+                    if r_o:
+                        det.append("HP baris %s masuk boundary %s" % (r_o, nm))
+                    longs.append("boundary tumpang tindih dgn %s (+-%s m2%s)" % (
+                        nm, num(-neg, 0), (", " + ", ".join(det)) if det else ", HP di irisan %d/%d" % (n_o, n_s)))
+                    meds.append("%s (+-%s m2%s)" % (cn, num(-neg, 0), (", %d HP di irisan" % (n_o + n_s)) if n_o + n_s
+                                                    else ""))
+                med = "boundary tumpang tindih dgn " + ", ".join(meds)
+                tot_a, tot_h = -sum(t[0] for t in items), sum(t[2] + t[3] for t in items)
+                tiny = ("boundary tumpang tindih dgn %d cluster (+-%s m2, %d HP di irisan)" % (len(items), num(tot_a, 0), tot_h)
+                        if len(items) > 1 else med)
+                if any(t[1] in merged for t in items):
+                    add(key, "; ".join(longs), med, blocking=True, prio_key="HP_DI_BOUNDARY_CLUSTER_LAIN", tiny=tiny)
+                else:
+                    add(key, "; ".join(longs), med, tiny=tiny)
         elif key == "BOUNDARY_MEMUAT_CLUSTER_LAIN":
             same = [f for f in L if "identik dengan BOUNDARY" in (f["ket"] or "")]
             if same:
@@ -266,11 +328,16 @@ def phrases(findings, rowmap=None, findim_stale=False):
                 m = re.search(r"^(\d+) tiang .*?KMZ cluster (.+?) \(", f["ket"])
                 if m:
                     tot += int(m.group(1))
-                    parts.append("%s tiang sama koordinat dgn %s (BOQ ganda)" % (m.group(1), short_cluster(m.group(2))))
+                    # 3.10.0: tiang eksisting di kedua cluster bukan BOQ tiang baru ganda (catatan sewa/attachment ganda)
+                    ex_only = "tiang EKSISTING di kedua cluster" in f["ket"] and "tiang BARU" not in f["ket"]
+                    parts.append("%s tiang sama koordinat dgn %s (%s)" % (
+                        m.group(1), short_cluster(m.group(2)), "tiang eksisting dicatat 2x" if ex_only else "BOQ ganda"))
             # versi pendek agar tetap masuk 255 karakter bila banyak temuan lain (review Jambi 2026: 17 tiang ganda RT 10
             # tidak tercantum karena frasa panjangnya tidak muat)
+            ex_all = bool(parts) and all("tiang eksisting dicatat 2x" in x for x in parts)
             add(key, "; ".join(parts) or "tiang dipakai cluster lain",
-                ("%d tiang ganda dgn %d cluster lain (BOQ)" % (tot, len(parts))) if parts else None)
+                ("%d tiang ganda dgn %d cluster lain (%s)" % (tot, len(parts), "eksisting" if ex_all else "BOQ"))
+                if parts else None)
         elif key.startswith("BAKP_"):
             for f in L:
                 t = f["ket"]
@@ -419,6 +486,20 @@ def phrases(findings, rowmap=None, findim_stale=False):
         elif key == "WARN_TSSR_HP_BEDA":
             m = re.search(r"TSSR mencatat (\d+) HP, HPDB (\d+) HP", L[0]["ket"] or "")
             add(key, "TSSR %s HP vs HPDB %s HP" % (m.group(1), m.group(2)) if m else "HP TSSR beda HPDB")
+        elif key == "WARN_TSSR_DIPAKAI_BERSAMA":
+            m = re.search(r"identik dengan TSSR (\d+) cluster lain.*?TSSR mencatat (\S+) HP", L[0]["ket"] or "")
+            add(key, "TSSR sama dgn %s cluster lain (%s HP strand), perlu TSSR per cluster" % (m.group(1), m.group(2))
+                if m else "TSSR strand, perlu TSSR per cluster", "TSSR strand, perlu TSSR per cluster")
+        elif key == "WARN_HPDB_CLUSTER_NAME_CAMPUR":
+            parts, sh = [], []
+            for f in L:
+                m = re.match(r"^(\d+) HP CLUSTER_NAME '([^']+)' \(baris ([^)]+)\)", f["ket"] or "")
+                if m:
+                    parts.append("%s HP CLUSTER_NAME '%s' (baris %s)" % (m.group(1), short_label(m.group(2)), m.group(3)))
+                    sh.append("%s HP CLUSTER_NAME '%s'" % (m.group(1), short_label(m.group(2))))
+            add(key, "; ".join(parts) or "CLUSTER_NAME HPDB campur", "; ".join(sh) or "CLUSTER_NAME HPDB campur")
+        elif key == "WARN_BOUNDARY_TIDAK_VALID":
+            add(key, "boundary KMZ memotong diri sendiri (perbaiki poligon)", "boundary KMZ tidak valid")
         elif key == "WARN_HP_KOORDINAT_BEDA_FOTO":
             dd = sorted(f.get("val") or 0 for f in L)
             jar = num(dd[0], 0) if num(dd[0], 0) == num(dd[-1], 0) else "%s-%s" % (num(dd[0], 0), num(dd[-1], 0))
@@ -430,6 +511,40 @@ def phrases(findings, rowmap=None, findim_stale=False):
             add(key, "karakter tersembunyi di %s baris HPDB%s" % (m.group(1) if m else n,
                                                                 (" (baris %s)" % rr.group(1)) if rr else ""),
                 "karakter tersembunyi di HPDB")
+        elif key in ("INFO_RENTANG_DITUMPU_TIANG_SAUDARA", "INFO_TITIK_JALUR_DI_TIANG_SAUDARA"):
+            if key == "INFO_RENTANG_DITUMPU_TIANG_SAUDARA":
+                notes.append("%d rentang ditumpu tiang cluster saudara (terpanjang %s m): bukan alasan reject, catat tiang bersama"
+                             % (n, num(max(f.get("val") or 0 for f in L))))
+            else:
+                notes.append("%d belokan/ujung jalur di tiang cluster saudara: pastikan treklam/tambat di tiang itu" % n)
+        elif key == "INFO_HP_TERCOVER_TIANG_SAUDARA":
+            # 3.11.0: catatan saja (bukan alasan reject): drop ditarik dari tiang cluster saudara 1 PIC/berdampingan
+            grp = {}
+            for f in L:
+                m = re.search(r"cluster (.+?) (\d+(?:\.\d+)?) m \(<=", f["ket"] or "")
+                grp.setdefault(short_cluster(m.group(1)) if m else "?", []).append(f)
+            for nm, v in grp.items():
+                notes.append("%d HP >%s m ke tiang sendiri tercover tiang %s (baris %s): desain drop dari tiang itu / tiang "
+                             "bersama, atau pindahkan HP" % (len(v), num(v[0]["lim"], 0) if v[0].get("lim") else "50", nm,
+                                                             rows_compact([r for f in v for r in _rows_of(f["ket"], rowmap)], 6)))
+        elif key in ("INFO_HP_DI_BOUNDARY_SAUDARA_1PIC", "INFO_BOUNDARY_BERIRISAN_1PIC"):
+            if key == "INFO_BOUNDARY_BERIRISAN_1PIC":
+                nms = []
+                for f in L:
+                    m = re.search(r"(?:dengan )?BOUNDARY cluster (?!ini )(.+?): luas irisan \+-(\d+) m2", f["ket"] or "")
+                    if m:
+                        nms.append("%s (+-%s m2)" % (short_cluster(m.group(1)), num(int(m.group(2)), 0)))
+                if nms:
+                    notes.append("boundary bertumpuk dgn %s - 1 PIC/berdampingan satu funnel: diterima, bukan alasan reject"
+                                 % ", ".join(nms))
+            else:
+                grp = {}
+                for f in L:
+                    m = re.search(r"di dalam BOUNDARY cluster (.+?) - 1 PIC", f["ket"] or "")
+                    grp.setdefault(short_cluster(m.group(1)) if m else "?", []).append(f)
+                for nm, v in grp.items():
+                    notes.append("%d HP di boundary %s (baris %s) - 1 PIC: diterima; pastikan rumah hanya di satu HPDB" % (
+                        len(v), nm, rows_compact([r for f in v for r in _rows_of(f["ket"], rowmap)], 6)))
         elif key == "INFO_BAKP_HASIL_SCAN":
             notes.append("BAKP hasil scan: baca manual Cluster ID/HP, RT/RW, kompensasi, centang verifikasi & ttd")
     out.sort(key=lambda t: t[0])
@@ -450,13 +565,21 @@ def build(findings, rowmap=None, findim_stale=False, max_len=MAX_LEN):
     ph.sort(key=lambda t: (not t[1], t[0]))
     used, dropped = [], []
     text = head.rstrip()
-    for _pr, _blk, long_, short_ in ph:
-        for cand in (long_, short_):
-            sep = " " if text.endswith(":") else "; "
-            if len(text) + len(sep) + len(cand) <= max_len:
-                text += sep + cand
-                used.append(cand)
-                break
+    for i, (_pr, _blk, long_, short_, *rest) in enumerate(ph):
+        cands = (long_, short_) + tuple(rest)
+        # 3.10.0: versi rinci tidak boleh menutup alasan reject berikutnya - sisakan ruang untuk versi terpendek alasan
+        # penghalang berikutnya bila versi lebih pendek frasa ini membuatnya muat (review Suka Karya 2026: rincian baris
+        # irisan menggeser 'gambar tempelan di BAKP' keluar dari 255 karakter)
+        nxt = next((min(len(c) for c in q[2:]) for q in ph[i + 1:] if q[1]), None) if _blk else None
+        sep = " " if text.endswith(":") else "; "
+        fit = [c for c in cands if len(text) + len(sep) + len(c) <= max_len]
+        if fit and nxt is not None:
+            room = [c for c in fit if len(text) + len(sep) + len(c) + 2 + nxt <= max_len]
+            fit = room or fit
+        if fit:
+            cand = fit[0]
+            text += sep + cand
+            used.append(cand)
         else:
             dropped.append(long_)
     if dropped:
