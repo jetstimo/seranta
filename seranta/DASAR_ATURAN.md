@@ -271,3 +271,25 @@ Permintaan tim QC (dokumen *improve QC QGIS*) dan kasus grup lapangan (HP > 50 m
   homepass yang sudah sesuai FINDIM; isi kolom yang tertukar (KECAMATAN berisi nama kelurahan) dilaporkan "tertukar", tidak
   lagi dicocokkan ke FINDIM (dulu menghasilkan wilayah jauh seperti 'Kabupaten Kerinci').
 
+## Tambahan 3.11.0 — 1 PIC / berdampingan sebagai satu wilayah (revisi pembuat, 5 November 2026)
+- **Boundary bertumpuk diterima**: dalam pasangan cluster 1 PIC / berdampingan (satu jaringan, BOUNDARY bersinggungan/
+  berdampingan <= 5 m, atau BAKP identik dalam 300 m) yang **satu funnel** (funnel cluster = funnel aktif/RFS EXT yang memuat
+  HP terbanyak, dari data referensi), irisan BOUNDARY (INFO_BOUNDARY_BERIRISAN_1PIC) dan HP di BOUNDARY saudara
+  (INFO_HP_DI_BOUNDARY_SAUDARA_1PIC) menjadi catatan, bukan alasan reject. Tanpa data referensi funnel, toleransi hanya
+  berlaku bila ada bukti satu wilayah induk (BAKP identik, TSSR identik, atau BOUNDARY induk sama).
+- **Lintas funnel tetap salah**: funnel kedua cluster diketahui dan berbeda -> HP_DI_BOUNDARY_CLUSTER_LAIN /
+  WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN tetap (ERROR/penghalang) dengan keterangan "LINTAS FUNNEL". Cek HP di funnel lain,
+  cluster lain digabung, RFS DONE/EXT tidak berubah.
+- **Tetap dikaji**: HP duplikat lintas cluster (rumah sama di dua HPDB), tiang ganda, BOUNDARY induk yang memuat sebagian
+  besar HP cluster lain (belum dipotong) dan BOUNDARY identik tetap seperti 3.10 - itu bukan "bertumpuk", melainkan satu rumah
+  di dua cluster atau boundary yang belum dibuat per cluster.
+- **HP > 50 m tercover tiang saudara** (INFO_HP_TERCOVER_TIANG_SAUDARA): HP yang garis lurusnya > batas (hp_pole_max_m) ke
+  semua tiang cluster sendiri, tetapi <= batas yang sama ke tiang cluster saudara yang ditoleransi (satu funnel/wilayah induk)
+  **yang dilewati jalur kabel cluster itu (<= 2 m dari ruas)**, menjadi catatan dengan nama tiang, jenis tiang dan saran desain
+  (drop dari tiang bersama atau pindahkan HP). Tiang saudara yang tidak dilewati jalur tidak dihitung (review Suka Karya: 39
+  HP > 50 m; 27 tercover tiang ber-jalur, 12 tetap reject; tanpa syarat jalur 39 akan lolos semua). Standar 1 dihitung ulang.
+- **Akses lewat jalur** (WARN_HP_JAUH_LEWAT_JALUR) tetap peringatan, karena graf akses hanya memuat jalur cluster sendiri;
+  tiang saudara <= batas dicatat sebagai alternatif.
+- Saklar profil `cross_1pic_overlap_ok` dan `cross_1pic_pole_cover` (bawaan true). Bila false, hasil identik dengan 3.10.0
+  (diuji pada batch Suka Karya).
+

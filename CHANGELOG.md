@@ -1,5 +1,18 @@
 # Changelog
 
+## 3.11.0 – 1 PIC / berdampingan dinilai sebagai satu wilayah (revisi pembuat, 5 November 2026)
+
+- **Boundary bertumpuk diterima**: irisan BOUNDARY dan HP di BOUNDARY cluster saudara dalam 1 PIC / berdampingan yang satu
+  funnel (atau, tanpa data referensi, satu wilayah induk: BAKP/TSSR identik, BOUNDARY induk sama) menjadi catatan
+  (INFO_BOUNDARY_BERIRISAN_1PIC, INFO_HP_DI_BOUNDARY_SAUDARA_1PIC), bukan alasan reject.
+- **Lintas funnel tetap ERROR**: boundary/HP yang masuk funnel lain tetap penghalang, ditandai "LINTAS FUNNEL".
+- **HP > 50 m tercover tiang saudara** (INFO_HP_TERCOVER_TIANG_SAUDARA): HP > batas ke tiang sendiri tetapi <= batas ke
+  tiang cluster saudara yang dilewati jalur kabel -> catatan + saran desain; standar 1 dihitung ulang. Suka Karya: 39 HP
+  > 50 m, 27 tercover, 12 tetap reject. Peringatan akses lewat jalur tetap, dengan tiang saudara sebagai alternatif.
+- Rekap grup/strand memisahkan irisan diterima vs perlu diperbaiki, dan menghitung HP tercover tiang saudara.
+- Saklar profil `cross_1pic_overlap_ok`, `cross_1pic_pole_cover` (bawaan true); false = hasil identik 3.10.0.
+- Uji `tests/test_v311.py` (sama funnel, lintas funnel, tanpa data funnel, saklar mati, remarks, rekap grup).
+
 ## 3.10.0 – analisis 1 PIC / cluster berdampingan lebih cerdas (review strand Jambi Suka Karya, 13 cluster RT, November 2026)
 
 Status review tidak bergeser: batch Suka Karya 3.9.5 vs 3.10.0 hanya berubah pada temuan yang dimaksud; 5.200 kombinasi

@@ -514,6 +514,22 @@
    "status": "NOT_APPROVED",
    "severity": "WARNING",
    "unit": "m"
+  },
+  "cross_1pic_overlap_ok": {
+   "v": true,
+   "dasar": "INTERNAL",
+   "sumber": "Revisi pembuat 5 Nov 2026: boundary wilayah (RT/RW/lingkungan) dalam 1 PIC desain / berdampingan boleh bertumpuk; yang tetap salah adalah boundary yang masuk funnel lain (LINTAS FUNNEL). false = perilaku <= 3.10 (setiap irisan alasan reject)",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "ya/tidak"
+  },
+  "cross_1pic_pole_cover": {
+   "v": true,
+   "dasar": "INTERNAL",
+   "sumber": "Revisi pembuat 5 Nov 2026: HP > batas jarak ke tiang cluster sendiri tidak langsung reject bila tiang cluster saudara 1 PIC/berdampingan (satu funnel/wilayah induk) <= batas yang sama (garis lurus); drop ditarik dari tiang bersama. false = perilaku <= 3.10",
+   "status": "APPROVED",
+   "severity": "INFO",
+   "unit": "ya/tidak"
   }
  }
 }

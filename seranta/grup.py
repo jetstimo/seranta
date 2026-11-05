@@ -220,7 +220,7 @@ def fdt_plan(mem, one_net, n_hp, fdt_cap=384):
 
 
 def _group_remarks(kind, status, wil, mem, n_hp, ov_pairs, ov_hp, pole_new, pole_ex, plan, n_mix, docs_short,
-                   max_len=255):
+                   max_len=255, cross_fun=0, n_cov=0, tol_pairs=0):
     """Remarks kesimpulan grup <= 255 karakter: alasan grup paling berat dulu (versi panjang lalu pendek)."""
     st = "REJECT" if status.startswith("REJECT") else ("BELUM LENGKAP" if status.startswith("BELUM") else
                                                      ("APPROVE DGN CATATAN" if "CATATAN" in status else "APPROVE"))
@@ -228,8 +228,9 @@ def _group_remarks(kind, status, wil, mem, n_hp, ov_pairs, ov_hp, pole_new, pole
     head = "%s %s %s(%d cluster, %s HP): " % (st, title, (wil + " ") if wil else "", len(mem), _num(n_hp))
     cand = []
     if ov_pairs:
-        cand.append(("%d pasang boundary tumpang tindih (%d HP di irisan)" % (ov_pairs, ov_hp),
-                     "%d boundary tumpang tindih" % ov_pairs))
+        cand.append(("%d pasang boundary tumpang tindih%s (%d HP di irisan)" % (
+            ov_pairs, (" (%d lintas funnel)" % cross_fun) if cross_fun else "", ov_hp),
+            "%d boundary tumpang tindih" % ov_pairs))
     if pole_new:
         cand.append(("%d tiang baru tercatat di 2 cluster (BOQ ganda)" % pole_new, "%d tiang BOQ ganda" % pole_new))
     if plan and plan.get("over"):
@@ -249,6 +250,10 @@ def _group_remarks(kind, status, wil, mem, n_hp, ov_pairs, ov_hp, pole_new, pole
     n_rej = sum(1 for r in mem if ((r.get("remarks") or {}).get("status") == "REJECT"))
     if n_rej:
         cand.append(("%d/%d anggota reject" % (n_rej, len(mem)), "%d anggota reject" % n_rej))
+    if tol_pairs:
+        cand.append(("%d boundary bertumpuk diterima (1 PIC)" % tol_pairs, "bertumpuk 1 PIC diterima"))
+    if n_cov:
+        cand.append(("%d HP tercover tiang saudara" % n_cov, "%d HP via tiang saudara" % n_cov))
     text = head.rstrip()
     for long_, short_ in cand:
         for c in (long_, short_):
@@ -305,6 +310,7 @@ def summarize(g, hp_per_spl=32, fdt_cap=384, ratio=4):
                 bnd_nm = m.group(1)
     # 3.10.0: irisan BOUNDARY, tiang bersama per jenis, label HPDB campur
     ov_pairs, ov_m2, ov_hp, ov_lines = 0, 0.0, 0, {}
+    tol_pairs, tol_m2, tol_hp, cross_fun = 0, 0.0, 0, 0
     pole_new = pole_ex = pole_unk = 0
     for a, b, p in g["links"]:
         o = p.get("overlap")
@@ -313,10 +319,18 @@ def summarize(g, hp_per_spl=32, fdt_cap=384, ratio=4):
             # irisan sangat kecil tanpa HP = garis batas bersinggungan (RT 01 x RT 02: +-2 m2), bukan tumpang tindih
             ov_lines[(a, b)] = "bersinggungan (irisan +-%s m2, tanpa HP)" % _num(o["m2"])
             o = None
-        if o and o.get("m2"):
+        if o and o.get("m2") and o.get("tolerated"):
+            # 3.11.0: bertumpuk dalam 1 PIC / satu funnel = diterima (dicatat, tidak dihitung sebagai masalah)
+            tol_pairs += 1
+            tol_m2 += float(o["m2"])
+            tol_hp += n_o_
+        elif o and o.get("m2"):
             ov_pairs += 1
             ov_m2 += float(o["m2"])
-            ov_hp += int(o.get("n_own") or 0) + int(o.get("n_sib") or 0)
+            ov_hp += n_o_
+            if o.get("beda_funnel"):
+                cross_fun += 1
+        if o and o.get("m2"):
             own_k = p.get("_from") or a
             oth_k = b if own_k == a else a
             parts = []
@@ -326,7 +340,10 @@ def summarize(g, hp_per_spl=32, fdt_cap=384, ratio=4):
             if o.get("n_sib"):
                 parts.append("%d HP %s%s" % (o["n_sib"], _sname(by[oth_k]),
                                              (" baris %s" % _rows(o.get("sib_rows"))) if o.get("sib_rows") else ""))
-            ov_lines[(a, b)] = "irisan +-%s m2%s" % (_num(o["m2"]), (": " + "; ".join(parts)) if parts else ", tanpa HP")
+            ov_lines[(a, b)] = "irisan +-%s m2%s%s" % (
+                _num(o["m2"]), (": " + "; ".join(parts)) if parts else ", tanpa HP",
+                " - DITERIMA (1 PIC, satu funnel/wilayah induk)" if o.get("tolerated") else
+                " - LINTAS FUNNEL (perlu diperbaiki)" if o.get("beda_funnel") else " - perlu diperbaiki")
         for ka, kb in p.get("pole_kinds") or []:
             if "new" in (ka, kb):
                 pole_new += 1
@@ -377,8 +394,18 @@ def summarize(g, hp_per_spl=32, fdt_cap=384, ratio=4):
         L.append("  Tiang dua cluster: %d tiang tercatat di dua KMZ%s -> tiang grup harus dihitung sekali" % (
             shared, (": " + "; ".join(jn)) if jn else ""))
     if ov_pairs:
-        L.append("  BOUNDARY irisan  : %d pasang tumpang tindih, total +-%s m2, %d HP berada di irisan (rincian di "
-                 "hubungan antar anggota)" % (ov_pairs, _num(ov_m2), ov_hp))
+        L.append("  BOUNDARY irisan  : %d pasang tumpang tindih PERLU DIPERBAIKI%s, total +-%s m2, %d HP berada di irisan "
+                 "(rincian di hubungan antar anggota)" % (ov_pairs, (" (%d lintas funnel)" % cross_fun) if cross_fun else "",
+                                                          _num(ov_m2), ov_hp))
+    if tol_pairs:
+        L.append("  BOUNDARY bertumpuk diterima: %d pasang (1 PIC/berdampingan, satu funnel/wilayah induk), +-%s m2, %d HP "
+                 "di irisan - bukan alasan reject; pastikan setiap rumah hanya di HPDB satu cluster" % (
+                     tol_pairs, _num(tol_m2), tol_hp))
+    n_cov = sum(int(r.get("hp_cover_sib") or 0) for r in mem)
+    if n_cov:
+        L.append("  HP tercover tiang saudara: %d HP > 50 m ke tiang sendiri dilayani tiang cluster saudara (%s) - desain drop "
+                 "dari tiang bersama, bukan alasan reject" % (n_cov, "; ".join(
+                     "%s %d HP" % (_sname(r), r["hp_cover_sib"]) for r in mem if r.get("hp_cover_sib"))))
     if n_mix:
         L.append("  Label HPDB       : %s" % "; ".join("%s %d HP berlabel cluster lain" % (_sname(r), r["label_mix"])
                                                      for r in mem if r.get("label_mix")))
@@ -405,7 +432,8 @@ def summarize(g, hp_per_spl=32, fdt_cap=384, ratio=4):
                                                   rm.get("text") or ("(belum dijalankan: %s)" % r.get("dir") if r.get("missing") else "")))
     dshort = "/".join(x for x, ok in (("BAKP", bool(bakp_k)), ("TSSR", bool(tssr_same))) if ok)
     rmk = _group_remarks(kind, status, wil, mem, n_hp, ov_pairs, ov_hp, pole_new, pole_ex, plan, n_mix,
-                         ("%s blm per cluster" % dshort) if dshort else "")
+                         ("%s blm per cluster" % dshort) if dshort else "", cross_fun=cross_fun, n_cov=n_cov,
+                         tol_pairs=tol_pairs)
     L.append("  Remarks grup (%d kar.): %s" % (len(rmk), rmk))
     L.append("  Saran review grup: tiang bersama dihitung sekali di satu cluster (di cluster lain jadi existing/bersama); "
              "satu rumah satu cluster; BOUNDARY tidak saling masuk; satu rencana FDT untuk %d HP; BAKP mencantumkan "
@@ -413,7 +441,8 @@ def summarize(g, hp_per_spl=32, fdt_cap=384, ratio=4):
     return {"ids": ids, "n_hp": n_hp, "spl": spl, "fdt": n_fdt, "shared": shared, "one_net": one_net,
             "status": status, "lines": L, "kind": kind, "wilayah": wil, "bnd_same": len(bnd_k), "bnd_name": bnd_nm,
             "bakp_same": len(bakp_k), "tssr_same": len(tssr_same), "remarks": rmk, "overlap_pairs": ov_pairs,
-            "overlap_hp": ov_hp, "plan": plan, "pole_new": pole_new, "pole_existing": pole_ex}
+            "overlap_hp": ov_hp, "plan": plan, "pole_new": pole_new, "pole_existing": pole_ex,
+            "tol_pairs": tol_pairs, "tol_hp": tol_hp, "cross_funnel": cross_fun, "hp_cover_sib": n_cov}
 
 
 # ----------------------------------------------------------------------------------------- STRAND (wilayah induk)

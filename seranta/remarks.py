@@ -35,7 +35,8 @@ PRIORITY = [
     "WARN_HPDB_CLUSTER_NAME_CAMPUR", "WARN_BOUNDARY_TIDAK_VALID",
     "WARN_HP_KOORDINAT_BEDA_FOTO", "WARN_JALUR_LEWAT_AREA_TANPA_IZIN",
     "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
-    "WARN_TSSR_ID_BEDA", "WARN_TSSR_HP_BEDA", "WARN_TSSR_DIPAKAI_BERSAMA", "WARN_HPDB_KARAKTER_TERSEMBUNYI", "INFO_BAKP_HASIL_SCAN",      # hanya catatan (bukan alasan reject, tidak mengubah status)
+    "WARN_TSSR_ID_BEDA", "WARN_TSSR_HP_BEDA", "WARN_TSSR_DIPAKAI_BERSAMA", "INFO_HP_TERCOVER_TIANG_SAUDARA", "INFO_HP_DI_BOUNDARY_SAUDARA_1PIC",
+    "INFO_BOUNDARY_BERIRISAN_1PIC", "WARN_HPDB_KARAKTER_TERSEMBUNYI", "INFO_BAKP_HASIL_SCAN",      # hanya catatan (bukan alasan reject, tidak mengubah status)
 ]
 
 
@@ -509,6 +510,34 @@ def phrases(findings, rowmap=None, findim_stale=False):
             add(key, "karakter tersembunyi di %s baris HPDB%s" % (m.group(1) if m else n,
                                                                 (" (baris %s)" % rr.group(1)) if rr else ""),
                 "karakter tersembunyi di HPDB")
+        elif key == "INFO_HP_TERCOVER_TIANG_SAUDARA":
+            # 3.11.0: catatan saja (bukan alasan reject): drop ditarik dari tiang cluster saudara 1 PIC/berdampingan
+            grp = {}
+            for f in L:
+                m = re.search(r"cluster (.+?) (\d+(?:\.\d+)?) m \(<=", f["ket"] or "")
+                grp.setdefault(short_cluster(m.group(1)) if m else "?", []).append(f)
+            for nm, v in grp.items():
+                notes.append("%d HP >%s m ke tiang sendiri tercover tiang %s (baris %s): desain drop dari tiang itu / tiang "
+                             "bersama, atau pindahkan HP" % (len(v), num(v[0]["lim"], 0) if v[0].get("lim") else "50", nm,
+                                                             rows_compact([r for f in v for r in _rows_of(f["ket"], rowmap)], 6)))
+        elif key in ("INFO_HP_DI_BOUNDARY_SAUDARA_1PIC", "INFO_BOUNDARY_BERIRISAN_1PIC"):
+            if key == "INFO_BOUNDARY_BERIRISAN_1PIC":
+                nms = []
+                for f in L:
+                    m = re.search(r"(?:dengan )?BOUNDARY cluster (?!ini )(.+?): luas irisan \+-(\d+) m2", f["ket"] or "")
+                    if m:
+                        nms.append("%s (+-%s m2)" % (short_cluster(m.group(1)), num(int(m.group(2)), 0)))
+                if nms:
+                    notes.append("boundary bertumpuk dgn %s - 1 PIC/berdampingan satu funnel: diterima, bukan alasan reject"
+                                 % ", ".join(nms))
+            else:
+                grp = {}
+                for f in L:
+                    m = re.search(r"di dalam BOUNDARY cluster (.+?) - 1 PIC", f["ket"] or "")
+                    grp.setdefault(short_cluster(m.group(1)) if m else "?", []).append(f)
+                for nm, v in grp.items():
+                    notes.append("%d HP di boundary %s (baris %s) - 1 PIC: diterima; pastikan rumah hanya di satu HPDB" % (
+                        len(v), nm, rows_compact([r for f in v for r in _rows_of(f["ket"], rowmap)], 6)))
         elif key == "INFO_BAKP_HASIL_SCAN":
             notes.append("BAKP hasil scan: baca manual Cluster ID/HP, RT/RW, kompensasi, centang verifikasi & ttd")
     out.sort(key=lambda t: t[0])

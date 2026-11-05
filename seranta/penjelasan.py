@@ -381,6 +381,16 @@ TOOL1_KIND = [
     ("WARN_BOUNDARY_TIDAK_VALID", "Poligon BOUNDARY di KMZ memotong dirinya sendiri (garis tepinya bersilang), sehingga luas, "
      "irisan dengan cluster lain dan uji 'HP di dalam BOUNDARY' tidak andal.",
      "Gambar ulang poligon dengan titik sudut berurutan mengikuti batas, tanpa garis bersilang."),
+    ("INFO_HP_DI_BOUNDARY_SAUDARA_1PIC", "Rumah berada di dalam BOUNDARY cluster saudara yang didesain satu PIC / berdampingan "
+     "dan satu funnel (atau satu wilayah induk). Boundary wilayah seperti ini boleh bertumpuk, jadi bukan alasan reject.",
+     "Pastikan rumah hanya tercatat di HPDB satu cluster; bila tiang terdekatnya milik cluster saudara, pertimbangkan "
+     "memindahkannya ke cluster itu."),
+    ("INFO_BOUNDARY_BERIRISAN_1PIC", "BOUNDARY cluster ini bertumpuk dengan BOUNDARY cluster saudara dalam 1 PIC / berdampingan "
+     "dan satu funnel (atau satu wilayah induk): diterima, bukan alasan reject. Yang tetap salah adalah boundary yang masuk "
+     "funnel lain.", "Tidak wajib dirapikan; cukup pastikan rumah di area bertumpuk hanya ada di satu HPDB."),
+    ("INFO_HP_TERCOVER_TIANG_SAUDARA", "Rumah lebih dari batas jarak ke tiang cluster ini, tetapi ada tiang cluster saudara "
+     "1 PIC / berdampingan (satu funnel) dalam batas jarak: drop bisa ditarik dari tiang itu, bukan alasan reject.",
+     "Rencanakan drop/FAT dari tiang cluster saudara (catat sebagai tiang bersama) atau pindahkan rumah ke cluster itu."),
     ("INFO_NAMA_FILE_HP_BEDA", "Jumlah HP yang tertulis di nama berkas (KMZ/TSSR/BAKP) tidak sama dengan isi HPDB, biasanya "
      "karena nama berkas tidak diperbarui setelah revisi.", "Perbarui nama berkas agar sesuai jumlah HP terakhir."),
     ("INFO_TSSR_WILAYAH_BEDA", "Alamat di TSSR tidak menyebut kelurahan yang tertulis di HPDB.",
