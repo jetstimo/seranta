@@ -359,6 +359,30 @@ TOOL1_STD = {
 
 # Tool 1 - arti jenis temuan (cocokkan dengan awalan kode, urutan penting)
 TOOL1_KIND = [
+    # --- 3.9.5 (review Jambi Argenta, Tegal Karangmangu, Minahasa Tataaran Satu, Cianjur Nyalindung November 2026) ---
+    ("HP_DI_AREA_TANPA_IZIN", "Rumah berada di dalam poligon yang ditandai vendor sebagai area tanpa izin / tanpa ruang "
+     "(mis. 'TIDAK DAPAT IZIN', 'NO SPACE') di folder BOUNDARY KMZ.",
+     "Keluarkan rumah itu dari HPDB dan KMZ, atau perbarui izin warga lalu hapus/ubah poligon larangannya."),
+    ("TIANG_DI_AREA_TANPA_IZIN", "Tiang berada di dalam area yang ditandai tanpa izin / tanpa ruang.",
+     "Pindahkan tiang keluar area itu, atau lengkapi izinnya."),
+    ("WARN_JALUR_LEWAT_AREA_TANPA_IZIN", "Jalur kabel melintas area yang ditandai tanpa izin / tanpa ruang.",
+     "Pastikan kabel boleh melintas (izin lintasan), atau geser jalur."),
+    ("WARN_TSSR_ID_BEDA", "File TSSR di folder cluster memuat ID cluster lain: kemungkinan TSSR milik cluster lain yang "
+     "ikut tersalin.", "Minta TSSR cluster ini dan cocokkan nama, ID, dan jumlah HP-nya."),
+    ("WARN_TSSR_HP_BEDA", "Jumlah homepass di TSSR berbeda dengan jumlah baris HPDB.",
+     "Samakan TSSR dengan HPDB (atau sebaliknya) sebelum review."),
+    ("INFO_TSSR_WILAYAH_BEDA", "Alamat di TSSR tidak menyebut kelurahan yang tertulis di HPDB.",
+     "Cek nama kelurahan/kecamatan di TSSR; nama lama (sebelum pemekaran) juga perlu diperbarui."),
+    ("WARN_HP_KOORDINAT_BEDA_FOTO", "Rumah tidak punya foto di dekat titiknya, tetapi ada foto evidence berlabel sama yang "
+     "letaknya jauh: titik HP kemungkinan salah tempat.", "Pindahkan titik HP (HPDB dan KMZ) ke lokasi rumah di foto, atau "
+     "perbaiki label fotonya."),
+    ("INFO_FOTO_EVIDENCE_TANPA_HP", "Ada foto evidence rumah yang tidak punya pasangan HP di HPDB (tidak ada HP di dekatnya "
+     "dan labelnya tidak ada di HPDB).", "Cek: rumah terlewat di HPDB, atau label foto salah."),
+    ("WARN_HPDB_KARAKTER_TERSEMBUNYI", "Sel HPDB memuat karakter tak terlihat (mis. zero-width space dari aplikasi survei). "
+     "Tidak tampak di Excel, tetapi membuat nomor rumah/alamat tidak cocok saat dicari atau dibandingkan.",
+     "Hapus karakter itu (ketik ulang isi sel, atau Find & Replace karakter tersembunyi)."),
+    ("INFO_BAKP_HASIL_SCAN", "BAKP berupa gambar hasil scan: tulisan tangan di dalamnya tidak dibaca otomatis oleh Seranta.",
+     "Baca manual: Cluster ID & homepass, RT/RW di stempel, nominal kompensasi, centang verifikasi, dan tanda tangan."),
     # --- 3.6.0 (review Jambi, Tegal, Minahasa Oktober 2026) ---
     ("BOUNDARY_MEMUAT_CLUSTER_LAIN", "BOUNDARY di KMZ cluster ini memuat sebagian besar rumah cluster lain: BOUNDARY masih "
      "BOUNDARY induk/gabungan dari sebelum cluster dipecah.",

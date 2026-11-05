@@ -593,6 +593,8 @@ def offline_check(doc):
     items, info = [], {}
     pages = doc["pages"]
     info["n_pages"] = doc["n_pages"]
+    # 3.9.5: semua halaman berupa gambar (scan/foto) -> isian tulisan tangan tidak terbaca otomatis
+    info["scan"] = bool(pages) and len(pages) >= (doc["n_pages"] or 0) > 0
     info["title_subject"] = doc.get("title_subject") or []
     groups = []                      # kelompok gambar tempelan yang identik secara visual
     # Lencana aplikasi pemindai (mis. 'Dipindai dengan CamScanner', 240x90 px) ikut tertanam sebagai gambar kecil di
@@ -748,6 +750,13 @@ def evaluate(off, exp):
         items.append(("INFO_BAKP_DIPAKAI_CLUSTER_LAIN", None,
                       "file BAKP yang sama dipakai juga oleh cluster %s - pastikan setiap cluster tercantum (ID & HP) di "
                       "BAKP / lampiran daftar cluster" % ", ".join(exp["shared_with"][:4])))
+    if off[0].get("scan"):
+        # review Jambi/Tegal/Minahasa/Cianjur (November 2026): kompensasi (Rp 3,5-35 juta), kotak verifikasi kosong, Cluster
+        # ID/homepass kosong di BAKP kelurahan, dan stempel RW lain hanya terlihat di gambar - tidak bisa dibaca otomatis
+        items.append(("INFO_BAKP_HASIL_SCAN", None,
+                      "BAKP hasil scan (%d halaman gambar): tulisan tangan TIDAK dibaca otomatis - baca manual Cluster ID & "
+                      "homepass, RT/RW di stempel, nominal kompensasi di catatan, centang 'Permit Approved'/'Kompensasi', "
+                      "dan tanda tangan vendor/Iforte/RT" % off[0].get("n_pages", 0)))
     n = off[0].get("n_pages", 0)
     if n and n < 2:
         items.append(("INFO_BAKP_HALAMAN_SEDIKIT", None, "BAKP hanya %d halaman; format standar 2-4 halaman" % n))

@@ -38,7 +38,7 @@ try:
 except ImportError:  # pragma: no cover
     import xml.etree.ElementTree as ET  # nosec B405
 
-RULE_VERSION = "2026.11-r12"
+RULE_VERSION = "2026.11-r13"
 
 HP_RX = re.compile(r"\b(hp|homepass|home ?pass|rumah)\b", re.IGNORECASE)
 # 'EVIDEN' (tanpa -CE) dipakai vendor di KMZ 1 PIC Tomohon 2026; dulu tidak dikenali sebagai folder foto
