@@ -21,7 +21,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.12.0"
+__version__ = "3.13.0"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -59,6 +59,7 @@ try:
     from . import laporan_grup as _lgrup
     from . import tssr as _tssr
     from . import konsistensi as _kons
+    from . import integritas_jalur as _integ
 except ImportError:          # dijalankan sebagai skrip tunggal
     import bakp as _bakp
     import qc_core as _qc
@@ -71,6 +72,7 @@ except ImportError:          # dijalankan sebagai skrip tunggal
     import laporan_grup as _lgrup
     import tssr as _tssr
     import konsistensi as _kons
+    import integritas_jalur as _integ
 
 # Kompatibilitas: QGIS 3.36+ (termasuk 3.40 Bratislava) memindahkan enum ke kelas Qgis.
 try:
@@ -1310,7 +1312,26 @@ def pole_height(folders, name):
 SPAN_REG = 50.0           # batas jarak antar tiang di regulasi daerah (Perwal Yogyakarta/Tangsel/Pekalongan, rancangan Permen Kominfo 2018)
 
 
-def trace_spans(seg_list):
+def remarks_data_kosong(msg):
+    """Remarks Reject untuk cluster yang KMZ-nya tidak memuat tiang atau garis jalur (alat berhenti sebelum QC).
+    Dasar: kabel udara harus ditumpu tiang (USDA RUS 1751F-630: bentang = jarak dua titik tumpu kabel); desain tanpa garis
+    jalur tidak bisa dinilai sama sekali. -> dict remarks atau None bila bukan kasus ini."""
+    if "No pole points" in (msg or ""):
+        t = ("Reject: KMZ tanpa titik tiang (folder POLE kosong/tidak terbaca): jalur kabel tidak ditumpu tiang, "
+             "lengkapi titik tiang NP/EP di KMZ lalu ajukan ulang")
+    elif "No pole or route folder" in (msg or ""):
+        fd = re.search(r"Folders found: ([^.]*)", msg or "")
+        t = ("Reject: KMZ tanpa folder tiang/jalur yang terbaca (folder ada: %s): titik tiang dan garis jalur kabel wajib "
+             "ada di KMZ, lengkapi lalu ajukan ulang" % ((fd.group(1).strip() or "-") if fd else "-"))[:255]
+    elif "No route lines" in (msg or ""):
+        t = ("Reject: KMZ tanpa garis jalur kabel (folder CABLE/ROUTE kosong/tidak terbaca): lengkapi garis jalur di KMZ "
+             "lalu ajukan ulang")
+    else:
+        return None
+    return {"status": "REJECT", "text": t, "length": len(t), "used": [t], "dropped": [], "notes": []}
+
+
+def trace_spans(seg_list, loops=False):
     """Gabungkan ruas jalur menjadi rentang tiang-ke-tiang: berjalan dari tiang melewati titik belok tanpa tiang
     (simpul 'X' berderajat 2) sampai bertemu tiang lain, percabangan, atau ujung. -> [(simpul_a, simpul_b, panjang, titik)]"""
     adj = {}
@@ -1343,6 +1364,15 @@ def trace_spans(seg_list):
             end, total, pts, seen = walk(st, idx, nxt)
             used |= seen
             out.append((st, end, total, pts))
+    if loops:
+        # 3.13.0: lingkar jalur yang SEMUA simpulnya titik belok tanpa tiang (tidak ada titik awal di atas) dulu tidak
+        # pernah ditelusuri sehingga tidak dinilai sama sekali
+        for idx0, (ka, kb, L, a, b) in enumerate(seg_list):
+            if idx0 in used:
+                continue
+            end, total, pts, seen = walk(ka, idx0, kb)
+            used |= seen
+            out.append((ka, end, total, pts))
     return out
 
 
@@ -1684,6 +1714,10 @@ QC_LABELS = [
      "GPS ponsel 4,9 m (GPS.gov): 2-5 m = mungkin rumah yang sama"),
     (r"^INFO_TIANG_BARU_DEKAT_EXISTING", 6, "Tiang baru dekat tiang Design Lite", "I6_NP_DEKAT_EXISTING",
      "buffer 10 m pencocokan tiang (Zhang dkk., Sensors 2018; OSM Conflation)"),
+    (r"^COLO_TITIK_MASUK_TIDAK_DI_JALUR", 7, "Tiang titik masuk colo tidak dilewati jalur", "S7_COLO_MASUK_JALUR",
+     "ITU-T G.984.1 ps. 1 & 3.6: semua bagian jaringan harus tersambung ke FDT/OLT"),
+    (r"^COLO_HP_TIDAK_TERJANGKAU_JALUR", 7, "HP di bagian jalur yang tidak tersambung ke titik masuk colo",
+     "S7_COLO_HP_TERJANGKAU", "ITU-T G.984.1 ps. 1 & 3.6: semua bagian jaringan harus tersambung ke FDT/OLT"),
     (r"^COLO_", 7, "Colo FDT", "S7_COLO", "Handbook colo <= 1 km (kebijakan internal)"),
     (r"^RENTANG_NP_NP", 9, "Rentang NP-NP > batas", "S9_RENTANG_NP_NP",
      "Handbook internal 60 m; regulasi daerah 50 m (Perwal Yogyakarta/Tangsel/Pekalongan)"),
@@ -1695,6 +1729,28 @@ QC_LABELS = [
     (r"^INFO_BAKP_", 8, "BAKP (info)", "I8_BAKP", "Standar Review Strand: izin warga"),
     (r"^TIANG_NGANGGUR", None, "Tiang NP tidak dilewati jalur", "T_TIANG_NGANGGUR",
      "Handbook: tidak boleh ada tiang nganggur bila NP (EP dan tiang feeder boleh)"),
+    # --- 3.13.0: integritas jalur (satu jaringan kabel utuh yang ditumpu tiang; review Suka Karya, Nov 2026) ---
+    (r"^JALUR_TANPA_TIANG", None, "Jalur kabel tanpa tiang (sepanjang jalur > batas bentang)", "T_JALUR_TANPA_TIANG",
+     "USDA RUS Bulletin 1751F-630: bentang = jarak dua titik tumpu kabel berurutan; Handbook 60 m; RUS 1751F-650: "
+     "tambat akhir di tiang ujung jalur"),
+    (r"^JALUR_TERPUTUS", None, "Jalur terputus dari jaringan jalur cluster", "T_JALUR_TERPUTUS",
+     "ITU-T G.984.1 ps. 1 & 3.6: ODN menghubungkan OLT ke semua ONT; bagian jalur terpisah tidak teraliri serat FDT cluster"),
+    (r"^WARN_JALUR_TERPUTUS", None, "Jalur terputus (cluster > 1 FDT: cek sumber serat tiap bagian)", "W_JALUR_TERPUTUS",
+     "ITU-T G.984.1 ps. 1 & 3.6: setiap bagian jaringan harus tersambung ke FDT/OLT"),
+    (r"^WARN_JALUR_BERSILANG_TANPA_TIANG", None, "Garis jalur bersilang/menempel tanpa simpul/tiang", "W_JALUR_BERSILANG",
+     "FOA Aerial Workmanship: splice closure dipasang di tiang, tidak ada kabel tergantung di bentang; Handbook: akses pole"),
+    (r"^WARN_JALUR_BERTUMPUK", None, "Garis jalur bertumpuk (panjang kabel BOQ terhitung ganda)", "W_JALUR_BERTUMPUK",
+     "satu jalur fisik satu garis: panjang kabel BOQ dari panjang garis jalur"),
+    (r"^INFO_JALUR_TERSAMBUNG_LEWAT_SAUDARA", None, "Bagian jalur tersambung lewat jalur cluster saudara 1 PIC",
+     "I_JALUR_LEWAT_SAUDARA", "1 PIC/berdampingan satu funnel = satu jaringan (revisi 5 Nov 2026); UU 36/1999 ps. 34B"),
+    (r"^WARN_TIANG_LUAR_BOUNDARY", 2, "Tiang NP di luar BOUNDARY cluster", "W2_TIANG_LUAR_BOUNDARY",
+     "Standar Review Strand: izin warga (BAKP) per wilayah cluster; toleransi GPS ponsel 10 m"),
+    (r"^INFO_TIANG_EP_LUAR_BOUNDARY", 2, "Tiang EP di luar BOUNDARY cluster (tiang eksisting)", "I2_EP_LUAR_BOUNDARY",
+     "tiang eksisting: tidak ada pemasangan tiang baru"),
+    (r"^WARN_JALUR_LUAR_BOUNDARY", 2, "Jalur kabel di luar BOUNDARY cluster", "W2_JALUR_LUAR_BOUNDARY",
+     "Standar Review Strand: izin warga per wilayah cluster; jalur feeder ke FDT boleh, sebutkan di desain"),
+    (r"^INFO_TIANG_JALUR_DI_BOUNDARY_SAUDARA", 2, "Tiang/jalur di BOUNDARY cluster saudara 1 PIC", "I2_TIANG_JALUR_SAUDARA",
+     "1 PIC/berdampingan satu funnel = satu wilayah (revisi 5 Nov 2026)"),
     (r"^UJUNG_JALUR_TANPA_TIANG", None, "Ujung jalur tanpa tiang", "T_UJUNG_JALUR_TANPA_TIANG",
      "Handbook: jalur harus ada akses pole; praktik operator: tambat akhir di tiang"),
     (r"^WARN_BELOKAN_TANPA_TIANG", None, "Belokan >= 30 derajat tanpa tiang", "W_BELOKAN_TANPA_TIANG",
@@ -1754,6 +1810,7 @@ QC_DASAR = [  # (pola kode, kategori dasar) untuk kolom dasar_src
     (r"^(HP_DUPLIKAT_LINTAS|HP_DI_BOUNDARY_CLUSTER)", "INTERNAL+RISET"),
     (r"^(INFO_HP_MUNGKIN|INFO_HP_TEPI|HP_LUAR_FUNNEL|INFO_TIANG_BARU_DEKAT)", "RISET"),
     (r"^HP_LUAR_BOUNDARY", "INTERNAL+RISET"), (r"BELOKAN", "STANDAR"),
+    (r"^(JALUR_TANPA_TIANG|JALUR_TERPUTUS|WARN_JALUR_TERPUTUS|WARN_JALUR_BERSILANG)", "STANDAR"),
     (r"^ADMIN_", "DATA RESMI"), (r".", "INTERNAL")]
 
 
@@ -3142,7 +3199,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 rekap.append((os.path.basename(cdir), "OK", res))
             except Exception as e:
                 feedback.reportError("FAILED %s: %s" % (os.path.basename(cdir), e), fatalError=False)
-                rekap.append((os.path.basename(cdir), "GAGAL: %s" % str(e)[:200], {}))
+                # 3.13.0: KMZ tanpa tiang / tanpa garis jalur = data desain tidak lengkap -> remarks Reject (dulu hanya
+                # 'GAGAL' tanpa remarks sehingga terlewat di rekap)
+                rm_f_ = remarks_data_kosong(str(e))
+                rekap.append((os.path.basename(cdir), "GAGAL: %s" % str(e)[:200],
+                              {"remarks": rm_f_, "label": os.path.basename(cdir), "gagal": True} if rm_f_ else {}))
         lines = ["REKAP BATCH INPUT AUTODESIGN - %s" % _dt.datetime.now().strftime("%d-%m-%Y %H:%M"),
                  "Folder induk: %s" % outdir, "",
                  "Temuan = perlu dicek + info (i). Detail di <KODE>_QC_TEMUAN.shp (QGIS) / .kmz (aplikasi peta KMZ) dan <KODE>_LAPORAN_INPUT.txt", "",
@@ -3181,7 +3242,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         except Exception as e:
             feedback.reportError("REMARKS_BATCH.csv not written: %s" % e, fatalError=False)
         try:
-            grp_lines = self._group_reports([r for _n, _s, r in rekap if r], outdir, o, feedback)
+            grp_lines = self._group_reports([r for _n, _s, r in rekap if r and not r.get("gagal")], outdir, o, feedback)
             if grp_lines:
                 lines.append("")
                 lines.extend(grp_lines)
@@ -3198,7 +3259,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             self._open_path = rk
         # satu HTML untuk seluruh batch: semua cluster + remarks tambahan + unduh Word semua cluster sekaligus
         try:
-            res_ = [r for _n, _s, r in rekap if r]
+            res_ = [r for _n, _s, r in rekap if r and not r.get("gagal")]
             if res_:
                 lk_, seen_l = [], set()
                 for g_ in _grup.groups(res_):
@@ -4171,9 +4232,14 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         def _kpt(k):
             return poles[k[1]] if k[0] == "P" else QgsPointXY(k[1], k[2])
         n_bend = n_end_free = n_junc = 0
+        route_int = bool(qcp("route_integrity", True))     # 3.13.0: integritas jalur (saklar profil)
         for k, nb in xadj.items():
             if k[0] != "X":
                 continue
+            if route_int:
+                # 3.13.0: tetangga BERBEDA. Garis rangkap yang berakhir di titik sudut garis lain bukan percabangan, dan
+                # ujung 'bolak-balik' (pergi lalu kembali ke titik yang sama) adalah ujung jalur, bukan belokan 180 derajat
+                nb = list(dict.fromkeys(nb))
             c = _kpt(k)
             qi_, d_ = nearest_idx(c)
             if len(nb) == 1:
@@ -4203,7 +4269,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         free_n = n_end_free + n_bend + n_junc
 
         # ----- Rentang tiang ke tiang SEPANJANG JALUR (melewati titik belok tanpa tiang) -----
-        spans = trace_spans(seg_list)
+        spans = trace_spans(seg_list, loops=route_int)
         # Tiang yang berdiri TEPAT di garis jalur (<= 3 m) tetapi tidak menjadi titik sudut garis: vendor menggambar
         # kabel lurus melewati tiang. desain otomatis memotong jalur di cutting point seperti ini, jadi rentangnya dipecah di
         # tiang tersebut (dan tiangnya tidak dianggap nganggur).
@@ -4284,6 +4350,185 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                        "gang/jalan kecil; crossing jalan raya pakai tiang 9 m (Permen PU 20/2010; Perwal Pekalongan 34/2025). "
                        "Tiang 6 m di luar daftar tinggi tiang 7/8/9 m pedoman infrastruktur bersama Kominfo: pastikan disetujui pemda"
                        % (n_low6, clear_road, attach_height(6.0, embed_frac)))
+
+        # ===== 3.13.0: INTEGRITAS JALUR - satu jaringan kabel utuh yang ditumpu tiang =====
+        # Rentang di atas hanya menilai bagian yang KEDUA ujungnya tiang. Bagian jalur yang berujung di titik tanpa tiang
+        # (ujung jalur, percabangan) atau tidak punya tiang sama sekali dulu tidak pernah diukur sepanjang jalurnya
+        # (review Suka Karya 2026: RT 18 ujung jalur 72 m garis lurus dari tiang = 280 m kabel sepanjang jalur), dan jalur
+        # yang terputus dari jaringan tidak terdeteksi. Dasar & batas: integritas_jalur.py, DASAR_ATURAN.md bagian 3.13.0.
+        integ_n = {"tanpa": 0, "putus": 0, "silang": 0, "tumpuk": 0, "tumpuk_m": 0.0}
+        integ_geo = {}          # nomor komponen terputus -> titik-titik jalurnya (dinilai ulang dengan jalur cluster saudara)
+        integ_comp_of = {}      # indeks tiang -> nomor komponen jalur (1 = terpanjang) untuk cek jangkauan colo
+        integ_sib_ok = set()    # nomor komponen yang tersambung lewat jalur cluster saudara 1 PIC
+        if route_int:
+            qc_before_int_, n_reg_before_ = list(qc), n_reg
+            try:
+                _kxi, _kyi = _geo.m_per_deg(_lat_c)
+
+                def _mi(q):
+                    return (q.x() * _kxi, q.y() * _kyi)
+
+                def _qi(xy):
+                    return QgsPointXY(xy[0] / _kxi, xy[1] / _kyi)
+                spans_m = [(ka, kb, L, [_mi(q) for q in pts]) for ka, kb, L, pts in spans]
+                deg_ = {k: len(set(v)) for k, v in xadj.items()}       # tetangga berbeda (lihat analisa simpul)
+                pk_ = {i_: kinds[i_] for i_ in range(len(poles))}
+
+                def _nm(k):
+                    if k is None:
+                        return "ujung jalur"
+                    if k[0] == "P":
+                        return names[k[1]] or "tiang"
+                    return "ujung jalur" if deg_.get(k, 0) == 1 else "percabangan"
+                # --- a. bagian jalur tanpa tiang, diukur sepanjang jalur ---
+                for pc_ in _integ.pieces(spans_m, deg_):
+                    for ev_ in _integ.evaluate_piece(pc_, spans_m, pk_):
+                        Lp_ = ev_["panjang"]
+                        line_ = [_qi(p_) for p_ in ev_["xy"]] or None
+                        mid_ = line_mid(line_) if line_ else _kpt(next(iter(pc_["leaves"] or pc_["junctions"])))
+                        if ev_["tipe"] == "tanpa_tiang":
+                            if Lp_ < 1.0:
+                                continue
+                            integ_n["tanpa"] += 1
+                            qc.append((mid_, "JALUR_TANPA_TIANG",
+                                       "Jalur tanpa tiang: %.1f m kabel tanpa satu pun tiang (%d ujung, %d percabangan; "
+                                       "tidak tersambung ke tiang mana pun). Kabel harus ditumpu tiang <= %.0f m: tambahkan "
+                                       "tiang di jalur ini atau hapus garis jalurnya" % (
+                                           Lp_, len(pc_["leaves"]), len(pc_["junctions"]), span_max),
+                                       line_, round(Lp_, 1), span_max))
+                        elif Lp_ > span_max:
+                            integ_n["tanpa"] += 1
+                            if ev_["tipe"] == "ujung":
+                                desc_ = ("%s - ujung jalur: %.1f m kabel sepanjang jalur dari tiang terakhir sampai ujung "
+                                         "jalur tanpa tiang (> %.0f m)" % (_nm(ev_["ujung_a"]), Lp_, span_max))
+                            else:
+                                desc_ = ("%s - %s: rentang %.1f m sepanjang jalur lewat percabangan tanpa tiang (> %.0f m)"
+                                         % (_nm(ev_["ujung_a"]), _nm(ev_["ujung_b"]), Lp_, span_max))
+                            qc.append((mid_, "JALUR_TANPA_TIANG",
+                                       "%s; sisipkan tiang tiap <= %.0f m%s" % (
+                                           desc_, span_max,
+                                           " dan tiang tambat akhir di ujung" if ev_["tipe"] == "ujung" else
+                                           " dan tiang di percabangan"), line_, round(Lp_, 1), span_max))
+                        elif ev_["tipe"] == "antartiang" and Lp_ > span_reg:
+                            n_reg += 1
+                            qc.append((mid_, "WARN_RENTANG_REGULASI",
+                                       "%s - %s: rentang %.1f m sepanjang jalur lewat percabangan tanpa tiang, di atas batas "
+                                       "regulasi daerah %.0f m tetapi <= %.0f m Handbook: perlu justifikasi/izin pemda" % (
+                                           _nm(ev_["ujung_a"]), _nm(ev_["ujung_b"]), Lp_, span_reg, span_max),
+                                       line_, round(Lp_, 1), span_reg))
+                        if ev_["tipe"] == "ujung":
+                            # ujung jalur: tambahkan panjang SEPANJANG JALUR ke keterangan temuan ujung jalur (nilai tetap)
+                            lf_ = _kpt(ev_["ujung_b"])
+                            for i_q, it_ in enumerate(qc):
+                                if it_[1] == "UJUNG_JALUR_TANPA_TIANG" and abs(it_[0].x() - lf_.x()) < 1e-9 \
+                                        and abs(it_[0].y() - lf_.y()) < 1e-9 and "sepanjang jalur" not in it_[2]:
+                                    qc[i_q] = (it_[0], it_[1], it_[2] + "; %.1f m sepanjang jalur dari tiang %s" % (
+                                        Lp_, _nm(ev_["ujung_a"]))) + tuple(it_[3:])
+                # --- b. jalur terputus dari jaringan cluster ---
+                comps_ = _integ.components(spans_m)
+                for ci0_, cp0_ in enumerate(comps_, 1):
+                    for k0_ in cp0_["poles"]:
+                        integ_comp_of.setdefault(k0_[1], ci0_)
+                if len(comps_) > 1:
+                    n_fdt_ = int(opt.get("prof", {}).get("fdt_cap") or 0)
+                    multi_ = bool(n_fdt_) and len(data) > n_fdt_
+                    for ci_, cp_ in enumerate(comps_[1:], 2):
+                        others_ = [c_ for c_ in comps_ if c_ is not cp_]
+                        gap_, at_ = min((_integ.comp_gap(spans_m, cp_, c_) for c_ in others_), key=lambda t: t[0])
+                        if gap_ <= snap_m:
+                            continue     # celah gambar <= snap: ujungnya sudah dinilai sebagai ujung jalur/percabangan
+                        if not cp_["poles"]:
+                            continue     # tanpa tiang sama sekali: sudah JALUR_TANPA_TIANG
+                        xy_ = [p_ for i_ in cp_["spans"] for p_ in spans_m[i_][3]]
+                        integ_geo[ci_] = xy_
+                        integ_n["putus"] += 1
+                        ln_best_ = max(cp_["spans"], key=lambda i_: spans_m[i_][2])
+                        qc.append((_qi(at_) if at_ else _qi(xy_[0]),
+                                   "WARN_JALUR_TERPUTUS" if multi_ else "JALUR_TERPUTUS",
+                                   "Jalur terputus #%d: %.1f m jalur (%d tiang) tidak tersambung ke jaringan jalur cluster ini "
+                                   "(celah terdekat %.1f m > snap %.0f m)%s. Sambungkan garis jalur di tiang, atau jelaskan "
+                                   "sumber serat bagian ini" % (
+                                       ci_, cp_["length"], len(cp_["poles"]), gap_, snap_m,
+                                       "; cluster > 1 FDT (%d HP > %d): pastikan tiap bagian jalur punya FDT" % (
+                                           len(data), n_fdt_) if multi_ else ""),
+                                   [_qi(p_) for p_ in spans_m[ln_best_][3]], round(gap_, 1), snap_m))
+                # --- c. garis jalur bersilang / menempel tanpa simpul ---
+                segs_m = [(ka, kb, _mi(a_), _mi(b_)) for ka, kb, _L, a_, b_ in seg_list]
+                pxy_ = [_mi(q) for q in poles]
+                leaf_ = {k for k, v in deg_.items() if k[0] == "X" and v == 1}
+                tjun_ = {}          # ujung jalur yang menempel di garis lain = percabangan tanpa simpul -> (jarak, sudut)
+                for x_ in _integ.crossings(segs_m):
+                    dpole_ = min((_m.hypot(x_["x"] - p_[0], x_["y"] - p_[1]) for p_ in pxy_), default=1e9)
+                    if dpole_ <= snap_m:
+                        continue          # bersilang di tiang (<= snap): kabel bertemu di tiang
+                    lk_ = [(dd_, k_) for dd_, k_ in x_["ujung"] if k_ in leaf_ and dd_ <= POLE_ON_LINE_M]
+                    if lk_:
+                        dd_, k_ = min(lk_)
+                        tjun_[k_] = (dd_, x_["sudut"], "melewati")
+                        continue
+                    integ_n["silang"] += 1
+                    c_ = _qi((x_["x"], x_["y"]))
+                    qi_, d_ = nearest_idx(c_)
+                    if x_["singgung"]:
+                        # titik sudut satu garis diletakkan tepat (<= 0,5 m) di garis lain = sambungan yang dimaksudkan
+                        # tetapi tidak disatukan di simpul: percabangan tanpa tiang
+                        qc.append((c_, "WARN_SIMPANG_TANPA_TIANG",
+                                   "Percabangan tanpa simpul: titik sudut garis jalur menempel di garis jalur lain (sudut %.0f "
+                                   "derajat) tanpa tiang (tiang terdekat %s %.1f m); pasang tiang di titik sambung dan "
+                                   "sambungkan garisnya di tiang" % (x_["sudut"], names[qi_] or "", d_), None, 3, 2))
+                        continue
+                    qc.append((c_, "WARN_JALUR_BERSILANG_TANPA_TIANG",
+                               "Garis jalur menyilang garis jalur lain tanpa simpul/tiang (sudut %.0f derajat, tiang terdekat %s "
+                               "%.1f m): bila percabangan, pasang tiang di titik ini dan sambungkan garisnya; bila dua kabel "
+                               "terpisah, pastikan keduanya ditumpu tiang" % (x_["sudut"], names[qi_] or "", d_),
+                               None, round(d_, 1), snap_m))
+                # ujung jalur <= 3 m dari garis jalur lain tanpa menyentuh (tidak disambung di simpul)
+                for k_, dd_ in _integ.leaf_near_lines(segs_m, leaf_, POLE_ON_LINE_M).items():
+                    if k_ not in tjun_:
+                        tjun_[k_] = (dd_, None, "berjarak")
+                for k_, (dd_, ang_, how_) in sorted(tjun_.items()):
+                    lf_ = _kpt(k_)
+                    qi_, d_ = nearest_idx(lf_)
+                    if d_ <= snap_m:
+                        continue
+                    integ_n["silang"] += 1
+                    txt_ = ("Percabangan tanpa simpul: ujung garis jalur %s %.1f m %s garis jalur lain (tidak disambung di "
+                            "simpul) tanpa tiang (tiang terdekat %s %.1f m); pasang tiang di titik sambung dan sambungkan "
+                            "garisnya di tiang" % ("melewati" if how_ == "melewati" else "berhenti", dd_,
+                                                   "dari titik potong dengan" if how_ == "melewati" else "dari",
+                                                   names[qi_] or "", d_))
+                    for i_q, it_ in enumerate(qc):
+                        if it_[1] == "UJUNG_JALUR_TANPA_TIANG" and abs(it_[0].x() - lf_.x()) < 1e-9 \
+                                and abs(it_[0].y() - lf_.y()) < 1e-9:
+                            qc[i_q] = (it_[0], "WARN_SIMPANG_TANPA_TIANG", txt_, None, 3, 2)
+                            break
+                    else:
+                        qc.append((lf_, "WARN_SIMPANG_TANPA_TIANG", txt_, None, 3, 2))
+                # --- d. garis jalur bertumpuk (digambar dua kali / bolak-balik di jalur yang sama) ---
+                tum_ = [o_ for o_ in _integ.merge_overlaps(_integ.overlaps(segs_m)) if o_["panjang"] >= hp_tol]
+                for o_ in tum_:
+                    integ_n["tumpuk"] += 1
+                    integ_n["tumpuk_m"] += o_["panjang"]
+                    ln_o_ = [_qi(p_) for p_ in o_["xy"]]
+                    qc.append((line_mid(ln_o_), "WARN_JALUR_BERTUMPUK",
+                               "Garis jalur bertumpuk %.1f m (digambar dua kali / bolak-balik di jalur yang sama): panjang "
+                               "kabel BOQ terhitung ganda. Satu jalur fisik = satu garis; bila memang dua kabel, sebutkan "
+                               "di desain" % o_["panjang"], ln_o_, round(o_["panjang"], 1), hp_tol))
+                rep.append("")
+                rep.append("INTEGRITAS JALUR (3.13.0: satu jaringan kabel utuh yang ditumpu tiang)")
+                rep.append("  Komponen jalur tersambung : %d%s" % (len(comps_), "" if len(comps_) == 1 else
+                                                                  " (%d terputus > snap %.0f m)" % (integ_n["putus"], snap_m)))
+                rep.append("  Bagian jalur tanpa tiang > %.0f m (sepanjang jalur, termasuk ujung/percabangan): %d"
+                           % (span_max, integ_n["tanpa"]))
+                rep.append("  Garis bersilang/menempel tanpa simpul/tiang: %d" % integ_n["silang"])
+                if integ_n["tumpuk"]:
+                    rep.append("  Garis bertumpuk: %d bentangan, %.0f m (panjang jalur tanpa tumpukan +-%.0f m)"
+                               % (integ_n["tumpuk"], integ_n["tumpuk_m"], total - integ_n["tumpuk_m"]))
+            except Exception as e_int:
+                qc[:] = qc_before_int_
+                n_reg = n_reg_before_
+                _log.note(e_int)
+                rep.append("  ! Cek integritas jalur dilewati (galat: %s)" % str(e_int)[:120])
 
         # Tiang nganggur: NP tidak boleh (tinjau/hapus); EP boleh (tiang pihak lain/cadangan rute) -> hanya info.
         # Koordinat (tikor) ditulis di keterangan agar tim lapangan langsung bisa menuju titiknya.
@@ -4923,6 +5168,55 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         else:
             out_own = []
             rep.append("  BOUNDARY di KMZ cluster      : tidak ditemukan (cek dilewati)")
+        # 3.13.0: tiang & jalur di luar BOUNDARY cluster ini. Izin warga (BAKP) dan survei berlaku untuk wilayah cluster;
+        # tiang baru di luar wilayah itu belum tentu tercakup izinnya. Toleransi sama dengan HP (bnd_tol, galat GPS ponsel +
+        # garis digambar tangan). Di BOUNDARY cluster saudara 1 PIC -> catatan (dinilai ulang di bagian 1 PIC).
+        if own_bnd and route_int:
+            try:
+                def _out_d(x_, y_):
+                    if any(in_poly(x_, y_, g_) for g_ in own_bnd):
+                        return 0.0
+                    return min(dist_to_poly_m(x_, y_, g_) for g_ in own_bnd)
+                n_tl_ = 0
+                for i_, p_ in enumerate(poles):
+                    d_ = _out_d(p_.x(), p_.y())
+                    if d_ <= bnd_tol:
+                        continue
+                    n_tl_ += 1
+                    ex_ = kinds[i_] == "existing"
+                    qc.append((p_, "INFO_TIANG_EP_LUAR_BOUNDARY" if ex_ else "WARN_TIANG_LUAR_BOUNDARY",
+                               "%s (%s) %.1f m di luar BOUNDARY cluster (> %.0f m)%s; tikor %.6f, %.6f" % (
+                                   names[i_] or "tiang", "EP" if ex_ else "NP", d_, bnd_tol,
+                                   ": tiang eksisting, cukup dicatat" if ex_ else
+                                   ": pastikan izin (BAKP) mencakup lokasi tiang ini atau masukkan ke boundary/cluster yang "
+                                   "benar", p_.y(), p_.x()), None, round(d_, 1), bnd_tol))
+                # jalur: sampel tiap +-2 m di setiap ruas; bentangan berurutan di luar boundary digabung
+                runs_, cur_ = [], None
+                for ka_, kb_, L_, a_, b_ in seg_list:
+                    n_s_ = max(1, int(L_ / 2.0))
+                    for j_ in range(n_s_):
+                        t_ = (j_ + 0.5) / n_s_
+                        x_, y_ = a_.x() + t_ * (b_.x() - a_.x()), a_.y() + t_ * (b_.y() - a_.y())
+                        if _out_d(x_, y_) > bnd_tol:
+                            if cur_ is None:
+                                cur_ = [0.0, []]
+                            cur_[0] += L_ / n_s_
+                            cur_[1].append(QgsPointXY(x_, y_))
+                        elif cur_ is not None:
+                            runs_.append(cur_)
+                            cur_ = None
+                if cur_ is not None:
+                    runs_.append(cur_)
+                runs_ = [r_ for r_ in runs_ if r_[0] >= bnd_tol and len(r_[1]) >= 2]
+                for L_r_, pts_r_ in runs_:
+                    qc.append((line_mid(pts_r_), "WARN_JALUR_LUAR_BOUNDARY",
+                               "Jalur kabel %.0f m di luar BOUNDARY cluster (> %.0f m dari garis): bila jalur feeder ke FDT/"
+                               "cluster lain, sebutkan di desain; bila jalur distribusi, perluas boundary atau pindahkan "
+                               "jalurnya" % (L_r_, bnd_tol), pts_r_, round(L_r_, 1), bnd_tol))
+                rep.append("  Tiang di luar BOUNDARY       : %d; jalur di luar BOUNDARY: %d bentangan, %.0f m (> %.0f m)"
+                           % (n_tl_, len(runs_), sum(r_[0] for r_ in runs_), bnd_tol))
+            except Exception as e_bt:
+                _log.note(e_bt)
         # 3.9.5: area tanpa izin / tanpa ruang yang digambar vendor di folder BOUNDARY (mis. 'TIDAK DAPAT IZIN', 'NO SPACE')
         hp_excl = []
         if excl_bnd:
@@ -5376,9 +5670,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                       for g_ in cov_sib for j_, (x_, y_, n_) in enumerate(g_["poles"])
                                       if j_ < len(g_.get("pole_on_route") or []) and g_["pole_on_route"][j_]]
                             n_node_sib = n_span_sib = 0
+                            _kxs_, _kys_ = _geo.m_per_deg(_lat_c)
                             if sib_on and route_sup_:
                                 node_kinds_ = {"WARN_BELOKAN_TANPA_TIANG": "belokan", "INFO_BELOKAN_KECIL_TANPA_TIANG": "belokan kecil",
-                                               "UJUNG_JALUR_TANPA_TIANG": "ujung jalur", "WARN_SIMPANG_TANPA_TIANG": "percabangan"}
+                                               "UJUNG_JALUR_TANPA_TIANG": "ujung jalur", "WARN_SIMPANG_TANPA_TIANG": "percabangan",
+                                               "WARN_JALUR_BERSILANG_TANPA_TIANG": "persilangan garis jalur"}
                                 for i_q, it_ in enumerate(list(qc)):
                                     k_ = it_[1]
                                     if k_ in node_kinds_:
@@ -5395,6 +5691,75 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                                            else "treklam/tambat sudut sesuai sudut belok" if "belokan" in node_kinds_[k_]
                                                            else "tambat di percabangan"),
                                                        [it_[0], QgsPointXY(t_[0], t_[1])], round(d_, 1), snap_m)
+                                    elif k_ == "JALUR_TANPA_TIANG" and it_[3]:
+                                        # 3.13.0: bagian jalur tanpa tiang cluster ini yang ditumpu tiang cluster saudara
+                                        xy_l_ = [(q_.x() * _kxs_, q_.y() * _kys_) for q_ in it_[3]]
+                                        sup_ = [(t[0] * _kxs_, t[1] * _kys_) for t in sib_on]
+                                        Lmax_, n_cut_, cuts_j_ = _integ.cut_gaps(xy_l_, sup_, POLE_ON_LINE_M)
+                                        # ujung jalur yang berada <= snap_m dari tiang saudara = titik tiang (aturan simpul 3.12)
+                                        end_sib_ = None
+                                        if "ujung jalur:" in it_[2]:
+                                            pe_ = it_[3][-1]
+                                            de_, te_ = min(((_lintas.dist_m(pe_.x(), pe_.y(), t[0], t[1]), t) for t in sib_on),
+                                                           key=lambda z: z[0])
+                                            if de_ <= snap_m:
+                                                end_sib_ = (de_, te_)
+                                        if not n_cut_ and not end_sib_:
+                                            continue
+                                        pos_j_ = sorted([0.0, _integ._plen(xy_l_)] + list(cuts_j_))
+                                        over_ = sorted((b_ - a_ for a_, b_ in zip(pos_j_, pos_j_[1:]) if b_ - a_ > span_max),
+                                                       reverse=True)
+                                        used_ = sorted({t[3] for t in sib_on if min(
+                                            (_lintas._pt_seg_m(t[0], t[1], (a_.x(), a_.y()), (b_.x(), b_.y()))
+                                             for a_, b_ in zip(it_[3], it_[3][1:])), default=1e9) <= POLE_ON_LINE_M})
+                                        n_span_sib += 1
+                                        tail_ = ("%d tiang cluster saudara %s menumpu jalur ini (<= %.0f m dari garis); tanpa "
+                                                 "tiang saudara %.1f m" % (n_cut_, ", ".join(used_), POLE_ON_LINE_M,
+                                                                          it_[4] or 0))
+                                        if end_sib_:
+                                            tail_ += ("; ujung jalur %.1f m dari tiang %s cluster %s (<= snap %.0f m) = ujung di "
+                                                      "tiang saudara" % (end_sib_[0], end_sib_[1][2], end_sib_[1][3], snap_m))
+                                        if len(over_) > 1:
+                                            tail_ += "; %d bagian > %.0f m (%s m)" % (
+                                                len(over_), span_max, ", ".join("%.1f" % v_ for v_ in over_))
+                                        pn_ = it_[2].split(":")[0]
+                                        if Lmax_ <= span_reg:
+                                            qc[i_q] = (it_[0], "INFO_RENTANG_DITUMPU_TIANG_SAUDARA",
+                                                       "%s: bagian tanpa tiang terpanjang %.1f m <= %.0f m setelah %s - bukan "
+                                                       "alasan reject" % (pn_, Lmax_, span_reg, tail_), it_[3],
+                                                       round(Lmax_, 1), span_reg)
+                                        elif Lmax_ <= span_max:
+                                            qc[i_q] = (it_[0], "WARN_RENTANG_REGULASI",
+                                                       "%s: bagian tanpa tiang terpanjang %.1f m, di atas batas regulasi daerah "
+                                                       "%.0f m tetapi <= %.0f m Handbook (%s): perlu justifikasi/izin pemda" % (
+                                                           pn_, Lmax_, span_reg, span_max, tail_), it_[3], round(Lmax_, 1),
+                                                       span_reg)
+                                        else:
+                                            qc[i_q] = (it_[0], k_, "%s; terpanjang tanpa tumpuan %.1f m > %.0f m setelah %s"
+                                                       % (it_[2], Lmax_, span_max, tail_), it_[3], round(Lmax_, 1),
+                                                       span_max)
+                                    elif k_ == "JALUR_TERPUTUS" and integ_geo:
+                                        # 3.13.0: bagian jalur yang tersambung ke jalur cluster saudara 1 PIC (satu jaringan)
+                                        mm_ = re.search(r"#(\d+)", it_[2])
+                                        xy_c_ = integ_geo.get(int(mm_.group(1))) if mm_ else None
+                                        if not xy_c_:
+                                            continue
+                                        hit_ = None
+                                        for g_ in cov_sib:
+                                            for ln_s_ in (g_.get("lines") or []):
+                                                for a_, b_ in zip(ln_s_, ln_s_[1:]):
+                                                    for p_ in xy_c_:
+                                                        dd_ = _lintas._pt_seg_m(p_[0] / _kxs_, p_[1] / _kys_, a_, b_)
+                                                        if dd_ <= snap_m and (hit_ is None or dd_ < hit_[0]):
+                                                            hit_ = (dd_, g_["label"])
+                                        if hit_:
+                                            n_node_sib += 1
+                                            integ_sib_ok.add(int(mm_.group(1)))
+                                            qc[i_q] = (it_[0], "INFO_JALUR_TERSAMBUNG_LEWAT_SAUDARA",
+                                                       "%s -> tersambung ke jalur cluster saudara %s (%.1f m <= snap %.0f m): "
+                                                       "satu jaringan 1 PIC, bukan alasan reject. Pastikan sambungan kabelnya "
+                                                       "di tiang." % (it_[2].split(". Sambungkan")[0], hit_[1], hit_[0], snap_m),
+                                                       it_[3], round(hit_[0], 1), snap_m)
                                     elif k_ in ("RENTANG_NP_NP", "RENTANG_NP_EP", "WARN_RENTANG_REGULASI") and it_[3]:
                                         line_ = list(it_[3])
                                         cum_, acc_ = [0.0], 0.0
@@ -5426,6 +5791,14 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                                                                          if "rentang " in it_[2] else "NP-NP"))
                                         tail_ = ("%d tiang cluster saudara %s menumpu jalur ini (<= %.0f m dari garis); tanpa tiang "
                                                  "saudara %.1f m" % (len(cuts_), ", ".join(sorted(used_)), POLE_ON_LINE_M, L0_))
+                                        if route_int:
+                                            # 3.13.0: semua bagian > batas disebut (dulu hanya yang terpanjang; review Suka
+                                            # Karya RT 16: bagian 65,6 m di rentang yang sama tidak terlihat)
+                                            over_ = sorted((b_ - a_ for a_, b_ in zip(pos_, pos_[1:]) if b_ - a_ > span_max),
+                                                           reverse=True)
+                                            if len(over_) > 1:
+                                                tail_ += "; %d bagian > %.0f m (%s m)" % (
+                                                    len(over_), span_max, ", ".join("%.1f" % v_ for v_ in over_))
                                         n_span_sib += 1
                                         if k_ != "WARN_RENTANG_REGULASI":
                                             for e_ in list(long_list):
@@ -5457,6 +5830,32 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                     rep.append("  Jalur ditumpu tiang cluster saudara 1 PIC: %d titik belok/ujung/simpang, %d rentang "
                                                "dihitung ulang dengan tiang saudara" % (n_node_sib, n_span_sib))
                             node_span_sib = (n_node_sib, n_span_sib)
+                            # 3.13.0: tiang/jalur di luar BOUNDARY cluster ini tetapi di BOUNDARY cluster saudara 1 PIC
+                            bnd_sib_ = [(g_["label"], b_) for g_ in cov_sib for b_ in (g_.get("bnd") or [])]
+                            if route_int and bnd_sib_:
+                                n_bs_ = 0
+                                for i_q, it_ in enumerate(list(qc)):
+                                    if it_[1] not in ("WARN_TIANG_LUAR_BOUNDARY", "WARN_JALUR_LUAR_BOUNDARY"):
+                                        continue
+                                    pts_c_ = list(it_[3]) if it_[3] else [it_[0]]
+                                    labs_ = set()
+                                    ok_c_ = True
+                                    for q_ in pts_c_:
+                                        hit_b_ = [lb_ for lb_, b_ in bnd_sib_ if in_poly(q_.x(), q_.y(), b_) or
+                                                  dist_to_poly_m(q_.x(), q_.y(), b_) <= bnd_tol]
+                                        if not hit_b_:
+                                            ok_c_ = False
+                                            break
+                                        labs_.add(hit_b_[0])
+                                    if ok_c_:
+                                        n_bs_ += 1
+                                        qc[i_q] = (it_[0], "INFO_TIANG_JALUR_DI_BOUNDARY_SAUDARA",
+                                                   "%s -> di BOUNDARY cluster saudara %s (1 PIC/berdampingan satu funnel): "
+                                                   "bukan alasan reject; catat sebagai tiang/jalur bersama" % (
+                                                       it_[2].split(": pastikan")[0].split(": bila")[0],
+                                                       ", ".join(sorted(labs_))), it_[3], it_[4], it_[5])
+                                if n_bs_:
+                                    rep.append("  Tiang/jalur di luar BOUNDARY sendiri tetapi di BOUNDARY cluster saudara 1 PIC: %d" % n_bs_)
                             # standar 1 dihitung ulang dari HP yang masih > batas setelah tiang saudara diperhitungkan
                             far_left = [it_ for it_ in qc if it_[1] == "HP_JAUH_DARI_TIANG"]
                             if cover_n:
@@ -5703,6 +6102,31 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 rep.append("     Total homepass di FDT     : existing %d%s + dipesan %d + cluster ini %d = %d dari %d HP%s"
                            % (rec["hp_used"], "?" if rec["hp_unknown"] else "", rec["hp_res"], n_hp, rec["hp_total"],
                               fdt_cap, ", FDT INDUK cluster ini" if rec["induk"] else ""))
+                # 3.13.0: serat dari FDT masuk lewat tiang titik masuk -> bagian jalur yang tidak tersambung ke tiang itu
+                # tidak teraliri (ITU-T G.984.1 ps. 1 & 3.6). Bagian yang tersambung lewat jalur cluster saudara dikecualikan.
+                if route_int and integ_comp_of:
+                    try:
+                        qi_r_ = nearest_idx(QgsPointXY(rec["x"], rec["y"]))[0]
+                        ce_ = integ_comp_of.get(qi_r_)
+                        if ce_ is None:
+                            qc.append((poles[qi_r_], "COLO_TITIK_MASUK_TIDAK_DI_JALUR",
+                                       "Tiang titik masuk colo %s (terdekat ke FDT %s) tidak dilewati jalur cluster: kabel dari FDT "
+                                       "tidak tersambung ke jaringan; tarik jalur ke tiang ini atau tentukan titik masuk lain"
+                                       % (names[qi_r_] or "tiang", rec["code"]), None, None, None))
+                        else:
+                            un_ = {}
+                            for _r, p_ in data:
+                                qh_, _d = nearest_idx(p_)
+                                ch_ = integ_comp_of.get(qh_)
+                                if ch_ is not None and ch_ != ce_ and ch_ not in integ_sib_ok and ce_ not in integ_sib_ok:
+                                    un_[ch_] = un_.get(ch_, 0) + 1
+                            for ch_, nh_ in sorted(un_.items()):
+                                qc.append((poles[qi_r_], "COLO_HP_TIDAK_TERJANGKAU_JALUR",
+                                           "%d HP dilayani bagian jalur #%d yang tidak tersambung ke tiang titik masuk colo %s "
+                                           "(FDT %s): serat tidak sampai ke HP itu; sambungkan jalurnya atau rencanakan FDT/"
+                                           "feeder lain" % (nh_, ch_, names[qi_r_] or "tiang", rec["code"]), None, nh_, 0))
+                    except Exception as e_cr:
+                        _log.note(e_cr)
             else:
                 rep.append("  >> TIDAK ADA FDT existing <= %.0f m dengan sisa >= %d splitter -> rencanakan FDT baru"
                            % (colo_max, need))
@@ -6072,7 +6496,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 fl_.append(d_)
             # remarks.build sudah mendukung findim_stale sejak 3.6 tetapi belum pernah diisi: ID cluster baru yang belum ada
             # di FINDIM usang (Pematangsiantar 2026: FINDIM 9 Nov 2022, 1455 hari) ikut jadi alasan reject
-            rmk = _remarks.build(fl_, rowmap=hid_row, findim_stale=findim_stale_)
+            rmk = _remarks.build(fl_, rowmap=hid_row, findim_stale=findim_stale_, route=route_int)
             if kmz_only:
                 rmk["text"] = _kt(rmk["text"])
                 rmk["length"] = len(rmk["text"])

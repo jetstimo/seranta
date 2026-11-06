@@ -38,7 +38,7 @@ try:
 except ImportError:  # pragma: no cover
     import xml.etree.ElementTree as ET  # nosec B405
 
-RULE_VERSION = "2026.11-r16"
+RULE_VERSION = "2026.11-r17"
 
 HP_RX = re.compile(r"\b(hp|homepass|home ?pass|rumah)\b", re.IGNORECASE)
 # 'EVIDEN' (tanpa -CE) dipakai vendor di KMZ 1 PIC Tomohon 2026; dulu tidak dikenali sebagai folder foto
@@ -1164,7 +1164,10 @@ def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, n
                                "pole_on_route": [any(_pt_seg_m(px_, py_, ln_[i_ - 1], ln_[i_]) <= POLE_ROUTE_M
                                                      for ln_ in (s.get("lines") or []) for i_ in range(1, len(ln_)))
                                                  for px_, py_, _n in (s.get("poles") or [])] if tol else [],
-                               "pole_kinds_sib": list(s.get("pole_kinds") or [])})
+                               "pole_kinds_sib": list(s.get("pole_kinds") or []),
+                               # 3.13.0: garis jalur cluster saudara (untuk menilai jalur terputus yang tersambung lewat saudara)
+                               "lines": [list(ln_) for ln_ in (s.get("lines") or [])] if tol else [],
+                               "bnd": list(s.get("bnd") or []) if tol else []})
         # Jalur berimpit TANPA tiang ganda bukan kesalahan: dua kabel distribusi boleh lewat ruas tiang yang sama
         # (Tomohon 2026: jalur Lingk. 2 berimpit 572 m dengan Lingk. 4 di atas 14 tiang Lingk. 4, tiang hanya tercatat
         # sekali). Yang salah adalah tiang yang dicatat di dua KMZ (temuan tiang ganda di atas). Jalur berimpit hanya

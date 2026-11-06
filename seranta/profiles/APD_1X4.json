@@ -538,6 +538,14 @@
    "status": "APPROVED",
    "severity": "INFO",
    "unit": "ya/tidak"
+  },
+  "route_integrity": {
+   "v": true,
+   "dasar": "STANDAR",
+   "sumber": "Integritas jalur 3.13.0: bagian jalur tanpa tiang diukur SEPANJANG JALUR sampai tiang terdekat dan dinilai dengan batas bentang yang sama (bentang = jarak dua titik tumpu kabel berurutan, USDA RUS Bulletin 1751F-630 Definitions; Corning AEN 14); ujung jalur di tiang tambat akhir (USDA RUS 1751F-650 ps. 3.5 deadend guy 'at the end of a line'); percabangan/sambungan kabel di tiang (Fiber Optic Association, Aerial Workmanship: 'Splice closures should be attached to poles'); bagian jalur terputus tidak teraliri serat FDT (ITU-T G.984.1 ps. 1 & 3.6: ODN menghubungkan OLT ke ONT); garis bertumpuk = panjang kabel BOQ ganda. Ujung/percabangan tanpa tiang masuk remarks sebagai alasan reject. false = perilaku 3.12",
+   "status": "APPROVED",
+   "severity": "ERROR",
+   "unit": "ya/tidak"
   }
  }
 }
