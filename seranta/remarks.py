@@ -21,7 +21,18 @@ MAX_LEN = 255
 MARGIN_M = 1.0          # selisih <= 1 m dari batas: di bawah galat GPS ponsel (4,9 m) -> catatan, bukan alasan reject
 
 # Peringatan yang dianggap menghalangi persetujuan (satu rumah/tiang di dua cluster)
-BLOCKING_WARN = {"WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "WARN_TIANG_GANDA_LINTAS_CLUSTER", "WARN_ID_CLUSTER_GANDA"}
+BLOCKING_WARN = {"WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "WARN_TIANG_GANDA_LINTAS_CLUSTER", "WARN_ID_CLUSTER_GANDA",
+                 # 3.13.0: percabangan kabel di antara tiang = sambungan tergantung di bentang; sambungan (splice closure)
+                 # dipasang di tiang (Fiber Optic Association, Aerial Workmanship)
+                 "WARN_SIMPANG_TANPA_TIANG"}
+
+# 3.13.0: kode integritas jalur. Sebelum 3.13.0 ujung jalur & percabangan tanpa tiang tidak masuk remarks (hanya di
+# QC_TEMUAN), sehingga jalur yang ujungnya tanpa tiang bisa lolos 'Approve'. Saklar profil route_integrity=false -> remarks
+# identik 3.12.0.
+ROUTE_KEYS = {"JALUR_TANPA_TIANG", "JALUR_TERPUTUS", "UJUNG_JALUR_TANPA_TIANG", "WARN_SIMPANG_TANPA_TIANG",
+              "WARN_JALUR_TERPUTUS", "WARN_JALUR_BERSILANG_TANPA_TIANG", "WARN_JALUR_BERTUMPUK",
+              "INFO_JALUR_TERSAMBUNG_LEWAT_SAUDARA", "COLO_TITIK_MASUK_TIDAK_DI_JALUR", "COLO_HP_TIDAK_TERJANGKAU_JALUR",
+              "WARN_TIANG_LUAR_BOUNDARY", "WARN_JALUR_LUAR_BOUNDARY", "INFO_TIANG_JALUR_DI_BOUNDARY_SAUDARA"}
 
 # Urutan prioritas (paling berat dulu). Kode yang tidak ada di sini tidak masuk remarks.
 PRIORITY = [
@@ -29,14 +40,18 @@ PRIORITY = [
     "HP_DI_BOUNDARY_CLUSTER_LAIN", "WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "BAKP_HP_KURANG", "BAKP_STEMPEL_TTD_TEMPELAN_DIGITAL",
     "BAKP_ADA_GAMBAR_TEMPELAN", "BAKP_NAMA_FILE_ID_BEDA", "WARN_BAKP_ID_METADATA_BEDA", "BAKP_DIEDIT_APLIKASI_GRAFIS", "FUNNEL_SENDIRI_REJECT",
     "HP_LUAR_FUNNEL", "HP_LUAR_BOUNDARY", "HP_DI_AREA_TANPA_IZIN", "TIANG_DI_AREA_TANPA_IZIN", "HP_JAUH_DARI_TIANG", "RENTANG_NP_NP", "RENTANG_NP_EP",
+    "JALUR_TANPA_TIANG", "JALUR_TERPUTUS", "UJUNG_JALUR_TANPA_TIANG", "WARN_SIMPANG_TANPA_TIANG",      # 3.13.0 integritas jalur
     "HP_DUPLIKAT_KOORDINAT", "HP_DUPLIKAT_ID", "HP_DUPLIKAT_LABEL", "HP_HPDB_TIDAK_ADA_DI_KMZ", "HP_KMZ_TIDAK_ADA_DI_HPDB",
     "HP_SUDAH_ADA_DI_DESIGN_LITE", "TIANG_BARU_SUDAH_ADA", "WARN_TIANG_GANDA_LINTAS_CLUSTER", "WARN_ID_CLUSTER_GANDA",
-    "ADMIN_", "WARN_TIANG_DUPLIKAT_KMZ", "WARN_BELOKAN_TANPA_TIANG", "WARN_POLE_SHEET_BEDA_KMZ", "WARN_CLUSTER_NAME_KOSONG",
+    "ADMIN_", "WARN_TIANG_DUPLIKAT_KMZ", "WARN_BELOKAN_TANPA_TIANG", "WARN_JALUR_TERPUTUS", "WARN_JALUR_BERSILANG_TANPA_TIANG",
+    "WARN_POLE_SHEET_BEDA_KMZ", "WARN_CLUSTER_NAME_KOSONG",
     "WARN_HPDB_CLUSTER_NAME_CAMPUR", "WARN_BOUNDARY_TIDAK_VALID",
     "WARN_HP_KOORDINAT_BEDA_FOTO", "WARN_JALUR_LEWAT_AREA_TANPA_IZIN",
     "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
+    "COLO_TITIK_MASUK_TIDAK_DI_JALUR", "COLO_HP_TIDAK_TERJANGKAU_JALUR", "WARN_TIANG_LUAR_BOUNDARY", "WARN_JALUR_LUAR_BOUNDARY",
+    "WARN_JALUR_BERTUMPUK",
     "WARN_TSSR_ID_BEDA", "WARN_TSSR_HP_BEDA", "WARN_TSSR_DIPAKAI_BERSAMA", "INFO_HP_TERCOVER_TIANG_SAUDARA", "INFO_HP_DI_BOUNDARY_SAUDARA_1PIC", "INFO_RENTANG_DITUMPU_TIANG_SAUDARA",
-    "INFO_TITIK_JALUR_DI_TIANG_SAUDARA",
+    "INFO_TITIK_JALUR_DI_TIANG_SAUDARA", "INFO_JALUR_TERSAMBUNG_LEWAT_SAUDARA", "INFO_TIANG_JALUR_DI_BOUNDARY_SAUDARA",
     "INFO_BOUNDARY_BERIRISAN_1PIC", "WARN_HPDB_KARAKTER_TERSEMBUNYI", "INFO_BAKP_HASIL_SCAN",      # hanya catatan (bukan alasan reject, tidak mengubah status)
 ]
 
@@ -143,19 +158,21 @@ def parse_rows(txt):
     return out
 
 
-def _group_key(kind):
+def _group_key(kind, route=True):
     for k in PRIORITY:
+        if not route and k in ROUTE_KEYS:
+            continue
         if kind == k or (k.endswith("_") and kind.startswith(k)):
             return k
     return None
 
 
-def phrases(findings, rowmap=None, findim_stale=False):
+def phrases(findings, rowmap=None, findim_stale=False, route=True):
     """findings: [dict(kind, sev, ket, val, lim, hint)]. -> (frasa [(prioritas, blocking, panjang, pendek)], catatan [teks])
     Tiap frasa punya versi panjang (dengan nomor baris) dan pendek (jumlah saja) untuk dipadatkan ke 255 karakter."""
     by = {}
     for f in findings:
-        k = _group_key(f["kind"])
+        k = _group_key(f["kind"], route)
         if k:
             by.setdefault(k, []).append(f)
     out, notes = [], []
@@ -167,7 +184,8 @@ def phrases(findings, rowmap=None, findim_stale=False):
 
     def add(key, long_, short_=None, blocking=None, prio_key=None, tiny=None):
         sev = by[key][0]["sev"]
-        blk = blocking if blocking is not None else (sev == "ERROR" or key in BLOCKING_WARN)
+        blk = blocking if blocking is not None else (sev == "ERROR" or key in BLOCKING_WARN and
+                                                     (route or key not in ROUTE_KEYS))
         out.append((PRIORITY.index(prio_key or key), blk, long_, short_ or long_) + ((tiny,) if tiny else ()))
 
     # 3.10.0: irisan BOUNDARY per cluster tetangga (nama pendek -> baris HP cluster ini di irisan). 'n HP masuk boundary X'
@@ -511,6 +529,82 @@ def phrases(findings, rowmap=None, findim_stale=False):
             add(key, "karakter tersembunyi di %s baris HPDB%s" % (m.group(1) if m else n,
                                                                 (" (baris %s)" % rr.group(1)) if rr else ""),
                 "karakter tersembunyi di HPDB")
+        # ---- 3.13.0: integritas jalur ----
+        elif key == "JALUR_TANPA_TIANG":
+            # selisih <= 1 m dari batas bentang: di bawah galat GPS -> catatan ukur ulang (aturan sama dengan span)
+            real = [f for f in L if f.get("val") is None or f.get("lim") is None or f["val"] - f["lim"] > MARGIN_M
+                    or (f["ket"] or "").startswith("Jalur tanpa tiang")]
+            for f in L:
+                if f not in real:
+                    notes.append("bagian jalur tanpa tiang %s m hanya %s m di atas %s m (di bawah galat GPS): ukur ulang, "
+                                 "bukan alasan reject" % (num(f["val"]), _excess(f["val"] - f["lim"]), num(f["lim"], 0)))
+            if not real:
+                continue
+            L, n = real, len(real)
+            L.sort(key=lambda f: -(f.get("val") or 0))
+            parts = []
+            for f in L[:2]:
+                t, v = f["ket"] or "", num(f.get("val"))
+                m = re.match(r"^(.+?) - (ujung jalur|percabangan|.+?): (?:rentang )?[\d.]+ m", t)
+                if t.startswith("Jalur tanpa tiang"):
+                    parts.append("jalur %s m tanpa tiang sama sekali" % v)
+                elif m and m.group(2) == "ujung jalur" and "= ujung di tiang saudara" in t:
+                    ms = re.search(r"dari tiang (\S+) cluster (.+?) \(<= snap", t)
+                    parts.append("span %s ke tiang %s%s %s m >60 m" % (m.group(1), ms.group(1) if ms else "saudara",
+                                                                 (" " + short_cluster(ms.group(2))) if ms else "", v))
+                elif m and m.group(2) == "ujung jalur":
+                    parts.append("kabel %s m tanpa tiang dari %s ke ujung jalur" % (v, m.group(1)))
+                elif m:
+                    parts.append("rentang %s ke %s %s m lewat percabangan tanpa tiang" % (m.group(1), m.group(2), v))
+                else:
+                    parts.append("jalur %s m tanpa tiang" % v)
+            mx = num(max(f.get("val") or 0 for f in L))
+            add(key, "; ".join(parts) + (" (+%d lain)" % (n - 2) if n > 2 else ""),
+                "%d bagian jalur tanpa tiang (maks %s m sepanjang jalur)" % (n, mx), tiny="%d jalur tanpa tiang" % n)
+        elif key in ("JALUR_TERPUTUS", "WARN_JALUR_TERPUTUS"):
+            ls = [re.search(r": ([\d.]+) m jalur \((\d+) tiang\).*?celah terdekat ([\d.]+) m", f["ket"] or "") for f in L]
+            det = ["%s m, %s tiang, celah %s m" % (num(float(m.group(1))), m.group(2), num(float(m.group(3))))
+                   for m in ls if m][:2]
+            add(key, "%d bagian jalur terputus dari jaringan cluster%s%s" % (
+                n, (" (%s)" % "; ".join(det)) if det else "", ", cek FDT tiap bagian" if key.startswith("WARN") else ""),
+                "%d jalur terputus" % n)
+        elif key == "UJUNG_JALUR_TANPA_TIANG":
+            mx = max((f.get("val") or 0) for f in L)
+            alg = [float(m.group(1)) for m in (re.search(r"; ([\d.]+) m sepanjang jalur", f["ket"] or "") for f in L) if m]
+            add(key, "%d ujung jalur tanpa tiang tambat (s/d %s m dari tiang%s)" % (
+                n, num(mx), (", %s m sepanjang jalur" % num(max(alg))) if alg else ""),
+                "%d ujung jalur tanpa tiang" % n)
+        elif key == "WARN_SIMPANG_TANPA_TIANG":
+            add(key, "%d percabangan jalur tanpa tiang (sambungan wajib di tiang)" % n, "%d percabangan tanpa tiang" % n)
+        elif key == "WARN_JALUR_BERSILANG_TANPA_TIANG":
+            add(key, "%d titik garis jalur bersilang/menempel tanpa simpul/tiang (cek sambungan)" % n,
+                "%d persilangan jalur tanpa tiang" % n)
+        elif key == "WARN_JALUR_BERTUMPUK":
+            tot = sum(f.get("val") or 0 for f in L)
+            add(key, "garis jalur bertumpuk %s m di %d tempat (panjang kabel BOQ ganda)" % (num(tot, 0), n),
+                "jalur bertumpuk %s m" % num(tot, 0))
+        elif key == "COLO_TITIK_MASUK_TIDAK_DI_JALUR":
+            m = re.search(r"titik masuk colo (\S+) \(terdekat ke FDT (\S+)\)", L[0]["ket"] or "")
+            add(key, "tiang titik masuk colo %s (FDT %s) tidak dilewati jalur" % (m.group(1), m.group(2)) if m else
+                "titik masuk colo tidak dilewati jalur", "titik masuk colo tdk di jalur")
+        elif key == "COLO_HP_TIDAK_TERJANGKAU_JALUR":
+            tot = sum(int(f.get("val") or 0) for f in L)
+            add(key, "%d HP di bagian jalur yg tidak tersambung ke titik masuk colo (serat FDT tidak sampai)" % tot,
+                "%d HP tidak terjangkau dari colo" % tot)
+        elif key == "WARN_TIANG_LUAR_BOUNDARY":
+            nm = [re.match(r"^(\S+)", f["ket"]).group(1) for f in L if re.match(r"^(\S+)", f["ket"] or "")]
+            mx = max(f.get("val") or 0 for f in L)
+            add(key, "%s di luar boundary (s/d %s m): cek izin lokasi tiang" % (
+                ", ".join(nm[:3]) if n <= 3 else "%d tiang NP" % n, num(mx, 0)), "%d tiang NP di luar boundary" % n)
+        elif key == "WARN_JALUR_LUAR_BOUNDARY":
+            tot = sum(f.get("val") or 0 for f in L)
+            add(key, "jalur %s m di luar boundary (feeder? sebutkan)" % num(tot, 0), "jalur %s m di luar boundary" % num(tot, 0))
+        elif key == "INFO_TIANG_JALUR_DI_BOUNDARY_SAUDARA":
+            notes.append("%d tiang/bentangan jalur di boundary cluster saudara 1 PIC: bukan alasan reject, catat sebagai "
+                         "tiang/jalur bersama" % n)
+        elif key == "INFO_JALUR_TERSAMBUNG_LEWAT_SAUDARA":
+            notes.append("%d bagian jalur tersambung lewat jalur cluster saudara 1 PIC: bukan alasan reject, pastikan "
+                         "sambungan kabel di tiang" % n)
         elif key in ("INFO_RENTANG_DITUMPU_TIANG_SAUDARA", "INFO_TITIK_JALUR_DI_TIANG_SAUDARA"):
             if key == "INFO_RENTANG_DITUMPU_TIANG_SAUDARA":
                 notes.append("%d rentang ditumpu tiang cluster saudara (terpanjang %s m): bukan alasan reject, catat tiang bersama"
@@ -551,9 +645,10 @@ def phrases(findings, rowmap=None, findim_stale=False):
     return out, notes
 
 
-def build(findings, rowmap=None, findim_stale=False, max_len=MAX_LEN):
-    """-> dict(status, text, length, used=[frasa], dropped=[frasa], notes=[...])"""
-    ph, notes = phrases(findings, rowmap, findim_stale)
+def build(findings, rowmap=None, findim_stale=False, max_len=MAX_LEN, route=True):
+    """-> dict(status, text, length, used=[frasa], dropped=[frasa], notes=[...])
+    route=False: tanpa kode integritas jalur 3.13.0 (hasil identik 3.12.0)."""
+    ph, notes = phrases(findings, rowmap, findim_stale, route)
     blocking = any(p[1] for p in ph)
     if blocking:
         status, head = "REJECT", "Reject: "

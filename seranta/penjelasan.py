@@ -394,6 +394,41 @@ TOOL1_KIND = [
     ("INFO_TITIK_JALUR_DI_TIANG_SAUDARA", "Belokan, ujung, atau percabangan jalur cluster ini berada di tiang cluster saudara 1 PIC "
      "/ berdampingan (tiang itu dilewati jalur cluster saudara): titik itu ditumpu tiang, bukan tanpa tiang.",
      "Pastikan tiang itu dipasang treklam / tambat akhir sesuai sudut, dan tercatat sebagai tiang bersama."),
+    # --- 3.13.0: integritas jalur ---
+    ("JALUR_TANPA_TIANG", "Ada bagian garis jalur yang tidak ditumpu tiang lebih panjang dari batas bentang, diukur SEPANJANG "
+     "JALUR: jalur tanpa satu pun tiang, ujung jalur yang jauh dari tiang terakhir, atau dua tiang yang dihubungkan lewat "
+     "percabangan tanpa tiang. Kabel udara hanya bisa dipasang dari tiang ke tiang (bentang = jarak dua titik tumpu kabel "
+     "berurutan), jadi bagian ini tidak bisa dibangun seperti digambar.",
+     "Sisipkan tiang sepanjang bagian itu tiap <= batas bentang, pasang tiang tambat akhir di ujung dan tiang di "
+     "percabangan; bila garisnya tidak dipakai, hapus garis jalurnya."),
+    ("JALUR_TERPUTUS", "Bagian jalur ini tidak tersambung ke jaringan jalur cluster (celah lebih dari toleransi snap), "
+     "sehingga tidak bisa dialiri serat dari FDT cluster.",
+     "Sambungkan garis jalur di tiang ke jaringan cluster, atau jelaskan sumber seratnya (FDT/kabel lain)."),
+    ("WARN_JALUR_TERPUTUS", "Bagian jalur tidak tersambung ke jaringan jalur cluster; cluster ini butuh lebih dari satu FDT "
+     "sehingga bisa jadi bagian ini dilayani FDT lain.", "Pastikan setiap bagian jalur punya FDT/sumber serat."),
+    ("WARN_JALUR_BERSILANG_TANPA_TIANG", "Dua garis jalur bersilang atau menempel tanpa simpul/tiang bersama. Bila itu "
+     "percabangan, sambungan kabelnya tergantung di tengah bentang (sambungan harus di tiang); bila dua kabel terpisah, "
+     "graf jalur tidak tersambung di titik itu.",
+     "Pasang tiang di titik temu dan sambungkan garisnya di tiang, atau geser garis agar jelas dua kabel terpisah."),
+    ("WARN_JALUR_BERTUMPUK", "Garis jalur digambar dua kali / bolak-balik di jalur yang sama, sehingga panjang kabel di BOQ "
+     "terhitung ganda.", "Hapus garis rangkap (satu jalur fisik = satu garis) atau sebutkan bila memang dua kabel."),
+    ("INFO_JALUR_TERSAMBUNG_LEWAT_SAUDARA", "Bagian jalur ini terpisah dari jalur cluster sendiri, tetapi tersambung ke jalur "
+     "cluster saudara 1 PIC / berdampingan (satu jaringan): bukan alasan reject.",
+     "Pastikan sambungan kabelnya di tiang dan tercatat di desain jaringan bersama."),
+    ("WARN_TIANG_LUAR_BOUNDARY", "Tiang baru (NP) berdiri lebih dari toleransi di luar BOUNDARY cluster: izin warga (BAKP) "
+     "dan survei berlaku untuk wilayah cluster, jadi lokasi tiang ini belum tentu tercakup izinnya.",
+     "Pastikan izin mencakup lokasi itu, perluas boundary, atau pindahkan tiang ke cluster yang benar."),
+    ("INFO_TIANG_EP_LUAR_BOUNDARY", "Tiang eksisting (EP) di luar BOUNDARY cluster: tidak ada pemasangan tiang baru.",
+     "Cukup dicatat (sewa/attachment)."),
+    ("WARN_JALUR_LUAR_BOUNDARY", "Sebagian jalur kabel di luar BOUNDARY cluster. Boleh bila jalur feeder ke FDT atau ke "
+     "cluster lain; bila jalur distribusi, boundary atau jalurnya perlu dirapikan.",
+     "Sebutkan fungsi jalur itu di desain, atau perluas boundary / pindahkan jalurnya."),
+    ("INFO_TIANG_JALUR_DI_BOUNDARY_SAUDARA", "Tiang/jalur di luar BOUNDARY cluster ini tetapi di BOUNDARY cluster saudara 1 PIC "
+     "(satu funnel): satu wilayah, bukan alasan reject.", "Catat sebagai tiang/jalur bersama."),
+    ("COLO_TITIK_MASUK_TIDAK_DI_JALUR", "Tiang terdekat ke FDT colo (titik masuk kabel) tidak dilewati jalur cluster, "
+     "sehingga kabel dari FDT tidak tersambung ke jaringan.", "Tarik jalur ke tiang itu atau tentukan titik masuk lain."),
+    ("COLO_HP_TIDAK_TERJANGKAU_JALUR", "Sebagian HP dilayani bagian jalur yang tidak tersambung ke tiang titik masuk colo: "
+     "serat dari FDT tidak sampai ke HP itu.", "Sambungkan bagian jalur itu atau rencanakan FDT/feeder lain untuknya."),
     ("INFO_HP_TERCOVER_TIANG_SAUDARA", "Rumah lebih dari batas jarak ke tiang cluster ini, tetapi ada tiang cluster saudara "
      "1 PIC / berdampingan (satu funnel) dalam batas jarak: drop bisa ditarik dari tiang itu, bukan alasan reject.",
      "Rencanakan drop/FAT dari tiang cluster saudara (catat sebagai tiang bersama) atau pindahkan rumah ke cluster itu."),
@@ -509,9 +544,11 @@ TOOL1_KIND = [
     ("TIANG_NGANGGUR", "Tiang baru (NP) survei tidak dilewati jalur kabel.", "Buka koordinat di keterangan; hapus tiang NP "
      "bila tidak dipakai, atau lewatkan jalur bila memang dibutuhkan."),
     ("INFO_TIANG_EP_NGANGGUR", "Tiang existing (EP) tidak dilewati jalur kabel. Ini diperbolehkan.", "Tidak perlu tindakan."),
-    ("UJUNG_JALUR_TANPA_TIANG", "Jalur berakhir tanpa tiang untuk menambat kabel.", "Tambahkan tiang di ujung jalur."),
+    ("UJUNG_JALUR_TANPA_TIANG", "Jalur berakhir tanpa tiang untuk menambat kabel (mulai 3.13.0 juga alasan reject di "
+     "remarks; keterangan memuat panjang kabel sepanjang jalur dari tiang terakhir).", "Tambahkan tiang di ujung jalur."),
     ("WARN_BELOKAN_TANPA_TIANG", "Belokan tajam tanpa tiang (kabel butuh tiang tambat di belokan).", "Tambahkan tiang di titik belokan."),
-    ("WARN_SIMPANG_TANPA_TIANG", "Percabangan jalur tanpa tiang.", "Tambahkan tiang di percabangan."),
+    ("WARN_SIMPANG_TANPA_TIANG", "Percabangan jalur tanpa tiang: sambungan kabel tergantung di bentang (mulai 3.13.0 alasan "
+     "reject; sambungan/splice closure dipasang di tiang).", "Tambahkan tiang di percabangan."),
     ("INFO_BELOKAN_KECIL_TANPA_TIANG", "Belokan kecil tanpa tiang.", "Opsional: pertimbangkan tiang sudut."),
     ("WARN_RENTANG_REGULASI", "Bentang di atas batas regulasi daerah.", "Sisipkan tiang bila daerah menegakkan batas ini."),
     ("INFO_RENTANG_REGULASI", "Bentang di atas batas regulasi daerah (catatan).", "Cukup dicatat."),

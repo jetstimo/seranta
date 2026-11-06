@@ -324,3 +324,70 @@ RT 07); 23 belokan/ujung jalur di tiang saudara; tidak ada rentang lain yang lol
 garis (di luar toleransi 3 m tiang sendiri).
 Saklar ketiga aturan 1 PIC false -> hasil identik dengan 3.10.0 (diuji pada batch Suka Karya).
 
+## Tambahan 3.13.0 — integritas jalur: satu jaringan kabel utuh yang ditumpu tiang (revisi pembuat 6 Nov 2026)
+Masalah: cek rentang lama hanya menilai bagian jalur yang **kedua ujungnya tiang**. Bagian jalur yang berujung di titik tanpa
+tiang (ujung jalur, percabangan) atau yang tidak punya tiang sama sekali tidak pernah diukur sepanjang jalurnya; lingkar jalur
+yang semua titiknya bukan tiang tidak ditelusuri sama sekali; garis yang bersilang tanpa simpul, garis yang terputus, dan garis
+yang digambar dua kali tidak terdeteksi. Ujung jalur dan percabangan tanpa tiang sudah tercatat di QC_TEMUAN tetapi tidak
+masuk remarks, sehingga cluster bisa 'Approve' walau jalurnya tidak bisa dibangun.
+
+Dasar (sumber dapat diperiksa):
+- **Bentang = jarak dua titik tumpu kabel berurutan** (USDA RUS Bulletin 1751F-630, Definitions; Corning AEN 14). Kabel di
+  antara tiang dan titik tanpa tiang tetap kabel tanpa tumpuan; panjangnya diukur **sepanjang jalur** sampai tiang terdekat
+  dan dinilai dengan batas bentang yang sama (Handbook 60 m; regulasi daerah 50 m).
+- **Ujung jalur di tiang tambat akhir**: USDA RUS Bulletin 1751F-650 ps. 3.5 (deadend guy "to hold the pole at the end of a
+  line").
+- **Sambungan/percabangan di tiang**: Fiber Optic Association, *Aerial Workmanship* (foa.org/tech/ref/OSP_Construction/
+  Aerial_Workmanship.html): "Splice closures should be attached to poles"; "All loops of cable must be secured to a pole at
+  the end of the span"; "no loose hanging cables along the span".
+- **Satu jaringan**: ITU-T G.984.1 ps. 1 ("one-to-many relationship between the OLT and the ONU/ONTs") dan ps. 3.6 (ODN
+  "realizes the optical transmission from the OLT towards the users"): bagian jalur yang tidak tersambung ke jaringan
+  cluster tidak bisa dialiri serat dari FDT cluster itu.
+- **BOQ kabel**: panjang kabel dihitung dari panjang garis jalur; garis yang digambar dua kali menggandakan panjang kabel.
+
+Aturan (saklar profil `route_integrity`, bawaan true; false = perilaku 3.12, termasuk remarks):
+| Kode | Tingkat | Aturan |
+|---|---|---|
+| JALUR_TANPA_TIANG | ERROR (reject) | (a) bagian jalur tanpa satu pun tiang (berapa pun panjangnya >= 1 m); (b) ujung jalur > 60 m sepanjang jalur dari tiang terakhir; (c) dua tiang yang dihubungkan lewat percabangan tanpa tiang > 60 m (50-60 m = WARN_RENTANG_REGULASI; EP-EP tidak dinilai, sama dengan rentang biasa). Tiang <= 3 m dari garis memecah bagian ini (aturan tiang sendiri). |
+| JALUR_TERPUTUS | ERROR (reject) | bagian jalur yang bertiang tetapi celahnya ke jalur cluster lain > snap_m (10 m). Cluster > 1 FDT (HP > kapasitas FDT) -> WARN_JALUR_TERPUTUS. Celah <= snap_m = celah gambar: ujungnya sudah dinilai sebagai ujung jalur. |
+| UJUNG_JALUR_TANPA_TIANG | ERROR (reject, baru masuk remarks) | sama dengan sebelumnya; keterangan ditambah panjang kabel sepanjang jalur dari tiang terakhir. |
+| WARN_SIMPANG_TANPA_TIANG | WARNING penghalang (reject, baru masuk remarks) | percabangan > snap_m dari tiang = sambungan tergantung di bentang. Juga percabangan yang tidak disatukan di simpul: ujung garis yang berhenti/melewati <= 3 m (POLE_ON_LINE_M) dari garis lain, atau titik sudut garis yang diletakkan <= 0,5 m di garis lain (menggantikan temuan ujung jalur di titik itu). Derajat simpul dihitung dari tetangga BERBEDA: garis rangkap yang berakhir di titik sudut garis lain bukan percabangan; ujung bolak-balik = ujung jalur. |
+| WARN_JALUR_BERSILANG_TANPA_TIANG | WARNING (catatan) | dua garis jalur menyilang/menempel (sudut >= 10 derajat) tanpa simpul bersama dan > snap_m dari tiang: bisa percabangan tanpa tiang atau dua kabel terpisah -> ditinjau. |
+| WARN_JALUR_BERTUMPUK | WARNING (catatan) | ruas jalur sejajar (sudut < 10 derajat) berjarak <= 1 m sepanjang >= 5 m (galat GPS ponsel 4,9 m, GPS.gov): garis digambar dua kali/bolak-balik; panjang jalur tanpa tumpukan dicatat di laporan. |
+| INFO_JALUR_TERSAMBUNG_LEWAT_SAUDARA | INFO | jalur terputus yang <= snap_m dari jalur cluster saudara 1 PIC (pasangan yang ditoleransi 3.11). |
+
+1 PIC (aturan 3.12 berlaku sama): JALUR_TANPA_TIANG dipotong di tiang cluster saudara yang dilewati jalurnya dan <= 3 m dari
+garis; bagian terpanjang yang tersisa dinilai ulang (<= 50 m INFO_RENTANG_DITUMPU_TIANG_SAUDARA, 50-60 m WARN_RENTANG_REGULASI,
+> 60 m tetap JALUR_TANPA_TIANG). Persilangan <= snap_m dari tiang saudara -> INFO_TITIK_JALUR_DI_TIANG_SAUDARA.
+KMZ tanpa titik tiang atau tanpa garis jalur (alat berhenti) kini menghasilkan remarks **Reject** di rekap batch, bukan hanya
+'GAGAL'.
+
+Uji (data REVIEW STRAND Suka Karya, 13 cluster, dan 7 skenario sintetis dari RT 07 asli):
+- Bentangan tanpa tumpuan > 60 m diperiksa ulang secara independen (geopandas, geometri ROADS tersnap, tumpuan = tiang
+  sendiri/saudara <= 3 m): semua bentangan terdeteksi Seranta (RENTANG_* / JALUR_TANPA_TIANG); bagian lain di rentang yang
+  sama kini disebut di keterangan (RT 16: 109,1 m dan 65,6 m).
+- RT 18: ujung jalur 72 m garis lurus = 237 m kabel tanpa tiang sendiri; ditumpu 4 tiang RT 06/RT 10, terpanjang 53,6 m
+  (WARN regulasi, bukan reject). RT 11: span NP6-22 ke tiang T6 KOTA RT 04 61,8 m dan ujung jalur 56,8 m tanpa tiang (kini
+  masuk remarks). RT 03: 3 percabangan tanpa simpul (2 di tiang RT 11 = catatan, 1 berjarak 49 m dari tiang = reject).
+- Garis bertumpuk: KOTA RT 04 71 m, RT 03 49/59/78 m (cabang digambar bolak-balik), RT 05 11 m, RT 09 50 m, RT 11 92 m,
+  RT 16 59 m = sama dengan audit geometri independen.
+- Sintetis: garis 150 m tanpa tiang, garis putus 85 m di antara dua tiang (tiang di celah jadi nganggur), ujung diperpanjang
+  120 m, garis rangkap 212 m, cabang dari tengah bentang, KMZ tanpa tiang -> semua terdeteksi sesuai kode di atas; RT 07 asli
+  tanpa temuan jalur.
+- Saklar `route_integrity` false -> 13 cluster, 458 temuan identik 3.12.0; remarks identik pada 5.200 kombinasi temuan;
+  dua kali jalan -> identik.
+
+### Tambahan 3.13.0 (lanjutan): jaringan sampai ke FDT, tiang & jalur di luar BOUNDARY
+| Kode | Tingkat | Aturan dan dasar |
+|---|---|---|
+| COLO_TITIK_MASUK_TIDAK_DI_JALUR | WARNING (std 7) | tiang terdekat ke FDT colo (titik masuk kabel) tidak dilewati jalur cluster: kabel dari FDT tidak tersambung ke jaringan (ITU-T G.984.1 ps. 1 & 3.6). |
+| COLO_HP_TIDAK_TERJANGKAU_JALUR | WARNING (std 7) | HP yang tiang terdekatnya ada di bagian jalur yang tidak tersambung ke tiang titik masuk colo: serat dari FDT tidak sampai. Bagian yang tersambung lewat jalur cluster saudara 1 PIC dikecualikan. Hanya bila ada rekomendasi colo (Design Lite di folder referensi). |
+| WARN_TIANG_LUAR_BOUNDARY | WARNING (std 2) | tiang NP > 10 m (bnd_tol, toleransi yang sama dengan HP: GPS ponsel + garis tangan) di luar BOUNDARY cluster: izin warga (BAKP) berlaku untuk wilayah cluster (Standar Review Strand). EP -> INFO_TIANG_EP_LUAR_BOUNDARY (tidak ada tiang baru). |
+| WARN_JALUR_LUAR_BOUNDARY | WARNING (std 2) | bentangan jalur >= 10 m yang > 10 m di luar BOUNDARY: boleh bila feeder ke FDT/cluster lain (sebutkan di desain), bukan alasan reject. |
+| INFO_TIANG_JALUR_DI_BOUNDARY_SAUDARA | INFO | tiang/jalur di atas yang berada di BOUNDARY cluster saudara 1 PIC (pasangan yang ditoleransi 3.11). |
+Uji: KOTA RT 04 2 tiang (37,9 m dan 25,7 m) + 100 m jalur di luar boundary sendiri, semuanya di boundary RT 03 -> catatan
+(sama dengan ukuran geopandas independen); RT 09 10 m -> catatan. Sintetis: jalur + tiang 55 m keluar boundary -> kedua
+peringatan; FDT di dekat bagian utama jalur yang terputus -> 8 HP bagian lain tidak terjangkau; FDT di jaringan utuh -> tanpa
+temuan. Belokan >= 30 derajat tanpa tiang tetap peringatan seperti sebelumnya (keputusan kebijakan pembuat; mengubahnya
+menggeser hasil lama).
+

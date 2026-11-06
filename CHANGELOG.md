@@ -1,5 +1,19 @@
 # Changelog
 
+## 3.13.0 – integritas jalur: satu jaringan kabel utuh yang ditumpu tiang (revisi pembuat 6 November 2026)
+
+- **Jalur tanpa tiang** (JALUR_TANPA_TIANG, reject): bagian jalur tanpa tiang diukur SEPANJANG JALUR sampai tiang terdekat
+  dan dinilai dengan batas bentang yang sama (USDA RUS 1751F-630): jalur tanpa satu pun tiang, ujung jalur > 60 m dari tiang
+  terakhir, dua tiang lewat percabangan tanpa tiang. Lingkar jalur tanpa titik tiang kini ditelusuri.
+- **Jalur terputus** (JALUR_TERPUTUS, reject): bagian jalur bertiang yang tidak tersambung ke jaringan cluster (ITU-T G.984.1).
+- **Percabangan tanpa simpul/tiang**: ujung atau titik sudut garis yang menempel di garis lain tanpa disambung; percabangan
+  dan ujung jalur tanpa tiang kini masuk remarks sebagai alasan reject (FOA Aerial Workmanship; RUS 1751F-650).
+- Catatan baru: garis bersilang tanpa simpul, garis bertumpuk/bolak-balik (BOQ kabel ganda), tiang NP & jalur di luar
+  BOUNDARY (di boundary cluster saudara 1 PIC = catatan), HP di bagian jalur yang tidak tersambung ke titik masuk colo FDT.
+- KMZ tanpa tiang/tanpa jalur kini mendapat remarks Reject di rekap batch. Rentang yang dihitung ulang dengan tiang saudara
+  menyebut semua bagian > 60 m.
+- Saklar profil `route_integrity`; false = identik 3.12.0 (Suka Karya 458 temuan; remarks identik pada 5.200 kombinasi).
+
 ## 3.12.0 – jalur ditumpu tiang cluster saudara 1 PIC, setiap aturan bersumber (kajian REVIEW STRAND Suka Karya, November 2026)
 
 - **Rentang lewat tiang saudara**: bentang = jarak titik tumpu berurutan (USDA RUS Bulletin 1751F-630 "Span Length";
