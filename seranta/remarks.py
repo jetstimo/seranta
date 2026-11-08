@@ -186,7 +186,8 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
         sev = by[key][0]["sev"]
         blk = blocking if blocking is not None else (sev == "ERROR" or key in BLOCKING_WARN and
                                                      (route or key not in ROUTE_KEYS))
-        out.append((PRIORITY.index(prio_key or key), blk, long_, short_ or long_) + ((tiny,) if tiny else ()))
+        out.append(_Ph((PRIORITY.index(prio_key or key), blk, long_, short_ or long_) + ((tiny,) if tiny else ()),
+                       key, [f for f in by.get(key, []) if f.get("ket")]))
 
     # 3.10.0: irisan BOUNDARY per cluster tetangga (nama pendek -> baris HP cluster ini di irisan). 'n HP masuk boundary X'
     # untuk HP yang SEMUANYA ada di irisan dengan X digabung ke frasa tumpang tindih X, supaya kedua cluster menyebut
@@ -645,9 +646,163 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
     return out, notes
 
 
-def build(findings, rowmap=None, findim_stale=False, max_len=MAX_LEN, route=True):
+class _Ph(tuple):
+    """Frasa remarks (tuple lama: prioritas, penghalang, panjang, pendek, [mini]) + kode temuan & temuannya."""
+    def __new__(cls, items, key="", fl=()):
+        o = tuple.__new__(cls, items)
+        o.key, o.fl = key, list(fl)
+        return o
+
+
+# ---- 3.14.0: remarks SEDERHANA (masukan pengguna: "lebih simple aja kata-katanya, kayak 'ada Homepass duplicate dengan
+# cluster blabla, ada homepass dari pole lebih 50 meter, ada pole duplicate dengan cluster blabla, mohon di check kembali
+# keseluruhannya'"). Satu kalimat pendek per jenis masalah, tanpa nomor baris/angka rinci; rincian tetap di REMARKS.txt,
+# laporan dan QC_TEMUAN. {c} = nama cluster lain, {lim} = batas yang dilanggar.
+SIMPLE = {
+    "CLUSTER_LAIN_DIGABUNG": "ada data cluster lain yang ikut tergabung di cluster ini",
+    "BOUNDARY_MEMUAT_CLUSTER_LAIN": "boundary masih boundary induk (memuat cluster lain)",
+    "HP_DUPLIKAT_LINTAS_CLUSTER": "ada homepass duplikat dengan cluster {c}",
+    "HP_DI_RFS_DONE": "ada homepass yang sudah masuk area RFS DONE",
+    "HP_DI_RFS_EXTENSION": "ada homepass di area RFS EXTENSION",
+    "HP_DI_FUNNEL_LAIN": "ada homepass yang masuk funnel lain",
+    "HP_DI_BOUNDARY_CLUSTER_LAIN": "ada homepass yang masuk boundary cluster {c}",
+    "WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN": "boundary tumpang tindih dengan cluster {c}",
+    "BAKP_HP_KURANG": "jumlah homepass di BAKP kurang",
+    "BAKP_STEMPEL_TTD_TEMPELAN_DIGITAL": "stempel/tanda tangan BAKP berupa tempelan digital",
+    "BAKP_ADA_GAMBAR_TEMPELAN": "ada gambar tempelan di BAKP",
+    "BAKP_NAMA_FILE_ID_BEDA": "ID cluster di nama file BAKP berbeda",
+    "WARN_BAKP_ID_METADATA_BEDA": "ID cluster di BAKP berbeda",
+    "BAKP_DIEDIT_APLIKASI_GRAFIS": "BAKP terdeteksi diedit dengan aplikasi grafis",
+    "FUNNEL_SENDIRI_REJECT": "funnel cluster ini berstatus reject/batal",
+    "HP_LUAR_FUNNEL": "ada homepass di luar funnel",
+    "HP_LUAR_BOUNDARY": "ada homepass di luar boundary",
+    "HP_DI_AREA_TANPA_IZIN": "ada homepass di area tanpa izin",
+    "TIANG_DI_AREA_TANPA_IZIN": "ada tiang di area tanpa izin",
+    "HP_JAUH_DARI_TIANG": "ada homepass yang jaraknya dari tiang lebih dari {lim} m",
+    "RENTANG_NP_NP": "ada jarak antar tiang lebih dari {lim} m",
+    "RENTANG_NP_EP": "ada jarak antar tiang lebih dari {lim} m",
+    "JALUR_TANPA_TIANG": "ada jalur kabel tanpa tiang",
+    "JALUR_TERPUTUS": "ada jalur kabel yang terputus",
+    "UJUNG_JALUR_TANPA_TIANG": "ada ujung jalur kabel tanpa tiang",
+    "WARN_SIMPANG_TANPA_TIANG": "ada percabangan jalur tanpa tiang",
+    "HP_DUPLIKAT_KOORDINAT": "ada homepass duplikat (koordinat sama)",
+    "HP_DUPLIKAT_ID": "ada ID homepass ganda",
+    "HP_DUPLIKAT_LABEL": "ada homepass duplikat (label sama)",
+    "HP_HPDB_TIDAK_ADA_DI_KMZ": "ada homepass di HPDB yang tidak ada di KMZ",
+    "HP_KMZ_TIDAK_ADA_DI_HPDB": "ada homepass di KMZ yang tidak ada di HPDB",
+    "HP_SUDAH_ADA_DI_DESIGN_LITE": "ada homepass yang sudah ada di jaringan eksisting",
+    "TIANG_BARU_SUDAH_ADA": "ada tiang baru yang sudah ada di jaringan eksisting",
+    "WARN_TIANG_GANDA_LINTAS_CLUSTER": "ada tiang duplikat dengan cluster {c}",
+    "WARN_ID_CLUSTER_GANDA": "ID cluster juga dipakai cluster lain",
+    "ADMIN_": "data wilayah administrasi tidak sesuai",
+    "WARN_TIANG_DUPLIKAT_KMZ": "ada tiang dobel di KMZ",
+    "WARN_BELOKAN_TANPA_TIANG": "ada belokan jalur tanpa tiang",
+    "WARN_JALUR_TERPUTUS": "ada jalur kabel yang terputus",
+    "WARN_JALUR_BERSILANG_TANPA_TIANG": "ada jalur kabel bersilang tanpa tiang",
+    "WARN_POLE_SHEET_BEDA_KMZ": "data sheet Pole berbeda dengan KMZ",
+    "WARN_CLUSTER_NAME_KOSONG": "ada nama cluster yang kosong di HPDB",
+    "WARN_HPDB_CLUSTER_NAME_CAMPUR": "nama cluster di HPDB tidak seragam",
+    "WARN_BOUNDARY_TIDAK_VALID": "bentuk boundary tidak valid",
+    "WARN_HP_KOORDINAT_BEDA_FOTO": "ada koordinat homepass yang berbeda dengan foto",
+    "WARN_JALUR_LEWAT_AREA_TANPA_IZIN": "ada jalur kabel lewat area tanpa izin",
+    "WARN_HP_TANPA_EVIDENCE": "ada homepass tanpa foto",
+    "TIANG_NGANGGUR": "ada tiang yang tidak dilewati jalur",
+    "WARN_HP_LABEL_SAMA": "ada homepass dengan label sama",
+    "WARN_HP_JAUH_LEWAT_JALUR": "ada homepass yang lebih dari {lim} m dari tiang bila diukur lewat jalan",
+    "WARN_HP_AKSES_DALAM": "ada homepass yang jauh dari jalur kabel",
+    "HP_BERGESER": "ada homepass yang posisinya bergeser",
+    "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR": "ID cluster belum terdaftar",
+    "COLO_TITIK_MASUK_TIDAK_DI_JALUR": "titik masuk kabel dari FDT tidak dilewati jalur",
+    "COLO_HP_TIDAK_TERJANGKAU_JALUR": "ada homepass yang tidak terjangkau dari FDT",
+    "WARN_TIANG_LUAR_BOUNDARY": "ada tiang di luar boundary",
+    "WARN_JALUR_LUAR_BOUNDARY": "ada jalur kabel di luar boundary",
+    "WARN_JALUR_BERTUMPUK": "ada garis jalur yang digambar dobel",
+    "WARN_TSSR_ID_BEDA": "ID cluster di TSSR berbeda",
+    "WARN_TSSR_HP_BEDA": "jumlah homepass di TSSR berbeda",
+    "WARN_TSSR_DIPAKAI_BERSAMA": "TSSR dipakai bersama cluster lain",
+    "WARN_HPDB_KARAKTER_TERSEMBUNYI": "ada karakter tersembunyi di HPDB",
+}
+SIMPLE_TAIL = "Mohon dicek kembali keseluruhannya."
+
+
+def _names_in(long_):
+    """Nama cluster lain dari frasa rinci ('... dgn SUKA KARYA RT 10 (+-2.910 m2 ...), RT 06 (...)')."""
+    m = re.search(r"\b(?:dgn|dengan)\s+(?:cluster\s+)?(.+)$", long_ or "")
+    if not m:
+        return []
+    t = m.group(1)
+    while re.search(r"\([^()]*\)", t):
+        t = re.sub(r"\([^()]*\)", "", t)
+    t = re.split(r";|:|\bmasuk\b|\bdi irisan\b", t)[0]
+    out = []
+    for x in t.split(","):
+        x = " ".join(x.split()).strip(" .")
+        x = re.sub(r"\s+(dan|&)\s+\d+\s+lain$", "", x)
+        if x and x not in out and len(x) <= 60:
+            out.append(x)
+    return out
+
+
+def _simple_of(p):
+    key = getattr(p, "key", "")
+    tpl = SIMPLE.get(key)
+    if tpl is None and key.startswith("ADMIN_"):
+        tpl = SIMPLE["ADMIN_"]
+    if tpl is None:
+        return p[3]                 # kode baru tanpa kalimat sederhana: pakai versi pendek
+    lim = None
+    for f in getattr(p, "fl", []):
+        if f.get("lim") not in (None, ""):
+            try:
+                lim = float(f["lim"])
+            except (TypeError, ValueError):
+                pass
+    if "{lim}" in tpl:
+        tpl = tpl.replace("{lim}", num(lim, 0) if lim else "batas")
+    if "{c}" in tpl:
+        nm = _names_in(p[2])
+        tpl = tpl.replace(" {c}", (" " + ", ".join(nm)) if nm else " lain")
+    return tpl
+
+
+def build_simple(findings, rowmap=None, findim_stale=False, max_len=MAX_LEN, route=True):
+    """Remarks sederhana: 'Reject: ada A, ada B, dan C. Mohon dicek kembali keseluruhannya.' (<= 255 karakter).
+    Urutan dan status SAMA dengan remarks rinci (alasan penghalang dulu)."""
+    ph, notes = phrases(findings, rowmap, findim_stale, route)
+    if not ph:
+        return {"status": "APPROVE", "text": "Approve", "length": 7, "used": [], "dropped": [], "notes": notes}
+    blocking = any(p[1] for p in ph)
+    status, head = ("REJECT", "Reject: ") if blocking else ("APPROVE DENGAN CATATAN", "Approve dengan catatan: ")
+    ph.sort(key=lambda t: (not t[1], t[0]))
+    items = []
+    for p in ph:
+        t = _simple_of(p)
+        if t and t not in items:
+            items.append(t)
+
+    def compose(it, more):
+        if not it:
+            return head.rstrip()
+        body = it[0] if len(it) == 1 else ", ".join(it[:-1]) + (", " if more else ", dan ") + it[-1]
+        body = body[0].upper() + body[1:]
+        return head + body + (", dan masalah lain" if more else "") + ". " + SIMPLE_TAIL
+    used = list(items)
+    text = compose(used, False)
+    while len(text) > max_len and len(used) > 1:
+        used.pop()
+        text = compose(used, True)
+    if len(text) > max_len:
+        text = text[:max_len - 1].rstrip() + "."
+    dropped = [t for t in items if t not in used]
+    return {"status": status, "text": text, "length": len(text), "used": used, "dropped": dropped, "notes": notes}
+
+
+def build(findings, rowmap=None, findim_stale=False, max_len=MAX_LEN, route=True, style="rinci"):
     """-> dict(status, text, length, used=[frasa], dropped=[frasa], notes=[...])
-    route=False: tanpa kode integritas jalur 3.13.0 (hasil identik 3.12.0)."""
+    route=False: tanpa kode integritas jalur 3.13.0 (hasil identik 3.12.0).
+    style='sederhana': kalimat pendek tanpa angka rinci (3.14.0); 'rinci' = gaya lama."""
+    if style == "sederhana":
+        return build_simple(findings, rowmap, findim_stale, max_len, route)
     ph, notes = phrases(findings, rowmap, findim_stale, route)
     blocking = any(p[1] for p in ph)
     if blocking:

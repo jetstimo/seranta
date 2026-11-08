@@ -391,3 +391,42 @@ peringatan; FDT di dekat bagian utama jalur yang terputus -> 8 HP bagian lain ti
 temuan. Belokan >= 30 derajat tanpa tiang tetap peringatan seperti sebelumnya (keputusan kebijakan pembuat; mengubahnya
 menggeser hasil lama).
 
+
+## Tambahan 3.14.0 — berkas dikenali dari isinya, remarks sederhana, jenis data otomatis (revisi pembuat 8 Nov 2026)
+**Pengenalan berkas (kenali.py)** — nama dipakai lebih dulu bila jelas (hasil lama tidak bergeser); isi dipakai bila nama
+tidak ada, salah ketik, atau lebih dari satu kandidat. Berkas dibaca sebagai DATA (zip + XML/teks, batas ukuran).
+| Berkas | Ciri isi (= syarat pembacanya) | Nama yang juga dikenali |
+|---|---|---|
+| Daftar homepass (HPDB) | baris judul berisi LATITUDE & LONGITUDE dalam 20 baris pertama (syarat pembaca HPDB) | HPDB, HPBD, HDPB, HPDP, HP DB, HP DATABASE, HOMEPASS, HOMEPAS (jarak edit Damerau <= 1) |
+| KMZ survei | titik di folder HP/HOMEPASS (+ garis jalur / folder tiang), atau tiang + jalur | — |
+| Design Lite | folder FDT dengan data SPLITTERS | DESIGN LITE |
+| Funnel | poligon tanpa titik/garis, folder funnel/RFS | FUNNEL |
+| attributes | workbook dengan sheet FINDIM / OLT CLUSTER | attribut/atribut/FINDIM |
+| TSSR | teks .docx memuat TSSR / Site Survey / Site Profile | TSSR, SITE PROFILE/SURVEY |
+| BAKP | (sudah ada sejak 3.5) teks PDF Berita Acara/Kesepakatan/Perijinan | BAKP, BKAP, BAPK (jarak edit 1) |
+Cadangan (OLD, LAMA, BACKUP, COPY, '(1)') dibuang bila masih ada kandidat lain. KMZ cluster lain yang tersalin ke folder
+tidak dipilih bila kemiripan nama dengan HPDB jelas menunjuk KMZ lain (ID cluster sama = cocok; nomor RT/RW beda = bukan
+pasangan; jumlah HP di nama diabaikan karena berubah setelah revisi).
+
+**Satu folder berisi banyak cluster** (banyak KMZ survei, atau banyak HPDB + KMZ + dokumen): disalin ke
+`_PER_BERKAS/<nama>/` dan diperiksa per cluster (cluster lain = saudara). Pasangan HPDB–KMZ–BAKP–TSSR dari kemiripan
+nama; bila ragu (selisih skor < 0,15 atau skor < 0,5) tidak dipasangkan. Uji: folder '1 pic design' (13 KMZ Suka Karya +
+1 KMZ 1 PIC Tomohon 7 lingkungan) dulu berhenti 'More than one KMZ'; kini 20 cluster diperiksa. Folder campuran 3 cluster
+(HPDB+KMZ+BAKP+TSSR): 3 pasangan benar.
+
+**Remarks sederhana (bawaan)** — masukan pengguna: kalimat pendek seperti "ada homepass duplikat dengan cluster X, ada
+homepass dari tiang lebih 50 meter, ada tiang duplikat dengan cluster X, mohon dicek kembali keseluruhannya". Status dan
+urutan SAMA dengan remarks rinci (alasan reject dulu); rincian (baris, jarak, nilai) tetap di REMARKS.txt, laporan, dan
+kolom `remarks_rinci` REMARKS_BATCH.csv. Pilihan "Detailed" di Advanced = gaya lama.
+
+**Jenis data dinilai otomatis** — tiap cluster: "1 PIC / berdampingan dengan ..." (satu jaringan: tiang sama / jalur
+tersambung / KMZ memuat folder cluster lain; berdampingan: BAKP sama atau boundary <= 5 m dan dekat) atau "cluster
+mandiri". Aturan reject sama untuk keduanya; toleransi 1 PIC (3.11-3.12) hanya berlaku bila terdeteksi 1 PIC.
+
+**Diuji dan DITOLAK: nama wilayah induk sebagai bukti satu funnel.** Usulan: tanpa data funnel/dokumen, cluster
+bertetangga dengan nama induk sama ('SUKA KARYA KOTA BARU RT 09/16', 'LINGKUNGAN 1..7-KAKASKASEN') dianggap satu wilayah.
+Uji di QGIS pengguna dengan data funnel asli (08-11-2026): 13 RT Suka Karya memang satu funnel, tetapi 7 lingkungan
+KAKASKASEN masing-masing funnel SENDIRI. Dengan aturan nama, LINGKUNGAN 7 lolos 'Approve dgn catatan' (tiang lintas funnel
+ikut dihitung) padahal dengan data funnel hasilnya Reject. Nama tidak membedakan kedua kasus -> tidak dipakai. Tanpa data
+funnel/BAKP/TSSR, boundary bertumpuk tetap tidak ditoleransi (aman) dan laporan menyebut funnel belum dicek; jalankan dengan
+folder data referensi untuk keputusan 1 PIC yang benar.

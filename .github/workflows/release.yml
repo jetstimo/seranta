@@ -36,6 +36,8 @@ jobs:
           python seranta/tests/test_v380.py
           python seranta/tests/test_v310.py seranta
           python seranta/tests/test_v311.py seranta
+          python seranta/tests/test_v313.py
+          python seranta/tests/test_v314.py
       - name: Brand-neutral texts
         env:
           BRAND_DENYLIST: ${{ secrets.BRAND_DENYLIST }}
