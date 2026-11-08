@@ -49,9 +49,18 @@ def find_bakp(folder):
         for f in sorted(files):
             if f.startswith("~$") or not f.lower().endswith(IMG_EXT):
                 continue
-            if BAKP_RX.search(f):
+            if BAKP_RX.search(f) or _typo_bakp(f):
                 hits.append(os.path.join(root, f))
     return hits
+
+
+def _typo_bakp(name):
+    """3.14.0: salah ketik satu huruf/tukar huruf pada kata BAKP (BKAP, BAPK, BAKB) di nama berkas."""
+    try:
+        from . import kenali as _k
+    except ImportError:
+        import kenali as _k
+    return any(len(t) == 4 and t != "BAKO" and _k.lev(t, "BAKP", 3) <= 1 for t in _k.tokens(name))
 
 
 OTHER_DOC_RX = re.compile(r"HPDB|KMZ|TSSR|EVID[AE]N[CS]E|FOTO|PHOTO|SURVEY|BOQ|BOM|INVOICE|QC_|RINGKASAN|LAPORAN",
@@ -756,7 +765,7 @@ def evaluate(off, exp):
         items.append(("INFO_BAKP_HASIL_SCAN", None,
                       "BAKP hasil scan (%d halaman gambar): tulisan tangan TIDAK dibaca otomatis - baca manual Cluster ID & "
                       "homepass, RT/RW di stempel, nominal kompensasi di catatan, centang 'Permit Approved'/'Kompensasi', "
-                      "dan tanda tangan vendor/Iforte/RT" % off[0].get("n_pages", 0)))
+                      "dan tanda tangan vendor/operator/RT" % off[0].get("n_pages", 0)))
     n = off[0].get("n_pages", 0)
     if n and n < 2:
         items.append(("INFO_BAKP_HALAMAN_SEDIKIT", None, "BAKP hanya %d halaman; format standar 2-4 halaman" % n))

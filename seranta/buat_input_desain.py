@@ -21,7 +21,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.13.0"
+__version__ = "3.14.0"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -60,6 +60,7 @@ try:
     from . import tssr as _tssr
     from . import konsistensi as _kons
     from . import integritas_jalur as _integ
+    from . import kenali as _kenali
 except ImportError:          # dijalankan sebagai skrip tunggal
     import bakp as _bakp
     import qc_core as _qc
@@ -73,6 +74,7 @@ except ImportError:          # dijalankan sebagai skrip tunggal
     import tssr as _tssr
     import konsistensi as _kons
     import integritas_jalur as _integ
+    import kenali as _kenali
 
 # Kompatibilitas: QGIS 3.36+ (termasuk 3.40 Bratislava) memindahkan enum ke kelas Qgis.
 try:
@@ -241,6 +243,36 @@ def ref_files(ref_dir, kind, depth=2):
         for f in sorted(files):
             if not f.startswith("~$") and f.lower().endswith(exts) and re.search(pat, f, re.IGNORECASE):
                 out.append(os.path.join(root, f))
+    if not out and kind in ("designlite", "funnel", "attributes"):
+        out = _ref_by_content(ref_dir, kind, exts, depth)
+    return out
+
+
+def _ref_by_content(ref_dir, kind, exts, depth):
+    """3.14.0: berkas referensi yang namanya tidak memuat kata kuncinya (diubah/salah ketik) dikenali dari ISI:
+    Design Lite = KMZ dengan folder FDT ber-data SPLITTERS; Funnel = KMZ poligon area layanan tanpa titik/garis;
+    attributes = workbook dengan sheet FINDIM / OLT CLUSTER. Hanya dipakai bila pencarian nama tidak menemukan apa pun."""
+    out = []
+    for root, dirs, files in os.walk(ref_dir):
+        rel = os.path.relpath(root, ref_dir)
+        d = 0 if rel == "." else rel.count(os.sep) + 1
+        dirs[:] = [] if d >= depth else sorted(x for x in dirs if not x.startswith(".")
+                                                and not x.upper().startswith(("INPUT", "HASIL_PASCA", "_")))
+        for f in sorted(files):
+            p_ = os.path.join(root, f)
+            if f.startswith("~$") or not f.lower().endswith(exts):
+                continue
+            try:
+                if kind in ("designlite", "funnel"):
+                    if _kenali.kmz_profile(p_).get("kind") == kind:
+                        out.append(p_)
+                elif f.lower().endswith((".xlsx", ".xlsm")):
+                    with zipfile.ZipFile(p_) as z_:
+                        wb_ = z_.read("xl/workbook.xml").decode("utf-8", "replace")
+                    if re.search(r'name="(FINDIM|OLT[ _]?CLUSTER)', wb_, re.IGNORECASE):
+                        out.append(p_)
+            except Exception as e:
+                _log.note(e)
     return out
 
 
@@ -395,14 +427,43 @@ def _sheet_files(folder):
 
 
 def hpdb_candidates(folder):
-    """Kandidat HPDB: nama memuat HPDB/HPBD/HOMEPASS; bila tidak ada, satu-satunya spreadsheet yang bukan
-    TSSR/BOM/BAKP/attributes."""
+    """Kandidat HPDB. Urutan (3.14.0: nama lalu ISI berkas):
+    1. tepat satu nama memuat HPDB/HPBD/HOMEPASS -> itu (perilaku lama, hasil tidak bergeser);
+    2. nama salah ketik (HDPB, HPDP, HOMEPAS, HP DATABASE ...) atau beberapa nama HPDB -> yang isinya punya baris judul
+       LATITUDE/LONGITUDE (syarat pembaca HPDB);
+    3. tanpa nama HPDB: satu-satunya spreadsheet lain (perilaku lama) kecuali isinya jelas bukan daftar homepass, atau
+       spreadsheet yang isinya daftar homepass."""
     c = _sheet_files(folder)
     named = [f for f in c if HPDB_NAME_RX.search(os.path.splitext(f)[0]) and not NOT_HPDB_RX.search(f)]
-    if named:
+    if len(named) == 1:
         return named
+
+    def is_hp(f):
+        return _kenali.sheet_profile(os.path.join(folder, f)).get("kind") == "hpdb"
+
+    def not_hp(f):
+        return _kenali.sheet_profile(os.path.join(folder, f)).get("kind") == "lain"
+    if not named:
+        named = [f for f in c if _kenali.name_is_hpdb(f) and not NOT_HPDB_RX.search(f)]
+    if named:
+        if len(named) == 1:
+            return named
+        byc = _drop_backup([f for f in named if is_hp(f)] or named)
+        return byc
     other = [f for f in c if not NOT_HPDB_RX.search(f)]
-    return other if len(other) == 1 else []
+    if len(other) == 1:
+        return [] if not_hp(other[0]) else other
+    return [f for f in other if is_hp(f)]
+
+
+_BACKUP_RX = re.compile(r"(?<![A-Z])(OLD|LAMA|BACKUP|BAK|COPY|SALINAN|ARSIP|ARCHIVE|DRAFT|TEMP)(?![A-Z])|\(\d\)$",
+                        re.IGNORECASE)
+
+
+def _drop_backup(files):
+    """Bila ada beberapa kandidat, buang salinan cadangan (OLD, LAMA, BACKUP, COPY, '(1)') selama masih tersisa satu."""
+    keep = [f for f in files if not _BACKUP_RX.search(os.path.splitext(f)[0].replace("_", " "))]
+    return keep if keep else files
 
 
 def find_hpdb(folder):
@@ -463,8 +524,10 @@ def cluster_id_of(hpdb, outdir="", kmz=""):
     return ""
 
 
-def find_kmz(folder):
-    """KMZ cluster dari vendor: .kmz/.kml selain hasil turunan (POLE, CABLE, QC_TEMUAN, ...)."""
+def find_kmz(folder, hpdb=None):
+    """KMZ cluster dari vendor: .kmz/.kml selain hasil turunan (POLE, CABLE, QC_TEMUAN, ...).
+    3.14.0: bila masih lebih dari satu, pilih dari ISI (KMZ survei: titik HP / tiang + jalur; KMZ referensi Design Lite/
+    Funnel dibuang) lalu dari kemiripan nama dengan HPDB (token nama + ID cluster yang sama)."""
     c = [f for f in _files(folder) if os.path.splitext(f)[1].lower() in (".kmz", ".kml")
          and not _DERIVED.match(os.path.splitext(f)[0].strip())]
     # folder proyek yang sudah sampai tahap pasca-desain juga berisi KMZ APD dan paket feeder (F5_T8_...):
@@ -473,7 +536,27 @@ def find_kmz(folder):
     if survey:
         c = survey
     pref = [f for f in c if re.match(r"^KMZ[_\s-]", f, re.IGNORECASE)]
-    return _choose(folder, pref or c, "KMZ", "KMZ cluster")
+    pick = pref or c
+    if len(c) > 1 and hpdb:
+        # KMZ cluster lain yang ikut tersalin ke folder ini (nama RT/ID beda dengan HPDB) tidak boleh terpilih hanya
+        # karena berawalan KMZ_: bila kemiripan nama dengan HPDB jelas menunjuk KMZ lain, pakai yang itu
+        bm, _sc = _kenali.best_match(os.path.basename(hpdb), c)
+        if bm and (len(pick) != 1 or _kenali.similarity(os.path.basename(hpdb), pick[0]) + 0.15 <= _sc):
+            pick = [bm]
+    pick = _drop_backup(pick)
+    if len(pick) > 1:
+        sv = [f for f in pick if _kenali.kmz_profile(os.path.join(folder, f)).get("kind") == "survei"]
+        if len(sv) == 1:
+            pick = sv
+        elif len(sv) > 1 and hpdb:
+            bm, _sc = _kenali.best_match(os.path.basename(hpdb), sv)
+            if bm:
+                pick = [bm]
+            else:
+                pick = sv
+        elif sv:
+            pick = sv
+    return _choose(folder, pick, "KMZ", "KMZ cluster")
 
 
 APD_KMZ_RX = re.compile(r"\bAPD\b|^F\d+_T\d+_|^QC_|FEEDER|DISTRIBUS", re.IGNORECASE)
@@ -558,7 +641,78 @@ def kmz_candidates(folder):
              and not _DERIVED.match(os.path.splitext(f)[0].strip())]
     except OSError:
         return []
-    return [f for f in c if not APD_KMZ_RX.search(f) and not REF_KMZ_RX.search(f)]
+    c = [f for f in c if not APD_KMZ_RX.search(f) and not REF_KMZ_RX.search(f)]
+    # 3.14.0: KMZ referensi yang namanya diubah (Design Lite / Funnel dari isinya) bukan KMZ survei
+    return [f for f in c if _kenali.kmz_profile(os.path.join(folder, f)).get("kind") not in ("designlite", "funnel")]
+
+
+PER_FILE_DIR = "_PER_BERKAS"     # diawali '_' -> tidak ikut dicari sebagai cluster pada run berikutnya
+
+
+def _safe_dirname(nm):
+    safe = re.sub(r'[<>:"/\\|?*\x00-\x1f]+', " ", nm).strip(" .") or "CLUSTER"
+    return re.sub(r"\s+", " ", safe)[:80]
+
+
+def split_flat_folder(folder, kmz_only):
+    """3.14.0: satu folder berisi BEBERAPA cluster (banyak KMZ survei, atau banyak HPDB + KMZ) tanpa subfolder per
+    cluster. Dulu berhenti dengan 'lebih dari satu berkas KMZ/HPDB'. Sekarang tiap cluster disalin ke
+    <folder>/_PER_BERKAS/<nama>/ dan diperiksa sendiri-sendiri (cluster lain di folder itu = cluster saudara).
+    Pasangan HPDB-KMZ dan dokumen (BAKP/TSSR/foto) dicocokkan dari kemiripan nama + ID cluster; bila ragu tidak
+    dipasangkan. -> (daftar folder cluster, catatan) atau ([], '') bila folder ini memang satu cluster."""
+    import shutil
+    try:
+        files = _files(folder)
+    except OSError:
+        return [], ""
+    kmzs = [f for f in kmz_candidates(folder)
+            if _kenali.kmz_profile(os.path.join(folder, f)).get("kind") == "survei"]
+    groups = {}
+    if kmz_only:
+        if len(kmzs) < 2:
+            return [], ""
+        for k in kmzs:
+            groups[os.path.splitext(k)[0]] = [k]
+    else:
+        hps = hpdb_candidates(folder)
+        if len(hps) < 2:
+            return [], ""
+        free = list(kmzs)
+        for h in hps:
+            groups[os.path.splitext(h)[0]] = [h]
+        # pasangkan KMZ: tiap HPDB dengan KMZ paling mirip yang jelas unggul (sekali pakai)
+        for h in hps:
+            bm, _sc = _kenali.best_match(h, free)
+            if bm:
+                groups[os.path.splitext(h)[0]].append(bm)
+                free.remove(bm)
+        used = {f for g in groups.values() for f in g}
+        docs = [f for f in files if f not in used and not f.startswith("~$")
+                and os.path.splitext(f)[1].lower() in (".pdf", ".docx", ".doc", ".jpg", ".jpeg", ".png")]
+        for d in docs:
+            bm, _sc = _kenali.best_match(d, hps)
+            if bm:
+                groups[os.path.splitext(bm)[0]].append(d)
+    base = os.path.join(folder, PER_FILE_DIR)
+    out, seen = [], set()
+    for nm, fl in sorted(groups.items()):
+        nm = re.sub(r"^(HPDB|HPBD|HDPB|HP[\s_-]*DB|KMZ)[\s_-]+", "", nm, flags=re.IGNORECASE) or nm
+        safe, k = _safe_dirname(nm), 2
+        s0 = safe
+        while safe.upper() in seen:
+            safe, k = "%s (%d)" % (s0, k), k + 1
+        seen.add(safe.upper())
+        d = os.path.join(base, safe)
+        os.makedirs(d, exist_ok=True)
+        for f in fl:
+            src, dst = os.path.join(folder, f), os.path.join(d, f)
+            if not os.path.exists(dst) or os.path.getmtime(dst) < os.path.getmtime(src) \
+                    or os.path.getsize(dst) != os.path.getsize(src):
+                shutil.copy2(src, dst)
+        out.append(d)
+    note = ("%d cluster dalam satu folder -> masing-masing disalin ke %s\\<nama> dan diperiksa sendiri-sendiri"
+            % (len(out), PER_FILE_DIR))
+    return out, note
 
 
 # ---------- Pembaca .xlsx tanpa GDAL (zip + XML, hanya pustaka standar Python) ----------
@@ -2573,6 +2727,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
     PROFILE = "PROFILE"
     OPEN_REPORT = "OPEN_REPORT"
     COLO_LOG = "COLO_LOG"
+    REMARK_STYLE = "REMARK_STYLE"
+    REMARK_STYLE_OPTS = ["Simple: short plain sentences (e.g. 'there are homepasses more than 50 m from a pole'), "
+                         "details stay in REMARKS.txt", "Detailed: rows, distances and values in the remarks"]
     NAMING = "NAMING"
     EXIST_SPAN = "EXIST_SPAN"          # lama (<= 3.1.x), tidak dipakai lagi
     SPAN_SCOPE = "SPAN_SCOPE"
@@ -2724,6 +2881,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         self._adv(QgsProcessingParameterEnum(
             self.COLO_BASIS, self.tr("Colocation: distance compared with the limit"),
             options=self.COLO_BASIS_OPTS, defaultValue=0))
+        self._adv(QgsProcessingParameterEnum(
+            self.REMARK_STYLE, self.tr("Review remarks wording (255 characters)"), options=self.REMARK_STYLE_OPTS,
+            defaultValue=0))
         self._adv(QgsProcessingParameterBoolean(
             self.COLO_LOG, self.tr("Colocation: record this cluster's planned FDT in COLO_RENCANA.csv (avoids double booking)"),
             defaultValue=True))
@@ -3058,6 +3218,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             "colo_max": self.parameterAsDouble(parameters, self.COLO_MAX, context),
             "profile": self.parameterAsEnum(parameters, self.PROFILE, context),
             "colo_log": self.parameterAsBool(parameters, self.COLO_LOG, context),
+            "remark_style": ("rinci" if (self.REMARK_STYLE in parameters and
+                                         self.parameterAsEnum(parameters, self.REMARK_STYLE, context) == 1) else "sederhana"),
             "naming": self.parameterAsEnum(parameters, self.NAMING, context),
             "exist_span": 0.0,
             "span_scope": self.parameterAsEnum(parameters, self.SPAN_SCOPE, context) if self.SPAN_SCOPE in parameters else 0,
@@ -3120,7 +3282,22 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         def subdirs(d):
             return [os.path.join(d, x) for x in sorted(os.listdir(d))
                     if os.path.isdir(os.path.join(d, x)) and not x.upper().startswith(("INPUT", "_"))]
+        def expand(d_, kmz_only_):
+            """3.14.0: folder yang memuat beberapa cluster tanpa subfolder -> satu folder per cluster (_PER_BERKAS)."""
+            if o["hpdb"] or o["cluster_kmz"]:
+                return [d_]
+            try:
+                r_, note_ = split_flat_folder(d_, kmz_only_)
+            except Exception as e_:
+                _log.note(e_)
+                r_, note_ = [], ""
+            if r_:
+                feedback.pushInfo("%s: %s" % (os.path.basename(d_.rstrip("\\/")) or d_, note_))
+                return r_
+            return [d_]
         clusters = [outdir]
+        if not o["hpdb"] and has_hpdb(outdir):
+            clusters = expand(outdir, False)
         if not o["hpdb"] and not has_hpdb(outdir):
             # tiap subfolder: berisi HPDB, atau (hasil ekstrak ZIP / folder bertingkat) HPDB-nya satu tingkat lebih dalam.
             # Dulu tingkat dalam hanya dicari bila TIDAK ada satu pun subfolder ber-HPDB, sehingga cluster bertingkat
@@ -3128,20 +3305,24 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             clusters = []
             for d in subdirs(outdir):
                 if has_hpdb(d):
-                    clusters.append(d)
+                    clusters.extend(expand(d, False))
                 else:
-                    clusters.extend(d2 for d2 in subdirs(d) if has_hpdb(d2))
+                    for d2 in subdirs(d):
+                        if has_hpdb(d2):
+                            clusters.extend(expand(d2, False))
             if not clusters:
                 # Tidak ada HPDB sama sekali: QC tetap jalan dari KMZ saja (cek berbasis HPDB dilewati, dengan peringatan).
                 # Hanya dipakai bila TIDAK ADA satu pun HPDB, sehingga run dengan HPDB tidak berubah.
                 if kmz_candidates(outdir):
-                    clusters = [outdir]
+                    clusters = expand(outdir, True)
                 else:
                     for d in subdirs(outdir):
                         if kmz_candidates(d):
-                            clusters.append(d)
+                            clusters.extend(expand(d, True))
                         else:
-                            clusters.extend(d2 for d2 in subdirs(d) if kmz_candidates(d2))
+                            for d2 in subdirs(d):
+                                if kmz_candidates(d2):
+                                    clusters.extend(expand(d2, True))
                 if not clusters:
                     sheets = [os.path.relpath(os.path.join(r, f), outdir) for r, _ds, fs in os.walk(outdir)
                               for f in fs if os.path.splitext(f)[1].lower() in (".xlsx", ".xls", ".csv")][:6]
@@ -3233,11 +3414,13 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             rcsv = os.path.join(outdir, "REMARKS_BATCH_%s.csv" % _dt.datetime.now().strftime("%Y%m%d_%H%M"))
             with open(rcsv, "w", newline="", encoding="utf-8-sig") as fh_:
                 w_ = _csv.writer(fh_, delimiter=";")
-                w_.writerow(["cluster_id", "cluster", "status", "remarks", "panjang", "satu_pic_dengan", "catatan"])
+                w_.writerow(["cluster_id", "cluster", "status", "remarks", "panjang", "satu_pic_dengan", "catatan",
+                             "remarks_rinci", "jenis_data"])
                 for nm, stt, r in rekap:
                     rm_ = r.get("remarks") or {}
                     w_.writerow([r.get("cl_id", ""), r.get("label", nm), rm_.get("status", stt), rm_.get("text", ""),
-                                 rm_.get("length", ""), ", ".join(r.get("pic") or []), " | ".join(rm_.get("notes") or [])])
+                                 rm_.get("length", ""), ", ".join(r.get("pic") or []), " | ".join(rm_.get("notes") or []),
+                                 rm_.get("rinci", rm_.get("text", "")), rm_.get("jenis", "")])
             lines.append("Remarks CSV: %s" % rcsv)
         except Exception as e:
             feedback.reportError("REMARKS_BATCH.csv not written: %s" % e, fatalError=False)
@@ -3637,7 +3820,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             cluster_kmz = ""
         elif not cluster_kmz:
             cluster_kmz = (_choose(outdir, kmz_candidates(outdir), "KMZ", "KMZ cluster") if kmz_only
-                           else find_kmz(outdir))
+                           else find_kmz(outdir, hpdb))
         if kmz_only:
             hpdb = ""
             if not cluster_kmz:
@@ -6504,7 +6687,23 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 rmk["dropped"] = [_kt(n_) for n_ in rmk["dropped"]]
                 rmk["notes"].insert(0, "TANPA HPDB: QC hanya dari KMZ (cek HPDB vs KMZ, ID/alamat, FINDIM, BAKP dilewati); "
                                        "nomor 'titik' = urutan titik HP di folder HP KMZ")
+            # 3.14.0: remarks SEDERHANA (bawaan) - kalimat pendek tanpa angka; versi rinci disimpan untuk pemeriksa
+            if opt.get("remark_style", "sederhana") == "sederhana":
+                rs_ = _remarks.build(fl_, rowmap=hid_row, findim_stale=findim_stale_, route=route_int, style="sederhana")
+                rs_["notes"] = rmk["notes"]
+                rs_["dropped"] = rmk["dropped"]
+                rs_["rinci"] = rmk["text"]
+                rmk = rs_
+            # 3.14.0: jenis data dinilai otomatis - 1 PIC/berdampingan atau cluster mandiri
+            if pic_group:
+                rmk["jenis"] = "1 PIC / berdampingan dengan %s" % ", ".join(
+                    "%s (%s)" % (g_["label"], "satu jaringan" if g_["one_net"] else "berdampingan") for g_ in pic_group)
+            else:
+                rmk["jenis"] = "cluster mandiri (tidak terdeteksi 1 PIC / berdampingan dengan cluster lain di folder ini)"
             summ.append("  REMARKS (%s, %d karakter): %s" % (rmk["status"], rmk["length"], rmk["text"]))
+            summ.append("    jenis data (otomatis): %s" % rmk["jenis"])
+            if rmk.get("rinci") and rmk["rinci"] != rmk["text"]:
+                summ.append("    rincian: %s" % rmk["rinci"])
             for n_ in rmk["notes"]:
                 summ.append("    catatan: %s" % n_)
             if rmk["dropped"]:
@@ -6515,6 +6714,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             with open(outp("REMARKS.txt"), "w", encoding="utf-8") as fh_:
                 fh_.write("Cluster : %s\nID      : %s\nStatus  : %s\nPanjang : %d karakter (maks 255)\n\n%s\n\n" % (
                     cluster_label(outdir, hpdb), cl_id or "-", rmk["status"], rmk["length"], rmk["text"]))
+                fh_.write("Jenis data (dinilai otomatis): %s\n\n" % rmk["jenis"])
+                if rmk.get("rinci") and rmk["rinci"] != rmk["text"]:
+                    fh_.write("Rincian untuk pemeriksa (baris, jarak, nilai):\n%s\n\n" % rmk["rinci"])
                 if rmk["notes"]:
                     fh_.write("Catatan (bukan alasan reject):\n" + "".join("- %s\n" % n_ for n_ in rmk["notes"]) + "\n")
                 if rmk["dropped"]:

@@ -1,5 +1,20 @@
 # Changelog
 
+## 3.14.0 – berkas dikenali dari isi, remarks sederhana, jenis data otomatis (revisi pembuat 8 November 2026)
+
+- **Remarks sederhana (bawaan)**: kalimat pendek tanpa nomor baris/angka, mis. "Reject: Ada tiang duplikat dengan cluster
+  X, dan ada garis jalur yang digambar dobel. Mohon dicek kembali keseluruhannya." Status & urutan sama dengan remarks
+  rinci; rincian tetap di REMARKS.txt dan kolom `remarks_rinci` REMARKS_BATCH.csv. Gaya lama: Advanced > Detailed.
+- **Jenis data otomatis**: tiap cluster dinyatakan "1 PIC / berdampingan dengan ..." atau "cluster mandiri".
+- **Berkas dikenali dari isinya**: HPDB dari kolom LATITUDE/LONGITUDE walau nama tanpa HPDB/salah ketik (HPBD, HDPB,
+  HOMEPAS); salinan cadangan dilewati; KMZ cluster lain yang tersalin tidak terpilih; Design Lite/Funnel/attributes,
+  TSSR dan BAKP yang namanya diubah/salah ketik dikenali dari isi.
+- **Satu folder berisi banyak cluster** (banyak KMZ, atau banyak HPDB+KMZ+dokumen) dipecah otomatis ke `_PER_BERKAS/`
+  dan diperiksa per cluster. Uji folder '1 pic design' (13 KMZ Suka Karya + KMZ 1 PIC Tomohon): dulu berhenti, kini 20
+  cluster diperiksa di QGIS pengguna dengan data funnel asli.
+- Diuji dan ditolak: nama wilayah induk sebagai bukti satu funnel (Tomohon: tiap lingkungan funnel sendiri).
+- Istilah perusahaan dihapus dari teks pengguna. Data Suka Karya ber-HPDB: temuan identik 3.13.0.
+
 ## 3.13.0 – integritas jalur: satu jaringan kabel utuh yang ditumpu tiang (revisi pembuat 6 November 2026)
 
 - **Jalur tanpa tiang** (JALUR_TANPA_TIANG, reject): bagian jalur tanpa tiang diukur SEPANJANG JALUR sampai tiang terdekat

@@ -31,6 +31,17 @@ def find_tssr(folder):
         for f in sorted(files):
             if f.lower().endswith(".docx") and not f.startswith("~$") and TSSR_RX.search(f):
                 hits.append(os.path.join(root, f))
+    if not hits:
+        # 3.14.0: nama tanpa kata TSSR (diubah/salah ketik) -> kenali dari teks dokumen
+        try:
+            from . import kenali as _k
+        except ImportError:
+            import kenali as _k
+        for f in sorted(os.listdir(folder)):
+            p = os.path.join(folder, f)
+            if f.lower().endswith(".docx") and not f.startswith("~$") and os.path.isfile(p) \
+                    and not re.search(r"BAKP|BERITA|KESEPAKATAN|PERI[JZ]INAN", f, re.IGNORECASE) and _k.docx_is_tssr(p):
+                hits.append(p)
     return hits
 
 

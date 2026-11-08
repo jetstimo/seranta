@@ -644,6 +644,13 @@ def sibling_dirs(outdir, has_hpdb, extra=(), max_dirs=120):
         if n in seen or own.startswith(n + os.sep) or n.startswith(own + os.sep):
             return False
         seen.add(n)
+        pb = os.path.join(d, "_PER_BERKAS")
+        if os.path.isdir(pb):
+            # 3.14.0: folder berisi beberapa cluster yang sudah dipecah per berkas -> saudara = tiap cluster di dalamnya
+            hit = False
+            for c in subdirs(pb):
+                hit = add(c) or hit
+            return hit
         if ok(d):
             out.append(d)
             return True
@@ -1019,6 +1026,10 @@ def compare(own, sibs, dup_exact=0.5, dup_near=5.0, name_m=15.0, bnd_tol=10.0, n
         same_tssr = bool(own.get("tssr_sha")) and own.get("tssr_sha") == s.get("tssr_sha")
         of_, sf_ = own.get("funnel_key") or "", s.get("funnel_key") or ""
         beda_funnel = bool(of_ and sf_ and of_ != sf_)
+        # 3.14.0 (diuji lalu DITOLAK): nama wilayah induk yang sama BUKAN bukti satu funnel. Uji di QGIS pengguna dengan
+        # data funnel asli: 7 lingkungan KAKASKASEN (Tomohon) masing-masing funnel sendiri -> bila nama dipakai, tiang
+        # saudara lintas funnel ikut dihitung dan LINGKUNGAN 7 lolos 'Approve dgn catatan' padahal seharusnya Reject.
+        # Tanpa data funnel/dokumen, boundary bertumpuk tetap tidak ditoleransi (aman), dengan catatan funnel belum dicek.
         satu_induk = (bool(of_) and of_ == sf_) or ((not of_ or not sf_) and bool(same_bakp or same_tssr or same_bnd))
         tol = bool(tol_1pic) and bool(one_net or maybe) and satu_induk and not beda_funnel
         fun_txt = (" LINTAS FUNNEL: funnel cluster ini '%s', cluster %s di funnel '%s'." % (
