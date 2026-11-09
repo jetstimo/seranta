@@ -20,9 +20,12 @@
   - `INFO_JALUR_MELINTAS_JALAN_SEDANG` (kolektor) dan `INFO_JALUR_MELINTAS_SUNGAI` (Permen PUPR 28/2015 Ps. 22).
   - Lebar jalan (`width`) dan jumlah lajur (`lanes`, `lanes:forward/backward`) dari OSM kini dibaca. Rute yang menyusuri
     jalan (memotong garis as jalan dengan sudut < 25°) tidak lagi dihitung sebagai menyeberang (jalan tol/rel tetap).
-- **Perbaikan unduhan data jalan**: di 3.14.1 cek persilangan selalu "tidak dicek" di banyak jaringan (overpass-api.de
-  menjawab 406, server lain tidak menjawab; laporan Bitung: "Expecting value"). Kini: 3 server Overpass dengan validasi
-  jawaban, lalu cadangan API utama OpenStreetMap 0.6 untuk kotak cluster kecil; hasil di-cache 30 hari.
+- **Unduhan data jalan diperbaiki dan dipercepat**: di 3.14.1 cek persilangan selalu "tidak dicek" di banyak jaringan
+  (overpass-api.de menjawab 406, server lain diam; laporan Bitung: "Expecting value"), dan server dicoba satu per satu
+  dengan batas 60 detik. Kini 3 server Overpass + API utama OpenStreetMap 0.6 diminta **bersamaan**, jawaban sah pertama
+  dipakai (batas 12 detik per server, 15 detik total); server yang terakhir berhasil didahulukan; hasil diingat di memori
+  dan di cache 30 hari yang juga dipakai cluster bertetangga (petak 0,01 derajat); keadaan offline diingat 10 menit
+  sehingga batch tidak menunggu di setiap cluster. Uji simulasi (1 server 406, 2 server diam): < 1 detik.
 - **RT/RW di nama berkas** (`WARN_NAMA_BERKAS_WILAYAH_BEDA`): mis. folder & HPDB "RT 17" tetapi BAKP bernama "RT_023".
   Temuan RT/RW kini membuat standar 3 **[CEK]** (sebelumnya tetap "--" bila FINDIM tidak ada sehingga kartu HTML tampil
   "belum diverifikasi").

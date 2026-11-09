@@ -66,6 +66,27 @@ if os.path.isdir(D):
     seg = [("NP-C - NP-D", (109.1300, -6.9960), (109.1320, -6.9958))]
     xr = J.crossings(seg, tg, kx, ky)
     ok([x["kind"] for x in xr] == ["rel"] and "Tegal" in xr[0]["name"], "persilangan rel Tegal-Prupuk")
+# kecepatan: cache dipakai bila kotaknya mencakup wilayah cluster; hasil dipotong ke wilayah cluster
+import json as _json  # noqa: E402
+import tempfile  # noqa: E402
+ok(J._covers((1.0, 1.0, 1.02, 1.02), (1.005, 1.005, 1.015, 1.015)) and not J._covers((1.0, 1.0, 1.02, 1.02),
+                                                                                 (1.005, 1.005, 1.03, 1.015)), "cakupan")
+with tempfile.TemporaryDirectory() as td:
+    box = (125.19, 1.45, 125.2, 1.46)
+    with open(J._cache_path(td, box), "w", encoding="utf-8") as fh:
+        _json.dump({"seranta_v": 2, "elements": [
+            {"type": "way", "tags": {"highway": "motorway"}, "geometry": [{"lon": 125.191, "lat": 1.451},
+                                                                         {"lon": 125.192, "lat": 1.452}]},
+            {"type": "way", "tags": {"railway": "rail"}, "geometry": [{"lon": 125.198, "lat": 1.458},
+                                                                      {"lon": 125.199, "lat": 1.459}]}]}, fh)
+    J._MEMO.clear()
+    roads, src = J.fetch((125.1905, 1.4505, 125.1935, 1.4535), td)       # tanpa jaringan: dari cache yang mencakup
+    ok([r["kind"] for r in roads] == ["tol"] and "cache" in src, "cache mencakup + potong ke wilayah")
+    roads, src = J.fetch((125.1975, 1.4575, 125.1995, 1.4595), td)       # kedua kali: dari memori
+    ok([r["kind"] for r in roads] == ["rel"], "memori sesi")
+    ok(J._cache_find(td, (125.19, 1.45, 125.21, 1.46)) is None, "kotak lebih luas tidak tercakup")
+J._MEMO.clear()
+
 # nama berkas memuat RT lain (Pasir Putih RT 17: BAKP bernama RT_023)
 fm = K.filename_area_mismatch("PASIR PUTIH RT 17_91HP_REV_up", [
     ("BAKP", "BAKP_JAMBI_21100232552_RT_023_Pasir_Putih_1150HP_AIA.pdf"),
