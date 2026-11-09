@@ -148,22 +148,43 @@ def parse_overpass(js):
     return out
 
 
+_ATTR_RX = re.compile(r'([A-Za-z_:]+)\s*=\s*("([^"]*)"|\'([^\']*)\')')
+_EL_RX = re.compile(r"<(node|way)\b([^>]*?)(/>|>(.*?)</\1>)", re.S)
+_ND_RX = re.compile(r"<nd\b([^>]*)/?>")
+_TAG_RX = re.compile(r"<tag\b([^>]*)/?>")
+
+
+def _attrs(s):
+    import html
+    return {m.group(1): html.unescape(m.group(3) if m.group(3) is not None else m.group(4)) for m in _ATTR_RX.finditer(s)}
+
+
 def osm_xml_to_overpass(raw):
     """Jawaban XML API OSM 0.6 (/map) -> bentuk JSON Overpass {'elements': [way + geometry]} (hanya way bertag
-    highway/railway/waterway) agar diproses & di-cache dengan cara yang sama."""
-    import xml.etree.ElementTree as ET
-    root = ET.fromstring(raw)
-    nodes = {n.get("id"): (float(n.get("lon")), float(n.get("lat"))) for n in root.iter("node")
-             if n.get("lon") is not None}
-    els = []
-    for w in root.iter("way"):
-        tags = {t.get("k"): t.get("v") for t in w.findall("tag")}
+    highway/railway/waterway) agar diproses & di-cache dengan cara yang sama. Dibaca dengan pola teks sederhana (format
+    OSM 0.6 tetap: node/way/nd/tag), tanpa pengurai XML umum (tidak ada entitas eksternal yang diproses)."""
+    txt = raw.decode("utf-8", "replace") if isinstance(raw, (bytes, bytearray)) else str(raw)
+    nodes, els = {}, []
+    for m in _EL_RX.finditer(txt):
+        at = _attrs(m.group(2))
+        if m.group(1) == "node":
+            try:
+                nodes[at.get("id")] = (float(at["lon"]), float(at["lat"]))
+            except (KeyError, ValueError):
+                pass
+            continue
+        body = m.group(4) or ""
+        tags = {}
+        for t in _TAG_RX.finditer(body):
+            ta = _attrs(t.group(1))
+            if "k" in ta:
+                tags[ta["k"]] = ta.get("v", "")
         if not any(k in tags for k in ("highway", "railway", "waterway")):
             continue
-        geom = [{"lon": nodes[nd.get("ref")][0], "lat": nodes[nd.get("ref")][1]} for nd in w.findall("nd")
-                if nd.get("ref") in nodes]
+        refs = [_attrs(n.group(1)).get("ref") for n in _ND_RX.finditer(body)]
+        geom = [{"lon": nodes[r][0], "lat": nodes[r][1]} for r in refs if r in nodes]
         if len(geom) >= 2:
-            els.append({"type": "way", "id": int(w.get("id")), "tags": tags, "geometry": geom})
+            els.append({"type": "way", "id": int(at.get("id", "0") or 0), "tags": tags, "geometry": geom})
     return {"elements": els, "generator": "api.openstreetmap.org/0.6"}
 
 
