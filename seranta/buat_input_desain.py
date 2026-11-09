@@ -2841,7 +2841,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         return "buat_input_desain_apd"
 
     def displayName(self):
-        return self.tr("1. Survey QC & Design Input")
+        return self.tr("Survey QC & Design Input")
 
     def group(self):
         return self.tr("FTTH Design")

@@ -15,12 +15,12 @@ try:                                    # Qt6 / QGIS 4
 except ImportError:                     # Qt5 / QGIS 3
     from qgis.PyQt.QtWidgets import QAction
 
-from .provider import SerantaProvider, show_extra_tools, set_extra_tools
+from .provider import SerantaProvider, SHOW_TOOLS_2_4
 
 MENU = "&Seranta"
 HERE = os.path.dirname(__file__)
 TOOLS = [
-    ("seranta:buat_input_desain_apd", "1. Survey QC && Design Input",
+    ("seranta:buat_input_desain_apd", "Survey QC && Design Input",
      "Pick a survey folder (homepass spreadsheet + KMZ): checks the survey and prepares the auto-design input"),
     ("seranta:alokasi_fdt_fat", "2. FDT && FAT Allocation",
      "Pick a checked cluster folder: estimates FATs, reuse of existing FDTs and new FDTs, with a link budget"),
@@ -67,21 +67,17 @@ class SerantaPlugin:
         self._welcome()
 
     def _build_actions(self):
-        """Menu & toolbar. 3.15.0: hanya alat 1 (fokus Seranta saat ini); alat 2-4 muncul bila 'Show tools 2-4'
-        dicentang di menu Vektor > Seranta (setelan disimpan, berlaku juga di Processing Toolbox)."""
-        extra = show_extra_tools()
+        """Menu & toolbar. 3.15.0: Seranta hanya melayani Survey QC & Design Input; alat 2-4 tidak ditampilkan
+        (provider.SHOW_TOOLS_2_4 = False). Bila kelak ditampilkan lagi, label alat kembali bernomor."""
         for i, (alg, label, tip) in enumerate(TOOLS):
-            if i > 0 and not extra:
+            if i > 0 and not SHOW_TOOLS_2_4:
                 continue
+            if SHOW_TOOLS_2_4 and i == 0:
+                label = "1. " + label
             self._add(label, tip, lambda checked=False, a=alg: self.run(a), toolbar=(i == 0))
         self._add("QC Findings Navigator",
                   "Browse findings by category and zoom to each one on the map", self.show_nav,
                   toolbar=True, icon=QIcon(os.path.join(HERE, "icon_nav.png")))
-        act = self._add("Show tools 2-4 (FDT/FAT allocation, post-design, package QC)",
-                        "Seranta now focuses on tool 1. Tick to bring back tools 2-4 in this menu and the Processing "
-                        "Toolbox; untick to hide them again", self._toggle_extra)
-        act.setCheckable(True)
-        act.setChecked(extra)
         self._add("About Seranta", "Version, author and licence", self.about)
 
     def _clear_actions(self):
@@ -93,21 +89,6 @@ class SerantaPlugin:
                 _log.note(_e)
         self.actions = []
 
-    def _toggle_extra(self, checked=False):
-        set_extra_tools(bool(checked))
-        self._clear_actions()
-        self._build_actions()
-        if self.provider:
-            try:
-                self.provider.refreshAlgorithms()
-            except Exception as _e:
-                _log.note(_e)
-        try:
-            self.iface.messageBar().pushInfo(
-                "Seranta", "Tools 2-4 are now %s (menu and Processing Toolbox)." % ("shown" if checked else "hidden"))
-        except Exception as _e:
-            _log.note(_e)
-
     def _welcome(self):
         st = QgsSettings()
         key = "seranta/welcomed"
@@ -117,7 +98,7 @@ class SerantaPlugin:
         try:
             self.iface.messageBar().pushInfo(
                 "Seranta",
-                "Installed. Open Vector > Seranta and pick a tool; each tool only needs a folder.")
+                "Installed. Open Vector > Seranta > Survey QC & Design Input; it only needs a folder.")
         except Exception as _e:
             _log.note(_e)
 
@@ -175,8 +156,8 @@ class SerantaPlugin:
         box.setWindowTitle("Seranta")
         box.setText(
             "<b>Seranta&trade; - FTTH Design Assistant</b> v%s<br>Author: %s<br>File integrity: %s<br><br>"
-            "Four one-folder tools for FTTH/GPON access networks: survey QC and design input, FDT/FAT allocation, "
-            "post-design tables, and design package QC. Reports are written in Indonesian.<br><br>"
+            "One-folder survey QC and design input for FTTH/GPON access networks. Reports are written in "
+            "Indonesian.<br><br>"
             "Licence: GNU GPL v3 or later with the section 7 terms in LICENSE: copies and modifications must keep the "
             "author's name, modified versions must be renamed and marked as modified and may not claim authorship. "
             "Official releases are digitally signed by the author; the official release key fingerprint is "
