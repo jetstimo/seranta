@@ -20,12 +20,19 @@
   - `INFO_JALUR_MELINTAS_JALAN_SEDANG` (kolektor) dan `INFO_JALUR_MELINTAS_SUNGAI` (Permen PUPR 28/2015 Ps. 22).
   - Lebar jalan (`width`) dan jumlah lajur (`lanes`, `lanes:forward/backward`) dari OSM kini dibaca. Rute yang menyusuri
     jalan (memotong garis as jalan dengan sudut < 25°) tidak lagi dihitung sebagai menyeberang (jalan tol/rel tetap).
-- **Unduhan data jalan diperbaiki dan dipercepat**: di 3.14.1 cek persilangan selalu "tidak dicek" di banyak jaringan
-  (overpass-api.de menjawab 406, server lain diam; laporan Bitung: "Expecting value"), dan server dicoba satu per satu
-  dengan batas 60 detik. Kini 3 server Overpass + API utama OpenStreetMap 0.6 diminta **bersamaan**, jawaban sah pertama
-  dipakai (batas 12 detik per server, 15 detik total); server yang terakhir berhasil didahulukan; hasil diingat di memori
-  dan di cache 30 hari yang juga dipakai cluster bertetangga (petak 0,01 derajat); keadaan offline diingat 10 menit
-  sehingga batch tidak menunggu di setiap cluster. Uji simulasi (1 server 406, 2 server diam): < 1 detik.
+- **Unduhan data jalan: andal, cepat, dan sesuai kebijakan OpenStreetMap** (kajian sumber resmi 10 Nov 2026). Di 3.14.1
+  cek persilangan selalu "tidak dicek" di banyak jaringan dan tiap server ditunggu sampai 60 detik per cluster. Kini:
+  - satu kueri Overpass ringkas (`[bbox]` global, `[timeout:25]`, `[maxsize]`, `out tags geom qt`) ke server publik
+    **berurutan** (overpass-api.de, overpass.private.coffee, maps.mail.ru; tidak paralel - wiki Overpass: "No parallel
+    running of multiple scripts"), server yang terakhir berhasil didahulukan, batas 30 detik per server;
+  - pemutus sirkuit: server yang menolak (406/429) diistirahatkan 30 menit, yang sibuk/diam 5 menit, sehingga cluster
+    berikutnya langsung melewatinya; kegagalan total diingat 10 menit;
+  - hasil di memori + cache 30 hari yang dipakai cluster bertetangga; semua server gagal -> cache lama dipakai (diberi
+    tanggal); sumber selalu memuat atribusi "(c) OpenStreetMap contributors, ODbL";
+  - API penyuntingan api.openstreetmap.org **tidak dipakai** (OSMF API Usage Policy: "not for read-only purposes");
+  - **paket data jalan lokal** untuk pemakaian rutin/batch/offline: taruh `*OSM*.gpkg` atau ekstrak Geofabrik
+    `*.osm.pbf` (download.geofabrik.de/asia/indonesia.html) di folder data referensi; .pbf diubah sekali menjadi paket
+    GeoPackage ringkas di cache, lalu dibaca seketika tanpa internet.
 - **RT/RW di nama berkas** (`WARN_NAMA_BERKAS_WILAYAH_BEDA`): mis. folder & HPDB "RT 17" tetapi BAKP bernama "RT_023".
   Temuan RT/RW kini membuat standar 3 **[CEK]** (sebelumnya tetap "--" bila FINDIM tidak ada sehingga kartu HTML tampil
   "belum diverifikasi").

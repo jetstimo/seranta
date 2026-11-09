@@ -6732,15 +6732,16 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 ys_ = [q_.y() for _a, _b, _L, a_, b_ in seg_list for q_ in (a_, b_)]
                 bb_ = (min(xs_) - _osm.MARGIN_DEG, min(ys_) - _osm.MARGIN_DEG, max(xs_) + _osm.MARGIN_DEG,
                        max(ys_) + _osm.MARGIN_DEG)
-                loc_ = _osm.find_local(funnel_dir)
+                try:
+                    from qgis.core import QgsApplication as _QA
+                    cdir_ = os.path.join(_QA.qgisSettingsDirPath(), "seranta_cache")
+                except Exception:
+                    cdir_ = None
+                loc_ = _osm.find_local(funnel_dir, cdir_, feedback)
                 if loc_:
-                    roads_, src_ = _osm.load_local(loc_, bb_), "file OSM lokal %s" % ", ".join(os.path.basename(x_) for x_ in loc_[:2])
+                    roads_ = _osm.load_local(loc_, bb_)
+                    src_ = "data jalan lokal %s; %s" % (", ".join(os.path.basename(x_) for x_ in loc_[:2]), _osm.ATTRIBUTION)
                 else:
-                    try:
-                        from qgis.core import QgsApplication as _QA
-                        cdir_ = os.path.join(_QA.qgisSettingsDirPath(), "seranta_cache")
-                    except Exception:
-                        cdir_ = None
                     feedback.setProgressText("Data jalan OpenStreetMap (persilangan tol/rel/jalan besar)")
                     roads_, src_ = _osm.fetch(bb_, cdir_, feedback)
                 if roads_ is None:

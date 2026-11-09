@@ -434,7 +434,12 @@ folder data referensi untuk keputusan 1 PIC yang benar.
 
 ## Standar 10 – persilangan jalan tol / rel / jalan besar / sungai (3.15.0)
 
-Data: OpenStreetMap (file *OSM* di folder referensi, atau unduhan Overpass / API OSM 0.6, cache 30 hari). Klasifikasi
+Data: © OpenStreetMap contributors (ODbL, openstreetmap.org/copyright). Urutan sumber: (1) paket data jalan lokal di
+folder referensi (*OSM*.gpkg/.geojson/.shp, atau ekstrak Geofabrik *.osm.pbf yang diubah sekali menjadi paket ringkas);
+(2) cache 30 hari; (3) server Overpass publik, berurutan (tidak paralel), satu kueri kecil per wilayah. API penyuntingan
+api.openstreetmap.org tidak dipakai (OSMF API Usage Policy: "not for read-only purposes or projects"). Kebijakan:
+operations.osmfoundation.org/policies/api/, wiki.openstreetmap.org/wiki/Overpass_API,
+dev.overpass-api.de/overpass-doc/en/preface/commons.html, osmfoundation.org/wiki/Licence/Attribution_Guidelines. Klasifikasi
 OSM bukan status hukum jalan; temuan adalah indikasi untuk ditinjau. Kajian 10 Nov 2026, hanya sumber resmi
 (peraturan.bpk.go.id, jdih.pu.go.id, perizinan.pu.go.id, bphn.go.id, portal.djka.kemenhub.go.id, sda.pu.go.id, ITU-T).
 
