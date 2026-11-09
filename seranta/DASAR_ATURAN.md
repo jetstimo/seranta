@@ -430,3 +430,25 @@ KAKASKASEN masing-masing funnel SENDIRI. Dengan aturan nama, LINGKUNGAN 7 lolos 
 ikut dihitung) padahal dengan data funnel hasilnya Reject. Nama tidak membedakan kedua kasus -> tidak dipakai. Tanpa data
 funnel/BAKP/TSSR, boundary bertumpuk tetap tidak ditoleransi (aman) dan laporan menyebut funnel belum dicek; jalankan dengan
 folder data referensi untuk keputusan 1 PIC yang benar.
+
+
+## Standar 10 – persilangan jalan tol / rel / jalan besar / sungai (3.15.0)
+
+Data: OpenStreetMap (file *OSM* di folder referensi, atau unduhan Overpass / API OSM 0.6, cache 30 hari). Klasifikasi
+OSM bukan status hukum jalan; temuan adalah indikasi untuk ditinjau. Kajian 10 Nov 2026, hanya sumber resmi
+(peraturan.bpk.go.id, jdih.pu.go.id, perizinan.pu.go.id, bphn.go.id, portal.djka.kemenhub.go.id, sda.pu.go.id, ITU-T).
+
+| Kode | Kondisi | Tingkat | Dasar |
+|---|---|---|---|
+| JALUR_MELINTAS_TOL | rentang memotong highway=motorway/motorway_link, toll=yes, atau tol sedang dibangun | ERROR | PP 23/2024 tentang Jalan Tol (mencabut PP 15/2005 jo. PP 17/2021); Permen PU 6/2025 (izin pemanfaatan rumija tol); Portal Perizinan PU: izin rumija tol oleh Dirjen Bina Marga atas rekomendasi teknis BPJT & BUJT, contoh "Crossing Utilitas (Pipa/Kabel)"; Permen PU 20/PRT/M/2010 Ps. 3 mengecualikan jalan tol |
+| JALUR_MELINTAS_REL | memotong railway=rail/light_rail/narrow_gauge (bukan terowongan) | ERROR | PM Perhubungan 36/2011 Ps. 7 (di atas rel: >= 6,20 m dari kepala rel, >= 10 m dari as rel terluar), Ps. 8 (di bawah: >= 150 cm di bawah subgrade, mulai >= 10 m dari sisi terluar jalur), Ps. 11-12 (izin Dirjen + izin prinsip penyelenggara prasarana); PP 56/2009 Ps. 59, 82 |
+| WARN_JALUR_MELINTAS_JALAN_BESAR | memotong trunk/primary, atau lanes >= 4, atau width >= 14 m | WARNING | PP 34/2006 Ps. 32 (jalan raya >= 2 lajur/arah @ 3,5 m), Ps. 35 (ruang bebas 5 m / 1,5 m), Ps. 40 (rumija jalan raya >= 25 m); Permen PU 20/PRT/M/2010 Ps. 4, 5, 12 |
+| WARN_TIANG_DEKAT_JALAN_TOL | tiang NP baru < 15 m dari jalur tol | WARNING | PP 34/2006 Ps. 40 ayat 1 (rumija jalan bebas hambatan >= 30 m) |
+| WARN_TIANG_DEKAT_REL | tiang NP baru < 10 m dari as rel | WARNING | PM 36/2011 Ps. 7 huruf b; PP 56/2009 Ps. 59 ayat 1, Ps. 82 |
+| INFO_JALUR_MELINTAS_JALAN_SEDANG | memotong secondary/tertiary (sudut >= 25°) | INFO | Permen PU 20/PRT/M/2010 Ps. 5, 12 ayat 6 |
+| INFO_JALUR_MELINTAS_SUNGAI | memotong waterway=river/canal | INFO | Permen PUPR 28/PRT/M/2015 Ps. 22; Permen PUPR 3/2023 |
+
+Pembanding internasional: NESC (IEEE C2) Tabel 232-1 (kabel komunikasi: 4,7 m di atas jalan, 7,2 m di atas rel);
+ITU-T L.56/L.158 (kabel optik sepanjang rel). Desain di atas rel disarankan >= 7 m.
+Batasan: kedalaman crossing tol & dasar sungai tidak diatur angka nasional (ditetapkan BUJT / BBWS); hasil "tidak ada
+persilangan" bukan jaminan bila ruas baru belum terpetakan di OSM.

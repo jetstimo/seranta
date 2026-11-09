@@ -12,8 +12,25 @@ from .alokasi_fdt import AlokasiFdtFat
 from .qc_apd import QcApd
 
 
+EXTRA_KEY = "seranta/show_tools_2_4"
+
+
+def show_extra_tools():
+    """True bila pengguna memunculkan alat 2-4 (bawaan 3.15.0: tersembunyi, hanya alat 1)."""
+    try:
+        from qgis.core import QgsSettings
+        return str(QgsSettings().value(EXTRA_KEY, "0")).lower() in ("1", "true", "yes")
+    except Exception:
+        return False
+
+
+def set_extra_tools(on):
+    from qgis.core import QgsSettings
+    QgsSettings().setValue(EXTRA_KEY, "1" if on else "0")
+
+
 class SerantaProvider(QgsProcessingProvider):
-    """Groups the four tools under 'Seranta' in the Processing Toolbox."""
+    """Groups the Seranta tools under 'Seranta' in the Processing Toolbox (tool 1 by default; tools 2-4 on request)."""
 
     def id(self):
         return "seranta"
@@ -29,6 +46,9 @@ class SerantaProvider(QgsProcessingProvider):
 
     def loadAlgorithms(self):
         self.addAlgorithm(BuatInputDesain())
-        self.addAlgorithm(PascaDesain())
-        self.addAlgorithm(AlokasiFdtFat())
-        self.addAlgorithm(QcApd())
+        # 3.15.0: Seranta fokus pada alat 1. Alat 2-4 tetap ada di paket dan bisa dimunculkan lagi lewat
+        # Vektor > Seranta > "Show tools 2-4" (setelan seranta/show_tools_2_4).
+        if show_extra_tools():
+            self.addAlgorithm(PascaDesain())
+            self.addAlgorithm(AlokasiFdtFat())
+            self.addAlgorithm(QcApd())

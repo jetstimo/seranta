@@ -23,6 +23,7 @@ jobs:
           python seranta/tests/test_v313.py
           python seranta/tests/test_v314.py
           python seranta/tests/test_v3141.py
+          python seranta/tests/test_v3150.py
           python seranta/tests/test_v351.py
           python seranta/tests/test_v353.py
       - name: Security scan (Bandit)

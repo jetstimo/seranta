@@ -45,7 +45,7 @@ ok(K.neighbour_odd(xy, ["17"] * 20) == [], "seragam")
 ok(J.classify({"highway": "motorway"}) == "tol" and J.classify({"highway": "primary", "toll": "yes"}) == "tol", "tol")
 ok(J.classify({"highway": "construction", "construction": "motorway"}) == "tol", "tol dibangun")
 ok(J.classify({"railway": "rail"}) == "rel" and J.classify({"railway": "rail", "tunnel": "yes"}) is None, "rel")
-ok(J.classify({"highway": "trunk"}) == "arteri" and J.classify({"highway": "residential"}) is None, "arteri/gang")
+ok(J.classify({"highway": "trunk"}) == "besar" and J.classify({"highway": "residential"}) is None, "besar/gang")
 roads = J.parse_overpass({"elements": [
     {"type": "way", "tags": {"highway": "motorway", "name": "Tol A"}, "geometry": [{"lon": 0.0005, "lat": -0.001},
                                                                                 {"lon": 0.0005, "lat": 0.001}]},
@@ -53,7 +53,7 @@ roads = J.parse_overpass({"elements": [
                                                                                 {"lon": 0.00052, "lat": 0.001}]},
     {"type": "way", "tags": {"railway": "rail"}, "geometry": [{"lon": 0.0, "lat": 0.00003}, {"lon": 0.002, "lat": 0.00003}]},
     {"type": "way", "tags": {"highway": "service"}, "geometry": [{"lon": 0.0, "lat": 0.0}, {"lon": 0.001, "lat": 0.0}]}]})
-ok(len(roads) == 3, "parse overpass")
+ok(len(roads) == 3, "parse overpass (service bukan jalan besar/kolektor)")
 segs = [("NP-01 - NP-02", (0.0, 0.0), (0.001, 0.0))]
 xr = J.crossings(segs, roads, 111320.0, 110574.0)
 ok(sorted(x["kind"] for x in xr) == ["tol"], "tol dua lajur = satu persilangan; rel sejajar tidak memotong")
