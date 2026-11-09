@@ -1,5 +1,25 @@
 # Changelog
 
+## 3.14.1 – ringkasan standar lebih jelas, cek RT/RW HPDB, persilangan jalan tol/rel (revisi pembuat 9 November 2026)
+
+- **Ringkasan 9 standar ditulis per bagian**, tiap bagian punya status sendiri, sehingga terlihat bagian mana yang membuat
+  standar [CEK]. Standar 4: "HP duplikat" (koordinat/label/ID sama, juga lintas cluster) dipisah dari "Kecocokan HPDB-KMZ".
+  Standar 2: Funnel/RFS, HP masuk BOUNDARY cluster lain, BOUNDARY tumpang tindih, tiang ganda (jumlah tiang kini sama dengan
+  remarks). Standar 5: HP di luar Funnel dipisah dari HP di luar BOUNDARY KMZ. Standar 9: rentang > 60 m dipisah dari
+  rentang 50-60 m. Alasan "tidak dicek" selalu ditulis; ada baris arti status. Status standar dan keputusan review tidak
+  berubah (uji 13 cluster nyata: Kediri, Minahasa, Pasir Putih).
+- **RT/RW-lingkungan HPDB** (WARN_HPDB_RT_RW_TIDAK_SESUAI): kolom RT, RW/lingkungan dan CLUSTER_NAME dibandingkan dengan
+  nomor wilayah di nama Funnel/folder cluster dan dengan tetangga terdekat (rumah RT 24 di tengah rumah RT 17, radius 60 m).
+- **Persilangan jalan tol / rel / jalan arteri** (WARN_JALUR_MELINTAS_TOL, WARN_JALUR_MELINTAS_REL,
+  INFO_JALUR_MELINTAS_JALAN_BESAR) dari data jalan OpenStreetMap: file *OSM* di folder referensi atau unduhan Overpass
+  (cache 30 hari; offline = tidak dicek). Dasar resmi: PP 23/2024 Pasal 71 & 75 dan SE Dirjen Bina Marga 11/SE/Db/2017
+  (tol; angka 5 m Permen PU 20/2010 tidak dipakai karena Pasal 3 mengecualikan jalan tol), PM Perhubungan 36/2011
+  Pasal 7, 8, 11 (rel: >= 6,20 m dari kepala rel, tiang >= 10 m dari as rel, >= 150 cm di bawah subgrade), Permen PU
+  20/PRT/M/2010 Pasal 12 ayat (6) (jalan non-tol, tetap berlaku menurut Permen PU 6/2025).
+- **Perbaikan**: garis temuan CLUSTER_LAIN_DIGABUNG dulu menyambung semua HP urut baris HPDB (garis silang-menyilang di
+  peta), kini garis tepi sebaran HP; labelnya jumlah HP, bukan meter. Bentangan jalur di luar BOUNDARY tidak lagi
+  digabung lintas garis jalur yang tidak bersambung.
+
 ## 3.14.0 – berkas dikenali dari isi, remarks sederhana, jenis data otomatis (revisi pembuat 8 November 2026)
 
 - **Remarks sederhana (bawaan)**: kalimat pendek tanpa nomor baris/angka, mis. "Reject: Ada tiang duplikat dengan cluster
