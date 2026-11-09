@@ -15,8 +15,8 @@ QGIS → **Plugins → Manage and Install Plugins → All** → search **Seranta
 New versions appear under **Upgradeable**; no ZIP needed.
 
 ## Tools (Processing Toolbox → Seranta, or menu Vector → Seranta)
-Since 3.15.0 Seranta focuses on **tool 1**; tools 2-4 are hidden. Tick **Vector → Seranta → Show tools 2-4** to bring
-them back (menu and Processing Toolbox), untick to hide them again.
+Since 3.15.0 Seranta shows one tool, **Survey QC & Design Input**. Tools 2-4 below are not shown in this version; they
+may return in a later one.
 
 | Tool | When | What you get |
 |---|---|---|

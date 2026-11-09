@@ -2,8 +2,9 @@
 
 ## 3.15.0 – fokus alat 1, standar 10 persilangan tol/rel/jalan besar (revisi pembuat 10 November 2026)
 
-- **Fokus alat 1**: alat 2-4 disembunyikan (menu dan Processing Toolbox). Munculkan lagi kapan saja dengan mencentang
-  **Vektor > Seranta > Show tools 2-4**; hapus centang untuk menyembunyikan. Kode alat 2-4 tetap ada di paket.
+- **Hanya alat 1**: Seranta kini hanya menampilkan **Survey QC & Design Input** (tanpa nomor). Alat 2-4 tidak ada lagi di
+  menu maupun Processing Toolbox; kodenya tetap di paket dan bisa ditampilkan lagi di versi berikutnya
+  (`provider.SHOW_TOOLS_2_4`).
 - **Standar 10 – persilangan jalan tol / rel / jalan besar** (tambahan Seranta di luar 9 standar Review Strand), dari
   kajian regulasi resmi:
   - `JALUR_MELINTAS_TOL` (**ERROR**, alasan Reject): izin rumija tol dari Dirjen Bina Marga atas rekomendasi teknis BPJT
