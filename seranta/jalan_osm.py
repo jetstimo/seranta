@@ -9,8 +9,10 @@ Masukan pengguna: "kalau crossing jalan tol apakah bisa dideteksi?". Peta dasar 
 (ubin), tidak bisa dihitung. Modul ini memakai DATA jalan OpenStreetMap (vektor):
   1. file lokal di folder data referensi: *OSM*.geojson / .gpkg / .shp (mis. hasil unduhan plugin QuickOSM, kolom
      highway, toll, railway, name, ref) - dipakai lebih dulu, bekerja tanpa internet;
-  2. bila tidak ada: Overpass API (3 server), cadangan API utama OSM 0.6 (/map, kotak cluster +-300 m), disimpan di
-     cache profil QGIS 30 hari. Offline -> standar 10 'tidak dicek', QC lain tetap berjalan.
+     ATAU ekstrak Geofabrik *.osm.pbf (download.geofabrik.de/asia/indonesia.html, per pulau): diubah SEKALI menjadi
+     paket GeoPackage ringkas di cache (hanya jalan tol/besar/kolektor, rel, sungai), lalu dibaca seketika;
+  2. bila tidak ada: server Overpass publik (berurutan, sesuai kebijakan pemakaian), disimpan di cache profil QGIS
+     30 hari. Offline/server menolak -> cache lama atau standar 10 'tidak dicek', QC lain tetap berjalan.
 Penggolongan (dokumentasi tag OpenStreetMap, Indonesian Tagging Guidelines): highway=motorway/motorway_link atau
 toll=yes -> JALAN TOL; railway=rail/light_rail -> REL KERETA; highway=construction + construction=motorway dan
 railway=construction -> ruas yang SEDANG DIBANGUN (akan beroperasi selama umur desain); highway=trunk/primary ATAU
@@ -43,15 +45,18 @@ try:
 except ImportError:          # diuji tanpa paket
     import _log
 
-OVERPASS = ("https://overpass-api.de/api/interpreter", "https://overpass.kumi.systems/api/interpreter",
-            "https://overpass.private.coffee/api/interpreter")
-# 3.15.0: cadangan bila semua server Overpass menolak/sibuk. Uji 10 Nov 2026 dari laptop pengguna: overpass-api.de
-# menjawab "406 Not Acceptable", server lain tidak menjawab dalam 40 detik, sehingga di 3.14.1 cek ini SELALU
-# 'tidak dicek' (laporan Bitung: "Expecting value: line 1 column 1"). API utama OpenStreetMap (api.openstreetmap.org,
-# /api/0.6/map) melayani kotak kecil (<= 0,25 derajat persegi) dan menjawab dalam beberapa detik. Satu permintaan per
-# cluster, disimpan di cache 30 hari, sesuai kebijakan pemakaian API OSMF (pemakaian ringan, ada User-Agent).
-OSM_API = "https://api.openstreetmap.org/api/0.6/map?bbox=%.6f,%.6f,%.6f,%.6f"
-OSM_API_MAX_DEG2 = 0.25
+# Server Overpass publik, dicoba BERURUTAN (tiga operator berbeda; daftar resmi: wiki.openstreetmap.org/wiki/Overpass_API,
+# "Public Overpass API instances"). overpass.kumi.systems tidak dipakai: itu nama lama overpass.private.coffee.
+# Kepatuhan kebijakan (kajian 10 Nov 2026, sumber resmi):
+#   * tidak ada permintaan paralel ("No parallel running of multiple scripts"), satu kueri kecil per wilayah, hasil
+#     di-cache 30 hari ("Cache and rate-limit calls, use extracts if you need a lot of data");
+#   * User-Agent yang mengidentifikasi aplikasi; jawaban 429/406 -> server diistirahatkan (wiki: jeda >= 30 detik);
+#   * API penyuntingan api.openstreetmap.org (/api/0.6/map) TIDAK dipakai: OSMF API Usage Policy menyatakan API itu
+#     "not for read-only purposes or projects" (operations.osmfoundation.org/policies/api/);
+#   * pemakaian banyak/rutin -> paket data lokal dari ekstrak Geofabrik (lihat PAKET DATA JALAN LOKAL di bawah).
+OVERPASS = ("https://overpass-api.de/api/interpreter", "https://overpass.private.coffee/api/interpreter",
+            "https://maps.mail.ru/osm/tools/overpass/api/interpreter")
+ATTRIBUTION = "(c) OpenStreetMap contributors, ODbL - openstreetmap.org/copyright"
 CACHE_DAYS = 30
 MARGIN_DEG = 0.003           # +-300 m di sekitar jalur
 LOCAL_RX = re.compile(r"OSM", re.IGNORECASE)
@@ -148,51 +153,83 @@ def parse_overpass(js):
     return out
 
 
-_ATTR_RX = re.compile(r'([A-Za-z_:]+)\s*=\s*("([^"]*)"|\'([^\']*)\')')
-_EL_RX = re.compile(r"<(node|way)\b([^>]*?)(/>|>(.*?)</\1>)", re.S)
-_ND_RX = re.compile(r"<nd\b([^>]*)/?>")
-_TAG_RX = re.compile(r"<tag\b([^>]*)/?>")
+HW_PBF = ("'motorway','motorway_link','trunk','trunk_link','primary','primary_link','secondary','secondary_link',"
+          "'tertiary','tertiary_link','construction'")
 
 
-def _attrs(s):
-    import html
-    return {m.group(1): html.unescape(m.group(3) if m.group(3) is not None else m.group(4)) for m in _ATTR_RX.finditer(s)}
+def pbf_where(fields):
+    """Saringan layer 'lines' driver OSM GDAL. Kunci yang punya kolom sendiri (bergantung osmconf.ini versi GDAL: highway,
+    waterway, kadang railway) disaring lewat kolomnya; kunci lain ada di kolom other_tags ('"kunci"=>"nilai"')."""
+    f = {x.lower() for x in fields}
+    w = []
+    if "highway" in f:
+        w.append("highway IN (%s)" % HW_PBF)
+    if "waterway" in f:
+        w.append("waterway IN ('river','canal')")
+    for k in ("railway", "toll", "lanes", "width"):
+        if k in f:
+            w.append("%s IS NOT NULL" % k)
+        elif "other_tags" in f:
+            w.append("other_tags LIKE '%%\"%s\"=>%%'" % k)
+    return " OR ".join(w)
 
 
-def osm_xml_to_overpass(raw):
-    """Jawaban XML API OSM 0.6 (/map) -> bentuk JSON Overpass {'elements': [way + geometry]} (hanya way bertag
-    highway/railway/waterway) agar diproses & di-cache dengan cara yang sama. Dibaca dengan pola teks sederhana (format
-    OSM 0.6 tetap: node/way/nd/tag), tanpa pengurai XML umum (tidak ada entitas eksternal yang diproses)."""
-    txt = raw.decode("utf-8", "replace") if isinstance(raw, (bytes, bytearray)) else str(raw)
-    nodes, els = {}, []
-    for m in _EL_RX.finditer(txt):
-        at = _attrs(m.group(2))
-        if m.group(1) == "node":
-            try:
-                nodes[at.get("id")] = (float(at["lon"]), float(at["lat"]))
-            except (KeyError, ValueError):
-                pass
-            continue
-        body = m.group(4) or ""
-        tags = {}
-        for t in _TAG_RX.finditer(body):
-            ta = _attrs(t.group(1))
-            if "k" in ta:
-                tags[ta["k"]] = ta.get("v", "")
-        if not any(k in tags for k in ("highway", "railway", "waterway")):
-            continue
-        refs = [_attrs(n.group(1)).get("ref") for n in _ND_RX.finditer(body)]
-        geom = [{"lon": nodes[r][0], "lat": nodes[r][1]} for r in refs if r in nodes]
-        if len(geom) >= 2:
-            els.append({"type": "way", "id": int(at.get("id", "0") or 0), "tags": tags, "geometry": geom})
-    return {"elements": els, "generator": "api.openstreetmap.org/0.6"}
-
-
-def find_local(ref_dir):
+def find_pbf(ref_dir):
     if not ref_dir or not os.path.isdir(ref_dir):
         return []
-    return sorted(os.path.join(ref_dir, f) for f in os.listdir(ref_dir)
-                  if LOCAL_RX.search(f) and f.lower().endswith(LOCAL_EXT) and not f.startswith("~$"))
+    return sorted(os.path.join(ref_dir, f) for f in os.listdir(ref_dir) if f.lower().endswith(".osm.pbf"))
+
+
+def pbf_package(pbf, cache_dir, feedback=None):
+    """PAKET DATA JALAN LOKAL: ekstrak OSM .osm.pbf (mis. Geofabrik sulawesi-latest.osm.pbf) -> GeoPackage ringkas di
+    cache (sekali; diulang hanya bila berkas .pbf berganti). Driver OSM GDAL tidak cocok dibaca langsung berulang-ulang
+    untuk berkas besar (dokumentasi GDAL: impor dulu ke GeoPackage). -> path .gpkg atau None bila gagal."""
+    from osgeo import gdal
+    st = os.stat(pbf)
+    stem = re.sub(r"[^A-Za-z0-9]+", "_", os.path.basename(pbf))[:40]
+    out = os.path.join(cache_dir, "osm_paket_%s_%d_%d.gpkg" % (stem, st.st_size, int(st.st_mtime)))
+    if os.path.exists(out) and os.path.getsize(out) > 0:
+        return out
+    os.makedirs(cache_dir, exist_ok=True)
+    if feedback is not None:
+        feedback.pushInfo("Menyiapkan paket data jalan lokal dari %s (%.0f MB) - sekali saja, bisa beberapa menit ..."
+                          % (os.path.basename(pbf), st.st_size / 1e6))
+    tmp = out + ".tmp.gpkg"
+    try:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+        gdal.SetConfigOption("OSM_MAX_TMPFILE_SIZE", "1024")
+        src = gdal.OpenEx(pbf, gdal.OF_VECTOR)
+        lyr = src.GetLayerByName("lines") if src is not None else None
+        if lyr is None:
+            return None
+        defn = lyr.GetLayerDefn()
+        where = pbf_where([defn.GetFieldDefn(i).GetName() for i in range(defn.GetFieldCount())])
+        src = None
+        ds = gdal.VectorTranslate(tmp, pbf, format="GPKG", layers=["lines"], where=where, layerName="jalan_osm",
+                                  layerCreationOptions=["SPATIAL_INDEX=YES"])
+        if ds is None:
+            return None
+        ds = None
+        os.replace(tmp, out)
+        return out
+    except Exception as e:
+        _log.note(e)
+        return None
+
+
+def find_local(ref_dir, cache_dir=None, feedback=None):
+    """Data jalan lokal di folder data referensi: *OSM*.geojson/.gpkg/.shp, dan paket dari ekstrak *.osm.pbf."""
+    if not ref_dir or not os.path.isdir(ref_dir):
+        return []
+    out = sorted(os.path.join(ref_dir, f) for f in os.listdir(ref_dir)
+                 if LOCAL_RX.search(f) and f.lower().endswith(LOCAL_EXT) and not f.startswith("~$"))
+    if cache_dir:
+        for p in find_pbf(ref_dir):
+            g = pbf_package(p, cache_dir, feedback)
+            if g:
+                out.append(g)
+    return out
 
 
 def load_local(paths, bbox):
@@ -225,19 +262,21 @@ def load_local(paths, bbox):
 
 
 # ---- 3.15.0: kecepatan ------------------------------------------------------------------------------------------
-# Sebelumnya server dicoba SATU PER SATU dengan batas waktu bawaan QGIS (60 detik per server): bila dua server Overpass
-# tidak menjawab, satu cluster menunggu +-2 menit sebelum sampai ke server yang menjawab. Sekarang:
+# Sebelumnya tiap server ditunggu sampai batas bawaan QGIS (60 detik) pada SETIAP cluster. Sekarang:
 #   1. hasil diingat di memori selama sesi QGIS dan di cache disk 30 hari; cache dipakai bila kotaknya MENCAKUP wilayah
-#      cluster (bukan hanya bila kotaknya persis sama), dan kotak unduhan dibulatkan ke petak 0,01 derajat (+-1,1 km)
-#      sehingga cluster bertetangga dalam satu batch memakai unduhan yang sama;
-#   2. server yang terakhir berhasil dicoba lebih dulu (awalan HEAD_START_S); bila belum menjawab, semua server lain
-#      diminta BERSAMAAN dan jawaban sah pertama yang dipakai; tiap permintaan dibatasi REQ_TIMEOUT_MS, seluruh proses
-#      dibatasi TOTAL_DEADLINE_S;
-#   3. kegagalan (offline) diingat FAIL_MEMO_S sehingga batch banyak cluster tidak menunggu berulang-ulang.
+#      cluster, dan kotak unduhan dibulatkan ke petak 0,01 derajat (+-1,1 km) sehingga cluster bertetangga dalam satu
+#      batch memakai unduhan yang sama;
+#   2. server dicoba berurutan mulai dari yang terakhir berhasil; tiap server dibatasi SERVER_LIMIT_S (server Overpass
+#      bisa mengantrekan kueri sampai 15 detik sebelum menjalankannya), tanpa byte selama REQ_TIMEOUT_MS -> batal;
+#   3. pemutus sirkuit: server yang menolak (406/429) diistirahatkan REST_BLOCK_S, yang sibuk/diam (504/timeout)
+#      REST_BUSY_S, disimpan di cache sehingga cluster & sesi berikutnya langsung melewatinya;
+#   4. semua server gagal -> cache kedaluwarsa dipakai (diberi tanggal), dan kegagalan diingat FAIL_MEMO_S sehingga batch
+#      tidak menunggu di setiap cluster.
 GRID_DEG = 0.01
-REQ_TIMEOUT_MS = 12000
-HEAD_START_S = 3.0
-TOTAL_DEADLINE_S = 15.0
+REQ_TIMEOUT_MS = 20000
+SERVER_LIMIT_S = 30.0
+REST_BLOCK_S = 1800
+REST_BUSY_S = 300
 FAIL_MEMO_S = 600
 _MEMO = {}            # kotak -> (waktu, js, sumber)
 _FAIL = {"t": 0.0, "why": ""}
@@ -254,8 +293,9 @@ def _covers(big, small):
     return big[0] <= small[0] + 1e-9 and big[1] <= small[1] + 1e-9 and big[2] >= small[2] - 1e-9 and big[3] >= small[3] - 1e-9
 
 
-def _cache_find(cache_dir, bbox):
-    """Berkas cache (masih berlaku) yang kotaknya mencakup bbox -> (js, waktu_berkas) atau None."""
+def _cache_find(cache_dir, bbox, stale=False):
+    """Berkas cache yang kotaknya mencakup bbox -> (js, waktu_berkas, kotak) atau None. stale=True: juga yang sudah
+    lewat CACHE_DAYS (dipakai hanya bila semua server gagal)."""
     if not cache_dir or not os.path.isdir(cache_dir):
         return None
     now = time.time()
@@ -268,7 +308,7 @@ def _cache_find(cache_dir, bbox):
         except ValueError:
             continue
         p = os.path.join(cache_dir, fn)
-        if not _covers(box, bbox) or now - os.path.getmtime(p) >= CACHE_DAYS * 86400:
+        if not _covers(box, bbox) or (not stale and now - os.path.getmtime(p) >= CACHE_DAYS * 86400):
             continue
         try:
             with open(p, encoding="utf-8") as fh:
@@ -291,21 +331,36 @@ def _clip(roads, bbox):
     return out
 
 
-def _last_good(cache_dir, save=None):
-    """Baca/simpan nama server yang terakhir berhasil (dicoba lebih dulu di unduhan berikutnya)."""
+def _state(cache_dir, update=None):
+    """Keadaan server di cache: {'good': host terakhir berhasil, 'rest': {host: istirahat_sampai}}."""
+    st = {"good": None, "rest": {}}
     if not cache_dir:
-        return None
+        return st
     p = os.path.join(cache_dir, "osm_server.json")
     try:
-        if save is not None:
+        with open(p, encoding="utf-8") as fh:
+            got = json.load(fh)
+        st["good"] = got.get("good")
+        st["rest"] = {k: float(v) for k, v in (got.get("rest") or {}).items() if float(v) > time.time()}
+    except Exception:
+        pass
+    if update:
+        update(st)
+        try:
             os.makedirs(cache_dir, exist_ok=True)
             with open(p, "w", encoding="utf-8") as fh:
-                json.dump({"server": save, "t": time.time()}, fh)
-            return save
-        with open(p, encoding="utf-8") as fh:
-            return json.load(fh).get("server")
+                json.dump(st, fh)
+        except Exception as e:
+            _log.note(e)
+    return st
+
+
+def _user_agent():
+    try:
+        from .buat_input_desain import __version__ as v
     except Exception:
-        return None
+        v = "3"
+    return ("Seranta/%s (QGIS plugin, FTTH survey QC; https://github.com/jetstimo/seranta)" % v).encode("ascii", "replace")
 
 
 def _http(url, post=None, feedback=None, timeout_ms=REQ_TIMEOUT_MS):
@@ -314,9 +369,11 @@ def _http(url, post=None, feedback=None, timeout_ms=REQ_TIMEOUT_MS):
     from qgis.PyQt.QtCore import QUrl, QByteArray
     from qgis.PyQt.QtNetwork import QNetworkRequest
     req = QNetworkRequest(QUrl(url))
-    req.setRawHeader(b"User-Agent", b"Seranta-QGIS-plugin (FTTH survey QC; github.com/jetstimo/seranta)")
-    req.setRawHeader(b"Accept", b"application/json, application/xml, text/xml, */*")
-    req.setRawHeader(b"Accept-Encoding", b"gzip, deflate")
+    # QGIS menimpa User-Agent dengan "Mozilla/5.0 QGIS/<versi>" (QgsNetworkAccessManager), jadi aplikasi diidentifikasi
+    # juga lewat Referer - kebijakan Overpass menerima "User-Agent or Referer headers that uniquely identify your app".
+    req.setRawHeader(b"User-Agent", _user_agent())
+    req.setRawHeader(b"Referer", b"https://github.com/jetstimo/seranta")
+    req.setRawHeader(b"Accept", b"application/json, */*")
     try:
         req.setTransferTimeout(int(timeout_ms))      # Qt >= 5.15: batalkan bila server diam
     except Exception as e:
@@ -338,85 +395,68 @@ def _http(url, post=None, feedback=None, timeout_ms=REQ_TIMEOUT_MS):
     return (int(code) if code else (200 if err == QgsBlockingNetworkRequest.NoError else 0)), raw
 
 
-def _ask(kind, url, body):
-    """Satu sumber -> (js, None) atau (None, alasan). kind: 'overpass' (POST, JSON) / 'api' (GET, XML OSM 0.6)."""
+def _ask(url, body):
+    """Satu server Overpass -> (js, None, None) atau (None, alasan, jenis); jenis: 'block' (406/429/403: klien ditolak)
+    atau 'busy' (504/timeout/galat lain)."""
     host = url.split("/")[2]
     try:
         code, raw = _http(url, body, None)
         if code is None or not raw:
-            return None, "%s: %s" % (host, raw if code is None else "tidak menjawab dalam %d detik" % (REQ_TIMEOUT_MS // 1000))
-        if kind == "overpass":
-            if code != 200 or not raw.lstrip().startswith(b"{"):
-                return None, "%s: HTTP %s" % (host, code)
-            js = json.loads(raw.decode("utf-8"))
-            if "remark" in js and not js.get("elements") and "error" in str(js.get("remark", "")).lower():
-                return None, "%s: %s" % (host, str(js["remark"])[:60])
-            return js, None
-        if code == 200 and raw.lstrip().startswith(b"<"):
-            return osm_xml_to_overpass(raw), None
-        return None, "%s: HTTP %s" % (host, code)
+            return None, "%s: %s" % (host, raw if code is None else "tidak menjawab"), "busy"
+        if code in (403, 406, 429):
+            return None, "%s: HTTP %s (permintaan ditolak/terlalu sering)" % (host, code), "block"
+        if code != 200 or not raw.lstrip().startswith(b"{"):
+            return None, "%s: HTTP %s" % (host, code), "busy"
+        js = json.loads(raw.decode("utf-8"))
+        # Overpass bisa membatalkan kueri dengan HTTP 200 + 'remark: runtime error ...' (waktu/memori habis)
+        if "remark" in js and "error" in str(js.get("remark", "")).lower():
+            return None, "%s: %s" % (host, str(js["remark"])[:60]), "busy"
+        return js, None, None
     except Exception as e:
-        return None, "%s: %s" % (host, str(e)[:60])
+        return None, "%s: %s" % (host, str(e)[:60]), "busy"
 
 
-def _race(sources, first=None, feedback=None):
-    """Minta beberapa sumber; jawaban sah PERTAMA yang dipakai. sources: [(nama, kind, url, body)]; first: nama sumber
-    yang diberi awalan HEAD_START_S. -> (js, nama, daftar_alasan_gagal)"""
+def _one(url, body, feedback=None):
+    """Jalankan _ask di thread Qt dengan batas SERVER_LIMIT_S (QGIS tetap bisa dibatalkan)."""
     import queue
     from qgis.PyQt.QtCore import QThread
     q = queue.Queue()
 
     class _Job(QThread):          # QThread (bukan thread Python biasa): pewaktu jaringan Qt butuh thread Qt
-        def __init__(self, src):
-            super().__init__()
-            self.src = src
-
         def run(self):
-            js, why = _ask(self.src[1], self.src[2], self.src[3])
-            q.put((self.src[0], js, why))
-
-    def start(src):
-        j = _Job(src)
-        _JOBS[:] = [o for o in _JOBS if o.isRunning()] + [j]     # simpan acuan sampai thread selesai
-        j.start()
-    order = sorted(sources, key=lambda s_: 0 if s_[0] == first else 1)
-    waves = [order[:1], order[1:]] if first and order and order[0][0] == first else [order]
-    t0, started, done, fails = time.time(), 0, 0, []
-    for wi, wave in enumerate(waves):
-        for src in wave:
-            start(src)
-            started += 1
-        limit = t0 + (HEAD_START_S if wi < len(waves) - 1 else TOTAL_DEADLINE_S)
-        while done < started and time.time() < limit:
-            if feedback is not None and feedback.isCanceled():
-                return None, None, ["dibatalkan"]
-            try:
-                nm, js, why = q.get(timeout=0.2)
-            except queue.Empty:
-                continue
-            done += 1
-            if js is not None:
-                return js, nm, fails
-            fails.append(why)
-    if done < started:
-        fails.append("%d server tidak menjawab dalam %.0f detik" % (started - done, TOTAL_DEADLINE_S))
-    return None, None, fails
+            q.put(_ask(url, body))
+    j = _Job()
+    _JOBS[:] = [o for o in _JOBS if o.isRunning()] + [j]     # simpan acuan sampai thread selesai
+    j.start()
+    t0 = time.time()
+    while time.time() - t0 < SERVER_LIMIT_S:
+        if feedback is not None and feedback.isCanceled():
+            return None, "dibatalkan", "cancel"
+        try:
+            return q.get(timeout=0.2)
+        except queue.Empty:
+            continue
+    return None, "%s: tidak menjawab dalam %.0f detik" % (url.split("/")[2], SERVER_LIMIT_S), "busy"
 
 
 def overpass_query(b, timeout_s=25):
-    """Kueri Overpass: jalan tol, jalan nasional/provinsi/kolektor (+ lebar/lajur), rel, sungai/kanal di kotak b."""
-    box = "(%f,%f,%f,%f)" % (b[1], b[0], b[3], b[2])
-    return ('[out:json][timeout:%d];('
-            'way["highway"~"^(motorway|motorway_link|trunk|trunk_link|primary|primary_link|secondary|secondary_link|'
-            'tertiary|tertiary_link)$"]%s;way["highway"]["lanes"]%s;way["highway"]["width"]%s;'
-            'way["railway"~"^(rail|light_rail|narrow_gauge|construction)$"]%s;'
-            'way["highway"="construction"]%s;way["waterway"~"^(river|canal)$"]%s;);out tags geom;'
-            % ((timeout_s,) + (box,) * 6))
+    """Kueri Overpass ringkas: [bbox] global, [timeout]/[maxsize] kecil (lebih mudah diterima server sibuk), satu regex
+    ber-jangkar per kunci, 'out tags geom qt' (koordinat langsung di tiap way, tanpa rekursi node, tanpa pengurutan).
+    Jalan tol, nasional/provinsi/kolektor (+ yang bertag lanes/width), rel, sungai/kanal di kotak b."""
+    return ('[out:json][timeout:%d][maxsize:67108864][bbox:%f,%f,%f,%f];('
+            'way[highway~"^(motorway|trunk|primary|secondary|tertiary)(_link)?$"];way[highway][lanes];way[highway][width];'
+            'way[highway=construction];way[railway~"^(rail|light_rail|narrow_gauge|construction)$"];'
+            'way[waterway~"^(river|canal)$"];);out tags geom qt;' % (timeout_s, b[1], b[0], b[3], b[2]))
 
 
-def fetch(bbox, cache_dir, feedback=None, timeout_s=10):
-    """Jalan/rel/sungai di kotak bbox dari OpenStreetMap (memori -> cache disk -> Overpass/API OSM 0.6 bersamaan).
-    -> (daftar jalan, keterangan sumber) atau (None, alasan)."""
+def _src_label(js, how):
+    ts = str(((js or {}).get("osm3s") or {}).get("timestamp_osm_base", ""))[:10]
+    return "OpenStreetMap (%s%s; %s)" % (how, (", data per %s" % ts) if ts else "", ATTRIBUTION)
+
+
+def fetch(bbox, cache_dir, feedback=None, timeout_s=25):
+    """Jalan/rel/sungai di kotak bbox dari OpenStreetMap: memori -> cache disk -> server Overpass (berurutan, dengan
+    pemutus sirkuit) -> cache kedaluwarsa. -> (daftar jalan, keterangan sumber) atau (None, alasan)."""
     g = GRID_DEG
     b = (math.floor(bbox[0] / g) * g, math.floor(bbox[1] / g) * g, math.ceil(bbox[2] / g) * g, math.ceil(bbox[3] / g) * g)
     b = tuple(round(v, 6) for v in b)
@@ -427,33 +467,54 @@ def fetch(bbox, cache_dir, feedback=None, timeout_s=10):
     hit = _cache_find(cache_dir, bbox)
     if hit:
         js, mt, box = hit
-        src = "OpenStreetMap (cache %s)" % time.strftime("%d-%m-%Y", time.localtime(mt))
+        src = _src_label(js, "cache %s" % time.strftime("%d-%m-%Y", time.localtime(mt)))
         _MEMO[box] = (mt, js, src)
         return _clip(parse_overpass(js), bbox), src
+
+    def stale(why):
+        old = _cache_find(cache_dir, bbox, stale=True)
+        if old:
+            js, mt, _box = old
+            return _clip(parse_overpass(js), bbox), _src_label(
+                js, "cache LAMA %s, server tidak terjangkau" % time.strftime("%d-%m-%Y", time.localtime(mt)))
+        return None, why
     if now - _FAIL["t"] < FAIL_MEMO_S:
-        return None, "%s (dicoba %d menit lalu; dicoba lagi otomatis setelah %d menit)" % (
-            _FAIL["why"], int((now - _FAIL["t"]) / 60), FAIL_MEMO_S // 60)
+        return stale("%s (dicoba %d menit lalu; dicoba lagi otomatis setelah %d menit)" % (
+            _FAIL["why"], int((now - _FAIL["t"]) / 60), FAIL_MEMO_S // 60))
     try:
         from qgis.PyQt.QtCore import QUrl
     except Exception as e:
         return None, "modul jaringan QGIS tidak tersedia (%s)" % e
     body = b"data=" + bytes(QUrl.toPercentEncoding(overpass_query(b, timeout_s)))
-    sources = [(u.split("/")[2], "overpass", u, body) for u in OVERPASS]
-    if (b[2] - b[0]) * (b[3] - b[1]) <= OSM_API_MAX_DEG2:
-        sources.append((OSM_API.split("/")[2], "api", OSM_API % b, None))
-    js, name, fails = _race(sources, _last_good(cache_dir), feedback)
+    st = _state(cache_dir)
+    hosts = sorted(OVERPASS, key=lambda u: 0 if u.split("/")[2] == st["good"] else 1)
+    js, name, fails = None, None, []
+    for url in hosts:
+        host = url.split("/")[2]
+        if host in st["rest"]:
+            fails.append("%s: diistirahatkan %d menit lagi" % (host, max(1, int((st["rest"][host] - now) / 60))))
+            continue
+        js, why, kind = _one(url, body, feedback)
+        if js is not None:
+            name = host
+            break
+        fails.append(why)
+        if kind == "cancel":
+            return None, "dibatalkan"
+        rest = REST_BLOCK_S if kind == "block" else REST_BUSY_S
+        _state(cache_dir, lambda s_, h_=host, r_=rest: s_["rest"].__setitem__(h_, time.time() + r_))
     if js is None:
-        why = "OpenStreetMap tidak terjangkau (offline/server sibuk): %s" % "; ".join(str(t) for t in fails)[:220]
-        if "dibatalkan" not in fails:
-            _FAIL.update(t=time.time(), why=why)
-        return None, why
+        why = ("OpenStreetMap tidak terjangkau (offline / server publik sibuk atau menolak): %s. Untuk pemakaian rutin, "
+               "taruh paket data jalan lokal (*OSM*.gpkg atau ekstrak Geofabrik *.osm.pbf) di folder data referensi"
+               % "; ".join(str(t) for t in fails)[:200])
+        _FAIL.update(t=time.time(), why=why)
+        return stale(why)
     _FAIL["t"] = 0.0
-    # simpan hanya ruas yang dipakai (API OSM mengembalikan semua jalan di kotak): cache kecil, baca ulang cepat
     js["elements"] = [e for e in js.get("elements", []) if classify(e.get("tags") or {})]
     js["seranta_v"] = 2
-    src = "OpenStreetMap (%s, %s)" % (name, time.strftime("%d-%m-%Y"))
+    src = _src_label(js, "%s, %s" % (name, time.strftime("%d-%m-%Y")))
     _MEMO[b] = (time.time(), js, src)
-    _last_good(cache_dir, name)
+    _state(cache_dir, lambda s_: s_.__setitem__("good", name))
     if cache_dir:
         try:
             os.makedirs(cache_dir, exist_ok=True)

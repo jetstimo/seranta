@@ -29,16 +29,14 @@ ok(C({"waterway": "river"}) == "sungai" and C({"waterway": "drain"}) is None and
    is None, "sungai")
 ok(C({"railway": "abandoned"}) is None and C({"railway": "rail", "usage": "branch"}) == "rel", "rel nonaktif")
 
-xml = b"""<?xml version='1.0'?><osm version='0.6'>
-<node id='1' lat='0.0' lon='0.0'/><node id='2' lat='0.0' lon='0.001'/><node id='3' lat='-0.001' lon='0.0005'/>
-<node id='4' lat='0.001' lon='0.0005'/>
-<way id='10'><nd ref='1'/><nd ref='2'/><tag k='highway' v='residential'/></way>
-<way id='11'><nd ref='3'/><nd ref='4'/><tag k='railway' v='rail'/><tag k='name' v='Rel X'/></way>
-<way id='12'><nd ref='3'/><nd ref='1'/><tag k='building' v='yes'/></way></osm>"""
-js = J.osm_xml_to_overpass(xml)
-ok(len(js["elements"]) == 2, "XML API OSM -> elemen jalan/rel saja")
-roads = J.parse_overpass(js)
-ok([r["kind"] for r in roads] == ["rel"] and roads[0]["name"] == "Rel X", "parse XML")
+# kebijakan pemakaian: server Overpass berurutan (tanpa kumi = private.coffee, tanpa API penyuntingan 0.6)
+ok(len(J.OVERPASS) == 3 and not any("kumi" in u or "api.openstreetmap.org" in u for u in J.OVERPASS), "daftar server")
+ok(not hasattr(J, "OSM_API") and not hasattr(J, "_race"), "tanpa API 0.6 dan tanpa permintaan paralel")
+q = J.overpass_query((125.19, 1.45, 125.2, 1.46))
+ok("[bbox:1.450000,125.190000,1.460000,125.200000]" in q and "[maxsize:" in q and q.endswith("out tags geom qt;"), "kueri")
+w = J.pbf_where(["name", "highway", "waterway", "other_tags"])
+ok("highway IN (" in w and 'other_tags LIKE \'%"railway"=>%\'' in w, "saringan paket pbf (railway di other_tags)")
+ok("railway IS NOT NULL" in J.pbf_where(["highway", "railway", "other_tags"]), "saringan paket pbf (kolom railway)")
 
 # tiang sejajar rel 5 m (tidak memotong) -> dekat rel; 20 m -> aman; tiang yang sudah di temuan persilangan tidak diulang
 kx, ky = 111320.0, 110574.0
@@ -81,10 +79,15 @@ with tempfile.TemporaryDirectory() as td:
                                                                       {"lon": 125.199, "lat": 1.459}]}]}, fh)
     J._MEMO.clear()
     roads, src = J.fetch((125.1905, 1.4505, 125.1935, 1.4535), td)       # tanpa jaringan: dari cache yang mencakup
-    ok([r["kind"] for r in roads] == ["tol"] and "cache" in src, "cache mencakup + potong ke wilayah")
+    ok([r["kind"] for r in roads] == ["tol"] and "cache" in src and "OpenStreetMap contributors" in src,
+       "cache mencakup + potong ke wilayah + atribusi")
     roads, src = J.fetch((125.1975, 1.4575, 125.1995, 1.4595), td)       # kedua kali: dari memori
     ok([r["kind"] for r in roads] == ["rel"], "memori sesi")
     ok(J._cache_find(td, (125.19, 1.45, 125.21, 1.46)) is None, "kotak lebih luas tidak tercakup")
+    os.utime(J._cache_path(td, box), (1, 1))
+    ok(J._cache_find(td, box) is None and J._cache_find(td, box, stale=True) is not None, "cache lama hanya bila diminta")
+    st = J._state(td, lambda s_: s_["rest"].__setitem__("a.example", 9e12))
+    ok(J._state(td)["rest"].get("a.example") == 9e12 and J._state(td)["good"] is None, "keadaan server tersimpan")
 J._MEMO.clear()
 
 # nama berkas memuat RT lain (Pasir Putih RT 17: BAKP bernama RT_023)
