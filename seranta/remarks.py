@@ -45,7 +45,8 @@ PRIORITY = [
     "HP_SUDAH_ADA_DI_DESIGN_LITE", "TIANG_BARU_SUDAH_ADA", "WARN_TIANG_GANDA_LINTAS_CLUSTER", "WARN_ID_CLUSTER_GANDA",
     "ADMIN_", "WARN_TIANG_DUPLIKAT_KMZ", "WARN_BELOKAN_TANPA_TIANG", "WARN_JALUR_TERPUTUS", "WARN_JALUR_BERSILANG_TANPA_TIANG",
     "WARN_POLE_SHEET_BEDA_KMZ", "WARN_CLUSTER_NAME_KOSONG",
-    "WARN_HPDB_CLUSTER_NAME_CAMPUR", "WARN_BOUNDARY_TIDAK_VALID",
+    "WARN_HPDB_CLUSTER_NAME_CAMPUR", "WARN_HPDB_RT_RW_TIDAK_SESUAI", "WARN_BOUNDARY_TIDAK_VALID",
+    "WARN_JALUR_MELINTAS_TOL", "WARN_JALUR_MELINTAS_REL",
     "WARN_HP_KOORDINAT_BEDA_FOTO", "WARN_JALUR_LEWAT_AREA_TANPA_IZIN",
     "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
     "COLO_TITIK_MASUK_TIDAK_DI_JALUR", "COLO_HP_TIDAK_TERJANGKAU_JALUR", "WARN_TIANG_LUAR_BOUNDARY", "WARN_JALUR_LUAR_BOUNDARY",
@@ -517,6 +518,19 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
                     parts.append("%s HP CLUSTER_NAME '%s' (baris %s)" % (m.group(1), short_label(m.group(2)), m.group(3)))
                     sh.append("%s HP CLUSTER_NAME '%s'" % (m.group(1), short_label(m.group(2))))
             add(key, "; ".join(parts) or "CLUSTER_NAME HPDB campur", "; ".join(sh) or "CLUSTER_NAME HPDB campur")
+        elif key == "WARN_HPDB_RT_RW_TIDAK_SESUAI":
+            parts, sh = [], []
+            for f in L:
+                m = re.match(r"^(\d+) HP kolom (\S+) = '([^']+)' \(baris ([^)]+)\), (seharusnya|tetangga) ([^:]+?)(?: sesuai |:)",
+                             f["ket"] or "")
+                if m:
+                    col = {"RW/lingkungan": "RW/lingk."}.get(m.group(2), m.group(2))
+                    parts.append("%s HP %s %s (baris %s) %s %s" % (m.group(1), col, short_label(m.group(3)), m.group(4),
+                                                                 "seharusnya" if m.group(5) == "seharusnya" else "di tengah",
+                                                                 m.group(6).strip()))
+                    sh.append("%s HP %s %s" % (m.group(1), col, short_label(m.group(3))))
+            add(key, "RT/RW HPDB beda wilayah: " + ("; ".join(parts) or "cek kolom RT/RW"),
+                "RT/RW HPDB beda wilayah: " + ("; ".join(sh) or "cek kolom RT/RW"))
         elif key == "WARN_BOUNDARY_TIDAK_VALID":
             add(key, "boundary KMZ memotong diri sendiri (perbaiki poligon)", "boundary KMZ tidak valid")
         elif key == "WARN_HP_KOORDINAT_BEDA_FOTO":
@@ -597,6 +611,12 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
             mx = max(f.get("val") or 0 for f in L)
             add(key, "%s di luar boundary (s/d %s m): cek izin lokasi tiang" % (
                 ", ".join(nm[:3]) if n <= 3 else "%d tiang NP" % n, num(mx, 0)), "%d tiang NP di luar boundary" % n)
+        elif key in ("WARN_JALUR_MELINTAS_TOL", "WARN_JALUR_MELINTAS_REL"):
+            jenis = "jalan tol" if key.endswith("TOL") else "rel kereta"
+            nms = sorted({(re.search(r"memotong (?:jalan tol|rel kereta) (.+?) \(rentang", f["ket"] or "") or
+                           re.search(r"(.*)", "")).group(1) or "" for f in L} - {"", "-"})
+            add(key, "jalur memotong %s%s di %d titik: perlu izin & metode crossing" % (
+                jenis, (" " + ", ".join(nms[:2])) if nms else "", len(L)), "jalur memotong %s (%d titik)" % (jenis, len(L)))
         elif key == "WARN_JALUR_LUAR_BOUNDARY":
             tot = sum(f.get("val") or 0 for f in L)
             add(key, "jalur %s m di luar boundary (feeder? sebutkan)" % num(tot, 0), "jalur %s m di luar boundary" % num(tot, 0))
@@ -702,6 +722,7 @@ SIMPLE = {
     "WARN_POLE_SHEET_BEDA_KMZ": "data sheet Pole berbeda dengan KMZ",
     "WARN_CLUSTER_NAME_KOSONG": "ada nama cluster yang kosong di HPDB",
     "WARN_HPDB_CLUSTER_NAME_CAMPUR": "nama cluster di HPDB tidak seragam",
+    "WARN_HPDB_RT_RW_TIDAK_SESUAI": "ada RT/RW di HPDB yang tidak sesuai wilayahnya",
     "WARN_BOUNDARY_TIDAK_VALID": "bentuk boundary tidak valid",
     "WARN_HP_KOORDINAT_BEDA_FOTO": "ada koordinat homepass yang berbeda dengan foto",
     "WARN_JALUR_LEWAT_AREA_TANPA_IZIN": "ada jalur kabel lewat area tanpa izin",
@@ -716,6 +737,8 @@ SIMPLE = {
     "COLO_HP_TIDAK_TERJANGKAU_JALUR": "ada homepass yang tidak terjangkau dari FDT",
     "WARN_TIANG_LUAR_BOUNDARY": "ada tiang di luar boundary",
     "WARN_JALUR_LUAR_BOUNDARY": "ada jalur kabel di luar boundary",
+    "WARN_JALUR_MELINTAS_TOL": "ada jalur kabel yang memotong jalan tol",
+    "WARN_JALUR_MELINTAS_REL": "ada jalur kabel yang memotong rel kereta",
     "WARN_JALUR_BERTUMPUK": "ada garis jalur yang digambar dobel",
     "WARN_TSSR_ID_BEDA": "ID cluster di TSSR berbeda",
     "WARN_TSSR_HP_BEDA": "jumlah homepass di TSSR berbeda",

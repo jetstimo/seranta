@@ -240,3 +240,133 @@ def admin_vs_hp_sheet(other, hp):
             " - sheet homepass: kelurahan '%s', kecamatan '%s'" % (hp[0], hp[1])
     diff = ["%s '%s' (sheet homepass '%s')" % (cols[i], other[i], hp[i]) for i in range(3) if o[i] and h[i] and o[i] != h[i]]
     return ("BEDA", "beda dengan sheet homepass: " + ", ".join(diff)) if diff else ("SAMA", "")
+
+
+# ----------------------------------------------------------------------------------------- RT / RW HPDB vs WILAYAH
+# 3.14.1 (masukan pengguna: "di HPDB nama RT-nya berbeda dengan wilayahnya, mis. seharusnya RT 17 tetapi tertulis RT 24").
+# Dua pembanding, keduanya tanpa data luar:
+#   1. nama wilayah resmi cluster (nama Funnel cluster ini, atau nama folder cluster): 'LINGKUNGAN 5 GESEL', 'RW 05',
+#      'RT 17', 'LINGKUNGAN 1&2', 'LINGKUNGAN 1-7', 'LINGKUNGAN I-IV' -> kolom RT / RW-Lingkungan dan CLUSTER_NAME tiap
+#      baris HPDB harus berada di dalam nomor itu;
+#   2. tetangga terdekat: rumah ber-RT 24 yang dikelilingi rumah RT 17 (radius 60 m) hampir pasti salah ketik / salah
+#      salin. Rumah di satu RT berdekatan; batas RT jarang memotong deret rumah yang rapat.
+# Kolom kosong, '-', '0' atau '00' = tidak diisi (wajar di daerah tanpa RT, mis. kelurahan ber-lingkungan di Sulawesi Utara).
+_ROMAN = {"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5, "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10, "XI": 11,
+          "XII": 12, "XIII": 13, "XIV": 14, "XV": 15, "XVI": 16, "XVII": 17, "XVIII": 18, "XIX": 19, "XX": 20}
+_NUM = r"(?:\d{1,3}|[IVX]{1,5})"
+_AREA_RX = re.compile(r"\b(RT|RW|LINGKUNGAN|LINGK|LK|DUSUN|DSN)\s*\.?\s*(%s(?:\s*(?:&|,|-|DAN|S/D|SD)\s*%s)*)(?![A-Z0-9])"
+                      % (_NUM, _NUM))
+RW_KEYS = ("RW", "LINGKUNGAN", "LINGK", "LK", "DUSUN", "DSN")
+
+
+def _num(tok):
+    tok = tok.strip()
+    if tok.isdigit():
+        return int(tok)
+    return _ROMAN.get(tok)
+
+
+def parse_numbers(v):
+    """'01&2' -> {1, 2}; '3-4' / 'I-IV' -> rentang; '-', '0', '00', '' -> set() (tidak diisi)."""
+    s = str(v or "").upper().replace("S/D", "-").replace(" SD ", "-").replace(" DAN ", "&")
+    out = set()
+    for part in re.split(r"[&,/]", s):
+        rng = [x for x in re.split(r"\s*-\s*", part.strip()) if x]
+        nums = [n for n in (_num(x) for x in rng) if n is not None]
+        if len(nums) == 2 and len(rng) == 2 and 0 < nums[1] - nums[0] <= 30:
+            out.update(range(nums[0], nums[1] + 1))
+        else:
+            out.update(nums)
+    out.discard(0)
+    return out
+
+
+def area_ref(label):
+    """Nomor wilayah di nama cluster/Funnel -> {'RT': set, 'RW': set} (RW mencakup RW/Lingkungan/Dusun)."""
+    s = re.sub(r"[_]+", " ", str(label or "").upper())
+    res = {"RT": set(), "RW": set()}
+    for key, nums in _AREA_RX.findall(s):
+        res["RT" if key == "RT" else "RW"] |= parse_numbers(nums)
+    return res
+
+
+def _fmt(nums):
+    v = sorted(nums)
+    if len(v) > 2 and v == list(range(v[0], v[-1] + 1)):
+        return "%d-%d" % (v[0], v[-1])
+    return "&".join(str(n) for n in v)
+
+
+def area_mismatch(ref_label, ref_src, rows, rt_vals, rw_vals, cn_vals):
+    """Baris HPDB yang RT / RW-Lingkungan / CLUSTER_NAME-nya di luar nomor wilayah nama cluster.
+    -> [dict(col, value, n, rows, idx, expect, text)] (satu per kolom & nilai)."""
+    ref = area_ref(ref_label)
+    out = []
+
+    def scan(col, vals, want, what):
+        if not want or not vals:
+            return
+        grp = {}
+        for i, v in enumerate(vals):
+            got = parse_numbers(v)
+            if got and not got <= want:
+                grp.setdefault(str(v).strip(), []).append(i)
+        for v, idx in sorted(grp.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+            out.append({"col": col, "value": v, "n": len(idx), "rows": [rows[i] for i in idx], "idx": idx,
+                        "expect": "%s %s" % (what, _fmt(want)),
+                        "text": "%d HP kolom %s = '%s' (baris %s), seharusnya %s %s sesuai %s '%s'" % (
+                            len(idx), col, v, rows_txt([rows[i] for i in idx]), what, _fmt(want), ref_src, ref_label)})
+    scan("RT", rt_vals, ref["RT"], "RT")
+    scan("RW/lingkungan", rw_vals, ref["RW"], "RW/lingkungan")
+    if cn_vals:
+        grp = {}
+        for i, v in enumerate(cn_vals):
+            a = area_ref(v)
+            bad = (a["RT"] and ref["RT"] and not a["RT"] <= ref["RT"]) or (a["RW"] and ref["RW"] and not a["RW"] <= ref["RW"])
+            if bad:
+                grp.setdefault(str(v).strip(), []).append(i)
+        for v, idx in sorted(grp.items(), key=lambda kv: (-len(kv[1]), kv[0])):
+            want = " ".join(x for x in (("RT " + _fmt(ref["RT"])) if ref["RT"] else "",
+                                        ("RW/lingkungan " + _fmt(ref["RW"])) if ref["RW"] else "") if x)
+            out.append({"col": "CLUSTER_NAME", "value": v, "n": len(idx), "rows": [rows[i] for i in idx], "idx": idx,
+                        "expect": want, "text": "%d HP kolom CLUSTER_NAME = '%s' (baris %s), seharusnya %s sesuai %s '%s'" % (
+                            len(idx), v, rows_txt([rows[i] for i in idx]), want, ref_src, ref_label)})
+    return out
+
+
+def neighbour_odd(xy_m, vals, radius_m=60.0, k=6, min_nb=4, share=0.8):
+    """Rumah yang nomor RT/RW-nya berbeda dengan hampir semua tetangga terdekatnya.
+    xy_m: [(x, y)] dalam meter; vals: nilai kolom per HP. Hanya nilai satu nomor yang dinilai.
+    -> [(i, nilai_sendiri, nilai_mayoritas, n_mayoritas, n_tetangga)]"""
+    nums = []
+    for v in vals:
+        p = parse_numbers(v)
+        nums.append(next(iter(p)) if len(p) == 1 else None)
+    if len({n for n in nums if n is not None}) < 2:
+        return []
+    cell = {}
+    for i, (x, y) in enumerate(xy_m):
+        cell.setdefault((int(x // radius_m), int(y // radius_m)), []).append(i)
+    out = []
+    for i, (x, y) in enumerate(xy_m):
+        if nums[i] is None:
+            continue
+        cx, cy = int(x // radius_m), int(y // radius_m)
+        nb = []
+        for dx in (-1, 0, 1):
+            for dy in (-1, 0, 1):
+                for j in cell.get((cx + dx, cy + dy), []):
+                    if j != i and nums[j] is not None:
+                        d = ((xy_m[j][0] - x) ** 2 + (xy_m[j][1] - y) ** 2) ** 0.5
+                        if d <= radius_m:
+                            nb.append((d, j))
+        nb = [j for _d, j in sorted(nb)[:k]]
+        if len(nb) < min_nb:
+            continue
+        cnt = {}
+        for j in nb:
+            cnt[nums[j]] = cnt.get(nums[j], 0) + 1
+        maj, n_maj = max(cnt.items(), key=lambda kv: (kv[1], -kv[0]))
+        if maj != nums[i] and n_maj >= share * len(nb) and nums[i] not in cnt:
+            out.append((i, nums[i], maj, n_maj, len(nb)))
+    return out
