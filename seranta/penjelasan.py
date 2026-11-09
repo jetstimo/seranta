@@ -355,6 +355,16 @@ TOOL1_STD = {
     9: dict(cek="Jarak antar tiang (sepanjang jalur kabel) tidak melebihi batas tegas maupun batas regulasi daerah.",
             alasan="Bentang terlalu panjang membuat kabel melendut dan sering ditolak saat izin.",
             tindakan="Sisipkan tiang baru di tengah bentang yang terlalu panjang."),
+    10: dict(cek="Jalur kabel tidak memotong jalan tol, rel kereta api, atau jalan besar (jalan nasional/arteri, >= 4 lajur "
+                 "atau >= 14 m) tanpa izin, dan tiang baru tidak berdiri di ruang milik jalan tol (< 15 m) atau terlalu dekat "
+                 "rel (< 10 m). Dibaca dari data jalan OpenStreetMap (jenis jalan, lajur, lebar). Standar tambahan Seranta.",
+             alasan="Jalan tol dan rel kereta punya ruang milik sendiri: memasang kabel melintasinya wajib izin pusat "
+                    "(Dirjen Bina Marga + BPJT/BUJT untuk tol; Dirjen Perkeretaapian + izin prinsip KAI untuk rel) dengan "
+                    "syarat teknis ketat (rel: >= 6,20 m di atas kepala rel atau >= 150 cm di bawah subgrade). Desain yang "
+                    "melintas tanpa izin akan ditolak dan harus didesain ulang. Jalan besar wajib izin penyelenggara jalan.",
+             tindakan="Pindahkan rute ke jalan yang tidak memotong tol/rel (mis. lewat underpass/jalan lain yang sudah ada), "
+                      "atau lampirkan izin dan metode yang disetujui pemilik ruas. Untuk jalan besar, pastikan tiang di kedua "
+                      "sisi, kabel >= 5 m, dan izin penyelenggara jalan. Cek juga di citra: data OSM bisa belum lengkap."),
 }
 
 # Tool 1 - arti jenis temuan (cocokkan dengan awalan kode, urutan penting)
@@ -374,6 +384,10 @@ TOOL1_KIND = [
     ("WARN_TSSR_DIPAKAI_BERSAMA", "File TSSR cluster ini identik dengan TSSR beberapa cluster lain: TSSR dibuat untuk wilayah "
      "induk (strand), sehingga jumlah HP dan nama cluster di dalamnya bukan milik cluster ini.",
      "Minta TSSR per cluster, atau lampiran yang merinci ID cluster dan jumlah HP setiap cluster di strand."),
+    ("WARN_NAMA_BERKAS_WILAYAH_BEDA", "Nama salah satu berkas cluster (HPDB, KMZ, BAKP, TSSR) memuat nomor RT/RW yang berbeda "
+     "dari wilayah cluster, mis. folder & HPDB 'RT 17' tetapi BAKP bernama 'RT_023'. Biasanya berkas wilayah lain ikut tersalin.",
+     "Buka berkas itu: bila isinya memang untuk wilayah ini, perbaiki namanya; bila milik wilayah lain, ganti dengan berkas "
+     "yang benar (BAKP dibuat per RT/lingkungan)."),
     ("WARN_HPDB_RT_RW_TIDAK_SESUAI", "Kolom RT, RW/lingkungan atau CLUSTER_NAME di HPDB tidak sesuai wilayah rumah: nomornya "
      "di luar nama wilayah cluster (nama Funnel atau folder cluster), atau rumah itu dikelilingi rumah ber-RT/RW lain "
      "(mis. tertulis RT 24 padahal semua tetangganya RT 17). Biasanya salah ketik atau baris yang disalin dari wilayah lain.",
@@ -425,22 +439,35 @@ TOOL1_KIND = [
      "Pastikan izin mencakup lokasi itu, perluas boundary, atau pindahkan tiang ke cluster yang benar."),
     ("INFO_TIANG_EP_LUAR_BOUNDARY", "Tiang eksisting (EP) di luar BOUNDARY cluster: tidak ada pemasangan tiang baru.",
      "Cukup dicatat (sewa/attachment)."),
-    ("WARN_JALUR_MELINTAS_TOL", "Jalur kabel memotong jalan tol menurut data jalan OpenStreetMap. Utilitas di ruang milik "
-     "jalan tol wajib izin Direktur Jenderal Bina Marga atas rekomendasi teknis BPJT/BUJT (PP 23/2024 Pasal 71 dan 75; "
-     "SE Dirjen Bina Marga 11/SE/Db/2017). Tidak ada angka ruang bebas resmi khusus tol: metode dan ruang bebas ditetapkan "
-     "BUJT. Angka 5 m Permen PU 20/PRT/M/2010 tidak berlaku untuk tol (Pasal 3 mengecualikan jalan tol).",
-     "Koordinasikan dengan BUJT ruas itu (portal SIP3 Rumija Tol Bina Marga) dan cantumkan izin serta metode crossing "
-     "(udara, HDD/boring, atau menumpang jembatan/overpass) di desain; bila tidak memungkinkan, pindahkan jalur. Cek juga "
-     "di citra: data OSM bisa belum lengkap atau bergeser."),
-    ("WARN_JALUR_MELINTAS_REL", "Jalur kabel memotong rel kereta menurut data OpenStreetMap. Wajib izin Direktur Jenderal "
-     "Perkeretaapian dengan izin prinsip penyelenggara prasarana (PM Perhubungan 36/2011 Pasal 11).",
-     "Di atas rel: ruang tinggi >= 6,20 m dari kepala rel dan tiang >= 10 m dari as rel terluar (Pasal 7). Di bawah rel: "
-     ">= 150 cm di bawah subgrade, penanaman mulai >= 10 m dari sisi terluar jalur (Pasal 8). Ajukan lewat portal DJKA "
-     "Kemenhub, atau pindahkan jalur."),
-    ("INFO_JALUR_MELINTAS_JALAN_BESAR", "Jalur kabel melintang jalan arteri/primer (jalan nasional/provinsi) menurut data "
-     "OpenStreetMap.",
-     "Kabel udara >= 5 m dari permukaan jalan tertinggi (Permen PU 20/PRT/M/2010 Pasal 12 ayat 6, tetap berlaku menurut "
-     "Permen PU 6/2025) dan izin penyelenggara jalan sesuai status jalan (Pasal 5). Cek aturan daerah yang bisa lebih ketat."),
+    ("JALUR_MELINTAS_TOL", "Jalur kabel memotong JALAN TOL (data OpenStreetMap). Ruang milik jalan tol hanya boleh dipakai "
+     "utilitas dengan izin Direktur Jenderal Bina Marga atas rekomendasi teknis BPJT dan BUJT (PP 23/2024 tentang Jalan Tol; "
+     "Permen PU 6/2025). Portal Perizinan PU menyebut 'Crossing Utilitas (Pipa/Kabel)' sebagai jenis izin tersendiri. "
+     "Angka 5 m Permen PU 20/PRT/M/2010 tidak berlaku untuk tol (Pasal 3 mengecualikan jalan tol).",
+     "Pindahkan rute ke jalan yang tidak memotong tol (underpass/overpass jalan umum yang sudah ada). Bila harus menyeberang: "
+     "ajukan izin rumija tol (boring/HDD dengan pit di luar rumija tol, atau menumpang jembatan atas persetujuan BUJT) dan "
+     "lampirkan di desain. Cek juga di citra: data OSM bisa belum lengkap atau bergeser."),
+    ("JALUR_MELINTAS_REL", "Jalur kabel memotong REL KERETA API (data OpenStreetMap). Wajib izin Direktur Jenderal "
+     "Perkeretaapian dengan izin prinsip penyelenggara prasarana (KAI) (PM Perhubungan 36/2011 Pasal 11-12; PP 56/2009 Pasal 82).",
+     "Pindahkan rute, atau ajukan izin crossing lewat portal DJKA Kemenhub. Syarat teknis: di atas rel ruang tinggi >= 6,20 m "
+     "dari kepala rel dan tiang >= 10 m dari as rel terluar (Pasal 7); di bawah rel >= 150 cm di bawah subgrade, penanaman "
+     "mulai >= 10 m dari sisi terluar jalur (Pasal 8)."),
+    ("WARN_JALUR_MELINTAS_JALAN_BESAR", "Jalur kabel memotong jalan besar: jalan nasional/arteri (trunk/primary di OSM), atau "
+     "jalan yang lebarnya terbaca >= 4 lajur / >= 14 m (PP 34/2006 Pasal 32: jalan raya minimal 2 lajur per arah dengan median).",
+     "Wajib izin penyelenggara jalan (nasional: BBPJN/BPJN; provinsi: gubernur; kabupaten/kota: bupati/wali kota; Permen PU "
+     "20/PRT/M/2010 Pasal 4-5, via OSS menurut Permen PU 6/2025). Kabel udara >= 5 m dari permukaan jalan tertinggi, kabel "
+     "tanah >= 1,5 m, tiang >= 1 m dari tepi bahu/trotoar (Pasal 12). Pastikan tiang di kedua sisi jalan."),
+    ("WARN_TIANG_DEKAT_JALAN_TOL", "Tiang baru berdiri < 15 m dari jalur jalan tol: kemungkinan di dalam ruang milik jalan tol "
+     "(lebar minimal 30 m, PP 34/2006 Pasal 40 ayat 1).", "Geser tiang menjauhi tol, atau pastikan batas pagar rumija di "
+     "lapangan; penempatan sejajar di rumija tol wajib izin Dirjen Bina Marga + BPJT/BUJT."),
+    ("WARN_TIANG_DEKAT_REL", "Tiang baru berdiri < 10 m dari as rel kereta (PM Perhubungan 36/2011 Pasal 7 huruf b).",
+     "Geser tiang >= 10 m dari as rel; utilitas sejajar rel hanya di luar ruang manfaat jalur KA, masuk ruang milik jalur KA "
+     "wajib izin pemilik prasarana (PP 56/2009 Pasal 59 dan 82)."),
+    ("INFO_JALUR_MELINTAS_JALAN_SEDANG", "Jalur kabel melintang jalan kolektor/penghubung (secondary/tertiary di OSM).",
+     "Kabel udara >= 5 m dari permukaan jalan tertinggi (Permen PU 20/PRT/M/2010 Pasal 12 ayat 6) dan izin penyelenggara "
+     "jalan sesuai status jalan. Cek aturan daerah yang bisa lebih ketat."),
+    ("INFO_JALUR_MELINTAS_SUNGAI", "Jalur kabel melintasi sungai/kanal (data OSM).",
+     "Rentangan kabel di sempadan sungai wajib izin dengan rekomendasi teknis pengelola SDA (Permen PUPR 28/2015 Pasal 22). "
+     "Pastikan tiang di kedua tepi dan bentang tidak melebihi batas."),
     ("WARN_JALUR_LUAR_BOUNDARY", "Sebagian jalur kabel di luar BOUNDARY cluster. Boleh bila jalur feeder ke FDT atau ke "
      "cluster lain; bila jalur distribusi, boundary atau jalurnya perlu dirapikan.",
      "Sebutkan fungsi jalur itu di desain, atau perluas boundary / pindahkan jalurnya."),

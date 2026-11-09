@@ -21,7 +21,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.14.1"
+__version__ = "3.15.0"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -1833,6 +1833,8 @@ QC_LABELS = [
      "kelengkapan dokumen survei: TSSR atau lampiran rincian per cluster"),
     (r"^WARN_HPDB_RT_RW_TIDAK_SESUAI", 3, "RT/RW-lingkungan di HPDB tidak sesuai wilayah", "W3_RT_RW_TIDAK_SESUAI",
      "data HPDB = wilayah rumah sebenarnya: nama wilayah cluster (Funnel/folder) dan tetangga terdekat (radius 60 m)"),
+    (r"^WARN_NAMA_BERKAS_WILAYAH_BEDA", 3, "Nomor RT/RW di nama berkas beda dari wilayah cluster", "W3_NAMA_BERKAS_WILAYAH",
+     "berkas cluster (HPDB, KMZ, BAKP, TSSR) harus untuk wilayah yang sama; BAKP per RT/lingkungan"),
     (r"^WARN_HPDB_CLUSTER_NAME_CAMPUR", 3, "CLUSTER_NAME tidak seragam di satu HPDB", "W3_CLUSTER_NAME_CAMPUR",
      "format HPDB: satu HPDB satu cluster (FINDIM / Funnel); HP pindahan harus diberi label cluster baru"),
     (r"^WARN_BOUNDARY_TIDAK_VALID", 2, "BOUNDARY KMZ memotong dirinya sendiri", "W2_BOUNDARY_TIDAK_VALID",
@@ -1964,12 +1966,20 @@ QC_LABELS = [
      "Standar Review Strand: izin warga (BAKP) per wilayah cluster; toleransi GPS ponsel 10 m"),
     (r"^INFO_TIANG_EP_LUAR_BOUNDARY", 2, "Tiang EP di luar BOUNDARY cluster (tiang eksisting)", "I2_EP_LUAR_BOUNDARY",
      "tiang eksisting: tidak ada pemasangan tiang baru"),
-    (r"^WARN_JALUR_MELINTAS_TOL", None, "Jalur kabel memotong jalan tol (OpenStreetMap)", "W_JALUR_MELINTAS_TOL",
-     "PP 23/2024 Ps. 71 & 75; SE Dirjen Bina Marga 11/SE/Db/2017; data jalan OpenStreetMap"),
-    (r"^WARN_JALUR_MELINTAS_REL", None, "Jalur kabel memotong rel kereta (OpenStreetMap)", "W_JALUR_MELINTAS_REL",
-     "PM Perhubungan 36/2011 Ps. 7, 8, 11; data jalan OpenStreetMap"),
-    (r"^INFO_JALUR_MELINTAS_JALAN_BESAR", None, "Jalur kabel melintang jalan arteri (OpenStreetMap)",
-     "I_JALUR_MELINTAS_ARTERI", "Permen PU 20/PRT/M/2010 Ps. 5 & 12(6) (berlaku per Permen PU 6/2025); data OSM"),
+    (r"^JALUR_MELINTAS_TOL", 10, "Jalur kabel memotong jalan tol", "S10_JALUR_MELINTAS_TOL",
+     "PP 23/2024 tentang Jalan Tol; Permen PU 6/2025 (izin rumija tol: Dirjen Bina Marga + rekomendasi BPJT/BUJT); data OSM"),
+    (r"^JALUR_MELINTAS_REL", 10, "Jalur kabel memotong rel kereta api", "S10_JALUR_MELINTAS_REL",
+     "PM Perhubungan 36/2011 Ps. 7, 8, 11-12; PP 56/2009 Ps. 82; data jalan OpenStreetMap"),
+    (r"^WARN_JALUR_MELINTAS_JALAN_BESAR", 10, "Jalur kabel memotong jalan besar (nasional/arteri, >= 4 lajur/14 m)",
+     "W10_JALUR_MELINTAS_JALAN_BESAR", "Permen PU 20/PRT/M/2010 Ps. 4, 5, 12; PP 34/2006 Ps. 32, 40; data OSM"),
+    (r"^WARN_TIANG_DEKAT_JALAN_TOL", 10, "Tiang baru < 15 m dari jalan tol (ruang milik jalan tol)", "W10_TIANG_DEKAT_TOL",
+     "PP 34/2006 Ps. 40 ayat 1 (rumija jalan bebas hambatan >= 30 m); PP 23/2024; data OSM"),
+    (r"^WARN_TIANG_DEKAT_REL", 10, "Tiang baru < 10 m dari as rel", "W10_TIANG_DEKAT_REL",
+     "PM Perhubungan 36/2011 Ps. 7 huruf b; PP 56/2009 Ps. 59 & 82; data OSM"),
+    (r"^INFO_JALUR_MELINTAS_JALAN_SEDANG", 10, "Jalur kabel melintang jalan kolektor (info)", "I10_MELINTAS_KOLEKTOR",
+     "Permen PU 20/PRT/M/2010 Ps. 5 & 12 ayat 6; data OSM"),
+    (r"^INFO_JALUR_MELINTAS_SUNGAI", 10, "Jalur kabel melintasi sungai/kanal (info)", "I10_MELINTAS_SUNGAI",
+     "Permen PUPR 28/PRT/M/2015 Ps. 22; Permen PUPR 3/2023; data OSM"),
     (r"^WARN_JALUR_LUAR_BOUNDARY", 2, "Jalur kabel di luar BOUNDARY cluster", "W2_JALUR_LUAR_BOUNDARY",
      "Standar Review Strand: izin warga per wilayah cluster; jalur feeder ke FDT boleh, sebutkan di desain"),
     (r"^INFO_TIANG_JALUR_DI_BOUNDARY_SAUDARA", 2, "Tiang/jalur di BOUNDARY cluster saudara 1 PIC", "I2_TIANG_JALUR_SAUDARA",
@@ -2034,7 +2044,7 @@ QC_DASAR = [  # (pola kode, kategori dasar) untuk kolom dasar_src
     (r"^(INFO_HP_MUNGKIN|INFO_HP_TEPI|HP_LUAR_FUNNEL|INFO_TIANG_BARU_DEKAT)", "RISET"),
     (r"^HP_LUAR_BOUNDARY", "INTERNAL+RISET"), (r"BELOKAN", "STANDAR"),
     (r"^(JALUR_TANPA_TIANG|JALUR_TERPUTUS|WARN_JALUR_TERPUTUS|WARN_JALUR_BERSILANG)", "STANDAR"),
-    (r"^ADMIN_", "DATA RESMI"), (r".", "INTERNAL")]
+    (r"^ADMIN_", "DATA RESMI"), (r"(MELINTAS_|TIANG_DEKAT_(JALAN_TOL|REL))", "REGULASI"), (r".", "INTERNAL")]
 
 
 # Temuan yang perlu ditinjau tetapi belum tentu salah desain (bukan "wajib diperbaiki"):
@@ -6706,8 +6716,16 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     qc.append((data[0][1], "INFO_NAMA_FILE_HP_BEDA", txt_, None, len(mm_), 0))
             except Exception as e:
                 _log.note(e)
-        # ===== 3.14.1: persilangan jalur kabel dengan jalan tol / rel / jalan arteri (data jalan OpenStreetMap) =====
-        osm_line = None
+        # ===== 3.14.1 -> 3.15.0: persilangan jalur kabel dengan jalan tol / rel / jalan besar / sungai (data OSM) =====
+        # Standar 10 (tambahan Seranta, di luar 9 standar Review Strand). Tingkat temuan (kajian regulasi 10 Nov 2026, lihat
+        # jalan_osm.py & DASAR_ATURAN.md):
+        #   ERROR   memotong jalan tol (PP 23/2024; izin Dirjen Bina Marga + rekomendasi BPJT/BUJT) atau rel KA (PM 36/2011
+        #           Ps. 7, 8, 11; izin Dirjen Perkeretaapian + izin prinsip KAI): rute tidak boleh lewat sebelum ada izin ->
+        #           pindahkan rute, atau lampirkan izin/metode yang disetujui pemilik ruas;
+        #   WARNING memotong jalan besar (nasional/arteri, >= 4 lajur atau >= 14 m; Permen PU 20/PRT/M/2010 Ps. 4 & 12) dan
+        #           tiang NP baru < 15 m dari jalur tol / < 10 m dari as rel (rute sejajar di ruang milik jalan/jalur KA);
+        #   INFO    memotong jalan kolektor (secondary/tertiary) dan sungai/kanal (Permen PUPR 28/2015 Ps. 22).
+        osm_line, std10 = None, (None, "tidak dicek (pemeriksaan persilangan dimatikan di profil)")
         if seg_list and bool(qcp("osm_crossing", True)):
             try:
                 xs_ = [q_.x() for _a, _b, _L, a_, b_ in seg_list for q_ in (a_, b_)]
@@ -6723,9 +6741,12 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         cdir_ = os.path.join(_QA.qgisSettingsDirPath(), "seranta_cache")
                     except Exception:
                         cdir_ = None
+                    feedback.setProgressText("Data jalan OpenStreetMap (persilangan tol/rel/jalan besar)")
                     roads_, src_ = _osm.fetch(bb_, cdir_, feedback)
                 if roads_ is None:
-                    osm_line = "  Persilangan jalan tol/rel (OpenStreetMap): tidak dicek - %s" % src_
+                    osm_line = "  Persilangan jalan tol/rel/jalan besar (OpenStreetMap): tidak dicek - %s" % src_
+                    std10 = (None, "tidak dicek - %s. Cek manual di citra: jalur tidak boleh memotong jalan tol/rel tanpa "
+                                   "izin" % src_)
                 else:
                     kx_o, ky_o = _geo.m_per_deg((bb_[1] + bb_[3]) / 2.0)
 
@@ -6733,56 +6754,127 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         return names[k_[1]] if k_[0] == "P" else "titik jalur"
                     xr_ = _osm.crossings([("%s - %s" % (_pn(ka_), _pn(kb_)), (a_.x(), a_.y()), (b_.x(), b_.y()))
                                           for ka_, kb_, _L, a_, b_ in seg_list], roads_, kx_o, ky_o)
-                    n_k_ = {"tol": 0, "rel": 0, "arteri": 0}
+                    used_ = sorted({k_[1] for ka_, kb_, _L, _a, _b in seg_list for k_ in (ka_, kb_) if k_[0] == "P"})
+                    cross_poles_ = {nm_ for x_ in xr_ if x_["kind"] in ("tol", "rel") for nm_ in x_["seg"].split(" - ")}
+                    near_ = _osm.near_poles([(names[i_], (poles[i_].x(), poles[i_].y())) for i_ in used_
+                                             if kinds[i_] != "existing"], roads_, kx_o, ky_o, cross_poles_)
+                    n_k_ = dict((k_, 0) for k_ in _osm.KINDS)
+
+                    def _wd(x_):
+                        d_ = []
+                        if x_.get("lanes"):
+                            d_.append("%d lajur" % x_["lanes"])
+                        if x_.get("width"):
+                            d_.append("lebar %.0f m" % x_["width"])
+                        return (", " + ", ".join(d_)) if d_ else ""
                     for x_ in xr_:
                         n_k_[x_["kind"]] += 1
                         lok_ = "rentang %s, tikor %.6f, %.6f" % (x_["seg"], x_["lat"], x_["lon"])
-                        sp_ = (" Bagian jalan/rel di titik ini tercatat sebagai jembatan/terowongan: cek apakah kabel lewat "
-                               "bawahnya." if (x_["bridge"] or x_["tunnel"]) else "") + \
+                        sp_ = (" Ruas jalan/rel di titik ini tercatat sebagai jembatan/layang: kabel tetap berada di ruang "
+                               "milik ruas tersebut, izin tetap diperlukan." if (x_["bridge"] or x_["tunnel"]) else "") + \
                               (" Ruas ini tercatat SEDANG DIBANGUN di OSM: akan beroperasi selama umur jaringan, perlakukan "
                                "sama dengan ruas yang sudah beroperasi." if x_.get("building") else "")
+                        pt_ = QgsPointXY(x_["lon"], x_["lat"])
                         if x_["kind"] == "tol":
-                            # PP 23/2024 Ps. 71 & 75; SE Dirjen Bina Marga 11/SE/Db/2017 (lihat jalan_osm.py)
-                            qc.append((QgsPointXY(x_["lon"], x_["lat"]), "WARN_JALUR_MELINTAS_TOL",
-                                       "Jalur kabel memotong jalan tol %s (%s; data %s). Utilitas di ruang milik jalan tol "
-                                       "wajib izin Direktur Jenderal Bina Marga atas rekomendasi teknis BPJT/BUJT (PP 23/2024 "
-                                       "Pasal 71 dan 75; SE Dirjen Bina Marga 11/SE/Db/2017). Metode crossing (udara, "
-                                       "HDD/boring, atau menumpang jembatan/overpass) dan ruang bebasnya ditetapkan BUJT: "
-                                       "koordinasikan dengan BUJT ruas ini sebelum desain final, atau pindahkan jalur.%s"
+                            qc.append((pt_, "JALUR_MELINTAS_TOL",
+                                       "Jalur kabel memotong JALAN TOL %s (%s; data %s). Tidak boleh dilewati tanpa izin "
+                                       "pemanfaatan ruang milik jalan tol dari Direktur Jenderal Bina Marga atas rekomendasi "
+                                       "teknis BPJT dan BUJT (PP 23/2024 tentang Jalan Tol; Permen PU 6/2025). Kabel udara "
+                                       "melintang di atas tol praktis tidak disetujui; metode yang lazim: boring/HDD di bawah "
+                                       "tol dengan pit di luar ruang milik jalan tol (>= 15 m dari as, rumija tol >= 30 m, "
+                                       "PP 34/2006 Pasal 40) atau menumpang jembatan/overpass atas persetujuan BUJT. "
+                                       "Pindahkan rute ke jalan yang tidak memotong tol, atau lampirkan izin dan metodenya.%s"
                                        % (x_["name"], lok_, src_, sp_)))
                         elif x_["kind"] == "rel":
-                            # PM Perhubungan 36/2011 Ps. 7, 8, 11
-                            near_ = (" Tiang ujung rentang ini hanya +-%.0f m dari rel (< 10 m): geser tiang." % x_["d_end"]) \
+                            nr_ = (" Tiang ujung rentang ini hanya +-%.0f m dari rel (< 10 m): geser tiang." % x_["d_end"]) \
                                 if x_.get("d_end", 99) < 10.0 else ""
-                            qc.append((QgsPointXY(x_["lon"], x_["lat"]), "WARN_JALUR_MELINTAS_REL",
-                                       "Jalur kabel memotong rel kereta %s (%s; data %s). Wajib izin Direktur Jenderal "
-                                       "Perkeretaapian dengan izin prinsip penyelenggara prasarana, mis. KAI (PM Perhubungan "
-                                       "36/2011 Pasal 11). Di atas rel: ruang tinggi >= 6,20 m dari kepala rel dan tiang "
-                                       ">= 10 m dari as rel terluar (Pasal 7); di bawah rel: kabel >= 150 cm di bawah subgrade, "
-                                       "penanaman mulai >= 10 m dari sisi terluar jalur (Pasal 8).%s%s"
-                                       % (x_["name"], lok_, src_, near_, sp_)))
+                            qc.append((pt_, "JALUR_MELINTAS_REL",
+                                       "Jalur kabel memotong REL KERETA API %s (%s; data %s). Tidak boleh dilewati tanpa "
+                                       "izin Direktur Jenderal Perkeretaapian dengan izin prinsip penyelenggara prasarana "
+                                       "(KAI) (PM Perhubungan 36/2011 Pasal 11-12; PP 56/2009 Pasal 82). Syarat teknis bila "
+                                       "diizinkan: di atas rel ruang tinggi >= 6,20 m dari kepala rel dan tiang >= 10 m dari "
+                                       "as rel terluar (Pasal 7; disarankan desain >= 7 m); di bawah rel kabel dalam pipa "
+                                       ">= 150 cm di bawah subgrade, mulai >= 10 m dari sisi terluar jalur (Pasal 8). "
+                                       "Pindahkan rute, atau lampirkan izin dan metodenya.%s%s" % (x_["name"], lok_, src_, nr_, sp_)))
+                        elif x_["kind"] == "besar":
+                            qc.append((pt_, "WARN_JALUR_MELINTAS_JALAN_BESAR",
+                                       "Jalur kabel memotong JALAN BESAR %s (%s%s; %s; data %s). Wajib izin penyelenggara "
+                                       "jalan sesuai status (nasional: BBPJN/BPJN; provinsi: gubernur; kabupaten/kota: "
+                                       "bupati/wali kota) (Permen PU 20/PRT/M/2010 Pasal 4 dan 5; perizinan via OSS menurut "
+                                       "Permen PU 6/2025). Kabel udara >= %.1f m dari permukaan jalan tertinggi, kabel tanah "
+                                       ">= 1,5 m, tiang >= 1 m dari tepi bahu/trotoar (Pasal 12). Jalan raya: rumija >= 25 m, "
+                                       "bentang melintang panjang - pastikan tiang di kedua sisi dan izin sebelum desain final.%s"
+                                       % (x_["name"], x_.get("hw", ""), _wd(x_), lok_, src_, clear_road, sp_)))
+                        elif x_["kind"] == "sedang":
+                            qc.append((pt_, "INFO_JALUR_MELINTAS_JALAN_SEDANG",
+                                       "Jalur kabel melintang jalan kolektor/penghubung %s (%s%s; %s; data %s): kabel udara "
+                                       ">= %.1f m dari permukaan jalan tertinggi (Permen PU 20/PRT/M/2010 Pasal 12 ayat 6) dan "
+                                       "izin penyelenggara jalan sesuai status jalan.%s"
+                                       % (x_["name"], x_.get("hw", ""), _wd(x_), lok_, src_, clear_road, sp_)))
                         else:
-                            # Permen PU 20/PRT/M/2010 Ps. 5 dan 12(6); tetap berlaku menurut Permen PU 6/2025
-                            qc.append((QgsPointXY(x_["lon"], x_["lat"]), "INFO_JALUR_MELINTAS_JALAN_BESAR",
-                                       "Jalur kabel melintang jalan arteri %s (%s; data %s): kabel udara >= %.1f m dari "
-                                       "permukaan jalan tertinggi (Permen PU 20/PRT/M/2010 Pasal 12 ayat 6, tetap berlaku "
-                                       "menurut Permen PU 6/2025) dan izin penyelenggara jalan sesuai status jalan (nasional: "
-                                       "BBPJN/BPJN; provinsi: gubernur; kabupaten/kota: bupati/wali kota). Cek juga aturan "
-                                       "daerah setempat.%s" % (x_["name"], lok_, src_, clear_road, sp_)))
-                    osm_line = ("  Persilangan jalan (OpenStreetMap, info): jalan tol %d, rel kereta %d, jalan arteri %d "
-                                "(sumber: %s). Ruas tol/rel baru bisa belum terpetakan: tidak terdeteksi bukan berarti tidak "
-                                "ada persilangan; verifikasi di citra terbaru" % (n_k_["tol"], n_k_["rel"], n_k_["arteri"], src_))
+                            qc.append((pt_, "INFO_JALUR_MELINTAS_SUNGAI",
+                                       "Jalur kabel melintasi sungai/kanal %s (%s; data %s): rentangan kabel di sempadan "
+                                       "sungai wajib izin dengan rekomendasi teknis pengelola sumber daya air (BBWS/BWS/dinas) "
+                                       "(Permen PUPR 28/2015 Pasal 22). Pastikan tiang di kedua tepi dan bentang tidak "
+                                       "melebihi batas.%s" % (x_["name"], lok_, src_, sp_)))
+                    for n_ in near_:
+                        if n_["kind"] == "tol":
+                            qc.append((QgsPointXY(n_["lon"], n_["lat"]), "WARN_TIANG_DEKAT_JALAN_TOL",
+                                       "Tiang baru %s hanya +-%.0f m dari jalur jalan tol %s (data %s): kemungkinan berada "
+                                       "di ruang milik jalan tol (lebar minimal 30 m = 15 m dari as, PP 34/2006 Pasal 40). "
+                                       "Penempatan utilitas sejajar di rumija tol wajib izin Dirjen Bina Marga + rekomendasi "
+                                       "BPJT/BUJT. Geser tiang menjauhi tol atau pastikan batas pagar rumija di lapangan."
+                                       % (n_["pole"], n_["d"], n_["name"], src_)))
+                        else:
+                            qc.append((QgsPointXY(n_["lon"], n_["lat"]), "WARN_TIANG_DEKAT_REL",
+                                       "Tiang baru %s hanya +-%.0f m dari as rel %s (data %s): < 10 m (PM Perhubungan 36/2011 "
+                                       "Pasal 7 huruf b). Bangunan/utilitas sejajar rel hanya boleh di luar ruang manfaat "
+                                       "jalur KA; masuk ruang milik jalur KA wajib izin pemilik prasarana (PP 56/2009 Pasal 59 "
+                                       "ayat 1 dan Pasal 82). Geser tiang >= 10 m dari as rel." % (n_["pole"], n_["d"], n_["name"], src_)))
+                    n_near_ = {"tol": sum(1 for n_ in near_ if n_["kind"] == "tol"),
+                               "rel": sum(1 for n_ in near_ if n_["kind"] == "rel")}
+                    parts_ = []
+                    if n_k_["tol"] or n_k_["rel"]:
+                        parts_.append(("Memotong jalan tol/rel", "ERROR", "%s - rute tidak boleh lewat tanpa izin "
+                                       "(pindahkan rute atau lampirkan izin & metode)" % ", ".join(
+                                           t_ for t_ in ("%d titik jalan tol" % n_k_["tol"] if n_k_["tol"] else "",
+                                                         "%d titik rel kereta" % n_k_["rel"] if n_k_["rel"] else "") if t_)))
+                    if n_k_["besar"]:
+                        parts_.append(("Memotong jalan besar", "WARNING", "%d titik jalan nasional/arteri (>= 4 lajur atau "
+                                       ">= 14 m): wajib izin penyelenggara jalan" % n_k_["besar"]))
+                    if n_near_["tol"] or n_near_["rel"]:
+                        parts_.append(("Tiang dekat tol/rel", "WARNING", "%s" % ", ".join(
+                            t_ for t_ in ("%d tiang < 15 m dari jalan tol" % n_near_["tol"] if n_near_["tol"] else "",
+                                          "%d tiang < 10 m dari rel" % n_near_["rel"] if n_near_["rel"] else "") if t_)))
+                    notes_ = ["Info: jalan kolektor %d titik, sungai/kanal %d titik (izin biasa, tidak membuat CEK)"
+                              % (n_k_["sedang"], n_k_["sungai"]),
+                              "Sumber: %s. Data OSM bisa belum lengkap (ruas baru); verifikasi di citra terbaru" % src_]
+                    if not parts_:
+                        std10 = (True, "tidak ada persilangan jalan tol, rel kereta, atau jalan besar. " + ". ".join(notes_))
+                    else:
+                        std10 = (False, seg_text(parts_, notes_))
+                    osm_line = ("  Persilangan (OpenStreetMap): jalan tol %d, rel kereta %d, jalan besar %d, jalan kolektor %d, "
+                                "sungai %d; tiang dekat tol %d, dekat rel %d (sumber: %s)" % (
+                                    n_k_["tol"], n_k_["rel"], n_k_["besar"], n_k_["sedang"], n_k_["sungai"],
+                                    n_near_["tol"], n_near_["rel"], src_))
                     rep.append("")
-                    rep.append("PERSILANGAN JALUR DENGAN JALAN TOL / REL / JALAN ARTERI")
+                    rep.append("PERSILANGAN JALUR DENGAN JALAN TOL / REL / JALAN BESAR / SUNGAI (standar 10)")
                     rep.append(osm_line.strip())
+                    lab_ = {"tol": "[ERROR] jalan tol", "rel": "[ERROR] rel kereta", "besar": "[CEK]   jalan besar",
+                            "sedang": "[i]     jalan kolektor", "sungai": "[i]     sungai/kanal"}
                     for x_ in xr_:
                         rep.append("  - %s %s: rentang %s, tikor %.6f, %.6f%s" % (
-                            {"tol": "[CEK] jalan tol", "rel": "[CEK] rel kereta", "arteri": "[i]   jalan arteri"}[x_["kind"]],
-                            x_["name"], x_["seg"], x_["lat"], x_["lon"],
-                            " (jembatan/terowongan)" if (x_["bridge"] or x_["tunnel"]) else ""))
+                            lab_[x_["kind"]], x_["name"], x_["seg"], x_["lat"], x_["lon"],
+                            " (jembatan/layang)" if (x_["bridge"] or x_["tunnel"]) else ""))
+                    for n_ in near_:
+                        rep.append("  - [CEK]   tiang %s %.0f m dari %s %s" % (
+                            n_["pole"], n_["d"], "jalan tol" if n_["kind"] == "tol" else "rel", n_["name"]))
             except Exception as e:
-                osm_line = "  Persilangan jalan tol/rel (OpenStreetMap): tidak dicek - galat %s" % str(e)[:100]
+                osm_line = "  Persilangan jalan tol/rel/jalan besar (OpenStreetMap): tidak dicek - galat %s" % str(e)[:100]
+                std10 = (None, "tidak dicek - galat %s" % str(e)[:100])
                 _log.note(e)
+        elif not seg_list:
+            std10 = (None, "tidak dicek - tidak ada garis jalur kabel")
         # ===== 3.14.1: RT / RW-lingkungan HPDB vs nama wilayah cluster dan vs tetangga terdekat =====
         rtrw_seg = None
         if not kmz_only:
@@ -6836,11 +6928,30 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                          float(qcp("rtrw_neighbour_m", 60.0))))
                     rep.append("  [CEK] " + txt_)
                     qc.append((data[it_[0][0]][1], "WARN_HPDB_RT_RW_TIDAK_SESUAI", txt_, None, len(it_), None))
+                # 3.15.0: nomor RT/RW di nama berkas (HPDB, KMZ, BAKP, TSSR) vs nama wilayah cluster
+                fl_ar_ = [("HPDB", hpdb or ""), ("KMZ", cluster_kmz or "")]
+                fl_ar_ += [("TSSR", f_) for f_ in (_tssr.find_tssr(outdir) or [])[:2]]
+                fl_ar_ += [("BAKP", f_) for f_ in (_bakp.find_bakp(outdir) or [])[:2]]
+                fm_ = _kons.filename_area_mismatch(ref_lab_, [f_ for f_ in fl_ar_ if f_[1]])
+                if fm_:
+                    txt_ = ("nomor wilayah di nama berkas berbeda dari wilayah cluster (%s '%s'): %s - berkas itu kemungkinan "
+                            "milik wilayah/cluster lain yang ikut tersalin (mis. BAKP RT lain); pastikan isinya untuk wilayah "
+                            "ini lalu perbaiki nama atau ganti berkasnya" % (ref_src_, ref_lab_, "; ".join(
+                                "%s '%s' = %s (seharusnya %s)" % f_ for f_ in fm_)))
+                    if not (mm_ or odd_):
+                        rep.append("")
+                        rep.append("RT / RW-LINGKUNGAN (pembanding: %s '%s')" % (ref_src_, ref_lab_))
+                    rep.append("  [CEK] " + txt_)
+                    qc.append((data[0][1], "WARN_NAMA_BERKAS_WILAYAH_BEDA", txt_, None, len(fm_), None))
                 n_bad_ = sum(m_["n"] for m_ in mm_) + sum(len(o_[3]) for o_ in odd_)
-                if mm_ or odd_:
+                if fm_ and not (mm_ or odd_):
+                    rtrw_seg = ("RT/RW di HPDB & nama berkas", "WARNING", "; ".join(
+                        "%s bernama %s, seharusnya %s" % (f_[0], f_[2], f_[3]) for f_ in fm_[:3]))
+                elif mm_ or odd_:
                     rtrw_seg = ("RT/RW di HPDB", "WARNING", "%d HP perlu dicek: %s" % (n_bad_, "; ".join(
                         ["%s '%s' %d HP, seharusnya %s" % (m_["col"], m_["value"], m_["n"], m_["expect"]) for m_ in mm_[:3]] +
-                        ["%s %s di tengah rumah %s %s: %d HP" % (o_[0], o_[1], o_[0], o_[2], len(o_[3])) for o_ in odd_[:2]])))
+                        ["%s %s di tengah rumah %s %s: %d HP" % (o_[0], o_[1], o_[0], o_[2], len(o_[3])) for o_ in odd_[:2]] +
+                        ["%s bernama %s, seharusnya %s" % (f_[0], f_[2], f_[3]) for f_ in fm_[:2]])))
                 elif checked_:
                     rtrw_seg = ("RT/RW di HPDB", True, "sesuai %s '%s' dan konsisten dengan tetangga" % (ref_src_, ref_lab_))
                 else:
@@ -6851,7 +6962,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 _log.note(e)
         if rtrw_seg is not None and 3 in std:
             # status standar 3 (wilayah HPDB vs FINDIM) tidak diubah; RT/RW ditulis sebagai bagian tersendiri
-            std[3] = (std[3][0], seg_text([("Kelurahan/kecamatan vs FINDIM", std[3][0], std[3][1]), rtrw_seg]))
+            # 3.15.0: temuan RT/RW membuat standar 3 [CEK] (sebelumnya status tetap '--' bila FINDIM tidak ada, sehingga
+            # di laporan HTML kartu standar 3 tampil 'belum diverifikasi' dan temuan RT/RW mudah terlewat)
+            ok3_ = False if rtrw_seg[1] == "WARNING" else std[3][0]
+            std[3] = (ok3_, seg_text([("Kelurahan/kecamatan vs FINDIM", std[3][0], std[3][1]), rtrw_seg]))
         # ===== 8. BAKP (izin warga) =====
         bk_mode = opt.get("bakp", 0)
         bres = None
@@ -6934,23 +7048,23 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             seg9.append(("Rentang %.0f-%.0f m" % (SPAN_REG, span_max), "WARNING",
                          "%d rentang di atas batas regulasi daerah %.0f m: perlu ditinjau" % (n_reg, SPAN_REG)))
         std[9] = (long_n == 0, seg_text(seg9, ["Catatan: rentang antar-tiang existing (EP-EP) tidak dinilai"]))
+        std[10] = locals().get("std10") or (None, "tidak dicek")
         judul = {1: "Jarak HP ke tiang (<= %.0f m)" % hp_max, 2: "Boundary RFS / Funnel / cluster lain",
                  3: "Wilayah HPDB vs FINDIM", 4: "HP duplikat & kecocokan HPDB-KMZ",
                  5: "HP di luar boundary (Funnel & KMZ)", 6: "Status desain cluster", 7: "Bisa colo ke FDT existing",
-                 8: "BAKP (izin warga)", 9: "Jarak tiang ke tiang NP (<= %.0f m)" % span_max}
+                 8: "BAKP (izin warga)", 9: "Jarak tiang ke tiang NP (<= %.0f m)" % span_max,
+                 10: "Persilangan jalan tol / rel / jalan besar"}
         if 8 in std and std[8][1]:
             # kode teknis pemeriksa BAKP (mis. 'BAKP_NOT_SUPPLIED: ...') tidak perlu tampil di ringkasan
             std[8] = (std[8][0], re.sub(r"^[A-Z][A-Z0-9_]{3,}:\s*", "", std[8][1]))
         summ = ["RINGKASAN STANDAR REVIEW STRAND",
                 "  Arti status: [OK] lolos | [CEK] ada temuan, perbaiki atau tinjau | [--] tidak dicek otomatis (alasan ditulis)."
                 " Standar yang berisi beberapa bagian menulis status tiap bagian, jadi terlihat bagian mana yang membuat [CEK]."]
-        for k in range(1, 10):
+        for k in range(1, 11):
             ok, txt = std.get(k, (None, "-"))
             summ.append("  %d. %-30s [%s] %s" % (k, judul[k], {True: "OK", False: "CEK", None: "--"}[ok], txt))
         summ.append("  Kabel rendah tengah bentang (info): %d < %.1f m; %d antara %.1f-%.1f m (tinjau bila melintang jalan)"
                     % (clear_n, clear_fail, clear_rev, clear_fail, clear_road))
-        if locals().get("osm_line"):
-            summ.append(osm_line)
         summ.append("  Efisiensi (info): NP bisa dihapus %d, ujung jalur tanpa HP %d | Profil %s (%s)" % (
             len(removable), loops, opt["prof"]["key"], opt["prof"]["src"]))
         if ignored:
@@ -7200,7 +7314,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         # data ringkas untuk laporan HTML gabungan (grup 1 PIC / batch): standar 1-9 dan temuan ber-ID yang sama dengan
         # laporan per cluster (F-0001..)
         std_rows_ = []
-        for k_ in range(1, 10):
+        for k_ in range(1, 11):
             ok_, txt_ = std.get(k_, (None, "-"))
             std_rows_.append((k_, judul[k_], ok_, _kt(txt_) if kmz_only else str(txt_)))
         find_ = []

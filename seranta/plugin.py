@@ -15,7 +15,7 @@ try:                                    # Qt6 / QGIS 4
 except ImportError:                     # Qt5 / QGIS 3
     from qgis.PyQt.QtWidgets import QAction
 
-from .provider import SerantaProvider
+from .provider import SerantaProvider, show_extra_tools, set_extra_tools
 
 MENU = "&Seranta"
 HERE = os.path.dirname(__file__)
@@ -55,11 +55,7 @@ class SerantaPlugin:
 
     def initGui(self):  # noqa: N802 - QGIS API name
         self.initProcessing()
-        for i, (alg, label, tip) in enumerate(TOOLS):
-            self._add(label, tip, lambda checked=False, a=alg: self.run(a), toolbar=(i == 0))
-        self._add("QC Findings Navigator",
-                  "Browse findings by category and zoom to each one on the map", self.show_nav,
-                  toolbar=True, icon=QIcon(os.path.join(HERE, "icon_nav.png")))
+        self._build_actions()
         try:
             from .qc_navigator import QcNavigator, RIGHT_DOCK
             self.nav = QcNavigator(self.iface)
@@ -68,8 +64,49 @@ class SerantaPlugin:
             self.nav.hide()
         except Exception:
             self.nav = None
-        self._add("About Seranta", "Version, author and licence", self.about)
         self._welcome()
+
+    def _build_actions(self):
+        """Menu & toolbar. 3.15.0: hanya alat 1 (fokus Seranta saat ini); alat 2-4 muncul bila 'Show tools 2-4'
+        dicentang di menu Vektor > Seranta (setelan disimpan, berlaku juga di Processing Toolbox)."""
+        extra = show_extra_tools()
+        for i, (alg, label, tip) in enumerate(TOOLS):
+            if i > 0 and not extra:
+                continue
+            self._add(label, tip, lambda checked=False, a=alg: self.run(a), toolbar=(i == 0))
+        self._add("QC Findings Navigator",
+                  "Browse findings by category and zoom to each one on the map", self.show_nav,
+                  toolbar=True, icon=QIcon(os.path.join(HERE, "icon_nav.png")))
+        act = self._add("Show tools 2-4 (FDT/FAT allocation, post-design, package QC)",
+                        "Seranta now focuses on tool 1. Tick to bring back tools 2-4 in this menu and the Processing "
+                        "Toolbox; untick to hide them again", self._toggle_extra)
+        act.setCheckable(True)
+        act.setChecked(extra)
+        self._add("About Seranta", "Version, author and licence", self.about)
+
+    def _clear_actions(self):
+        for act in self.actions:
+            self.iface.removePluginVectorMenu(MENU, act)
+            try:
+                self.iface.removeToolBarIcon(act)
+            except Exception as _e:
+                _log.note(_e)
+        self.actions = []
+
+    def _toggle_extra(self, checked=False):
+        set_extra_tools(bool(checked))
+        self._clear_actions()
+        self._build_actions()
+        if self.provider:
+            try:
+                self.provider.refreshAlgorithms()
+            except Exception as _e:
+                _log.note(_e)
+        try:
+            self.iface.messageBar().pushInfo(
+                "Seranta", "Tools 2-4 are now %s (menu and Processing Toolbox)." % ("shown" if checked else "hidden"))
+        except Exception as _e:
+            _log.note(_e)
 
     def _welcome(self):
         st = QgsSettings()
@@ -122,13 +159,7 @@ class SerantaPlugin:
             except Exception as _e:
                 _log.note(_e)
             self.nav = None
-        for act in self.actions:
-            self.iface.removePluginVectorMenu(MENU, act)
-            try:
-                self.iface.removeToolBarIcon(act)
-            except Exception as _e:
-                _log.note(_e)
-        self.actions = []
+        self._clear_actions()
         if self.provider:
             QgsApplication.processingRegistry().removeProvider(self.provider)
             self.provider = None

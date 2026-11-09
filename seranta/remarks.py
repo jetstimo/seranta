@@ -41,12 +41,13 @@ PRIORITY = [
     "BAKP_ADA_GAMBAR_TEMPELAN", "BAKP_NAMA_FILE_ID_BEDA", "WARN_BAKP_ID_METADATA_BEDA", "BAKP_DIEDIT_APLIKASI_GRAFIS", "FUNNEL_SENDIRI_REJECT",
     "HP_LUAR_FUNNEL", "HP_LUAR_BOUNDARY", "HP_DI_AREA_TANPA_IZIN", "TIANG_DI_AREA_TANPA_IZIN", "HP_JAUH_DARI_TIANG", "RENTANG_NP_NP", "RENTANG_NP_EP",
     "JALUR_TANPA_TIANG", "JALUR_TERPUTUS", "UJUNG_JALUR_TANPA_TIANG", "WARN_SIMPANG_TANPA_TIANG",      # 3.13.0 integritas jalur
+    "JALUR_MELINTAS_TOL", "JALUR_MELINTAS_REL",                                                          # 3.15.0 standar 10
     "HP_DUPLIKAT_KOORDINAT", "HP_DUPLIKAT_ID", "HP_DUPLIKAT_LABEL", "HP_HPDB_TIDAK_ADA_DI_KMZ", "HP_KMZ_TIDAK_ADA_DI_HPDB",
     "HP_SUDAH_ADA_DI_DESIGN_LITE", "TIANG_BARU_SUDAH_ADA", "WARN_TIANG_GANDA_LINTAS_CLUSTER", "WARN_ID_CLUSTER_GANDA",
     "ADMIN_", "WARN_TIANG_DUPLIKAT_KMZ", "WARN_BELOKAN_TANPA_TIANG", "WARN_JALUR_TERPUTUS", "WARN_JALUR_BERSILANG_TANPA_TIANG",
     "WARN_POLE_SHEET_BEDA_KMZ", "WARN_CLUSTER_NAME_KOSONG",
-    "WARN_HPDB_CLUSTER_NAME_CAMPUR", "WARN_HPDB_RT_RW_TIDAK_SESUAI", "WARN_BOUNDARY_TIDAK_VALID",
-    "WARN_JALUR_MELINTAS_TOL", "WARN_JALUR_MELINTAS_REL",
+    "WARN_HPDB_CLUSTER_NAME_CAMPUR", "WARN_HPDB_RT_RW_TIDAK_SESUAI", "WARN_NAMA_BERKAS_WILAYAH_BEDA", "WARN_BOUNDARY_TIDAK_VALID",
+    "WARN_JALUR_MELINTAS_JALAN_BESAR", "WARN_TIANG_DEKAT_JALAN_TOL", "WARN_TIANG_DEKAT_REL",
     "WARN_HP_KOORDINAT_BEDA_FOTO", "WARN_JALUR_LEWAT_AREA_TANPA_IZIN",
     "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
     "COLO_TITIK_MASUK_TIDAK_DI_JALUR", "COLO_HP_TIDAK_TERJANGKAU_JALUR", "WARN_TIANG_LUAR_BOUNDARY", "WARN_JALUR_LUAR_BOUNDARY",
@@ -531,6 +532,10 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
                     sh.append("%s HP %s %s" % (m.group(1), col, short_label(m.group(3))))
             add(key, "RT/RW HPDB beda wilayah: " + ("; ".join(parts) or "cek kolom RT/RW"),
                 "RT/RW HPDB beda wilayah: " + ("; ".join(sh) or "cek kolom RT/RW"))
+        elif key == "WARN_NAMA_BERKAS_WILAYAH_BEDA":
+            ms = re.findall(r"(\w+) '[^']*' = (R[TW] [\d&-]+) \(seharusnya (R[TW] [\d&-]+)\)", L[0]["ket"] or "")
+            add(key, "nama berkas beda wilayah: " + ("; ".join("%s %s (cluster %s)" % m for m in ms[:2]) or "cek nama berkas"),
+                "nama berkas beda RT/RW" + ((": " + ms[0][0] + " " + ms[0][1]) if ms else ""))
         elif key == "WARN_BOUNDARY_TIDAK_VALID":
             add(key, "boundary KMZ memotong diri sendiri (perbaiki poligon)", "boundary KMZ tidak valid")
         elif key == "WARN_HP_KOORDINAT_BEDA_FOTO":
@@ -611,12 +616,21 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
             mx = max(f.get("val") or 0 for f in L)
             add(key, "%s di luar boundary (s/d %s m): cek izin lokasi tiang" % (
                 ", ".join(nm[:3]) if n <= 3 else "%d tiang NP" % n, num(mx, 0)), "%d tiang NP di luar boundary" % n)
-        elif key in ("WARN_JALUR_MELINTAS_TOL", "WARN_JALUR_MELINTAS_REL"):
-            jenis = "jalan tol" if key.endswith("TOL") else "rel kereta"
-            nms = sorted({(re.search(r"memotong (?:jalan tol|rel kereta) (.+?) \(rentang", f["ket"] or "") or
-                           re.search(r"(.*)", "")).group(1) or "" for f in L} - {"", "-"})
-            add(key, "jalur memotong %s%s di %d titik: perlu izin & metode crossing" % (
-                jenis, (" " + ", ".join(nms[:2])) if nms else "", len(L)), "jalur memotong %s (%d titik)" % (jenis, len(L)))
+        elif key in ("JALUR_MELINTAS_TOL", "JALUR_MELINTAS_REL", "WARN_JALUR_MELINTAS_JALAN_BESAR"):
+            jenis = {"JALUR_MELINTAS_TOL": "jalan tol", "JALUR_MELINTAS_REL": "rel kereta"}.get(key, "jalan besar")
+            nms = sorted({(re.search(r"memotong (?:JALAN TOL|REL KERETA API|JALAN BESAR) (.+?) \((?:rentang|[a-z_]+)",
+                                     f["ket"] or "") or re.search(r"(.*)", "")).group(1) or "" for f in L} - {"", "-"})
+            add(key, "jalur memotong %s%s di %d titik: %s" % (
+                jenis, (" " + ", ".join(nms[:2])) if nms else "", len(L),
+                "perlu izin penyelenggara jalan" if jenis == "jalan besar" else "pindah rute atau lampirkan izin"),
+                "jalur memotong %s (%d titik)" % (jenis, len(L)))
+        elif key in ("WARN_TIANG_DEKAT_JALAN_TOL", "WARN_TIANG_DEKAT_REL"):
+            jenis = "jalan tol" if key.endswith("TOL") else "rel"
+            nm = [re.match(r"^Tiang baru (\S+)", f["ket"] or "") for f in L]
+            nm = [m.group(1) for m in nm if m]
+            add(key, "%s terlalu dekat %s (< %s m)" % (", ".join(nm[:3]) if n <= 3 else "%d tiang" % n, jenis,
+                                                    "15" if jenis == "jalan tol" else "10"),
+                "%d tiang dekat %s" % (n, jenis))
         elif key == "WARN_JALUR_LUAR_BOUNDARY":
             tot = sum(f.get("val") or 0 for f in L)
             add(key, "jalur %s m di luar boundary (feeder? sebutkan)" % num(tot, 0), "jalur %s m di luar boundary" % num(tot, 0))
@@ -724,6 +738,7 @@ SIMPLE = {
     "WARN_HPDB_CLUSTER_NAME_CAMPUR": "nama cluster di HPDB tidak seragam",
     "WARN_HPDB_RT_RW_TIDAK_SESUAI": "ada RT/RW di HPDB yang tidak sesuai wilayahnya",
     "WARN_BOUNDARY_TIDAK_VALID": "bentuk boundary tidak valid",
+    "WARN_NAMA_BERKAS_WILAYAH_BEDA": "ada berkas (mis. BAKP) yang namanya memuat RT/RW lain",
     "WARN_HP_KOORDINAT_BEDA_FOTO": "ada koordinat homepass yang berbeda dengan foto",
     "WARN_JALUR_LEWAT_AREA_TANPA_IZIN": "ada jalur kabel lewat area tanpa izin",
     "WARN_HP_TANPA_EVIDENCE": "ada homepass tanpa foto",
@@ -737,8 +752,11 @@ SIMPLE = {
     "COLO_HP_TIDAK_TERJANGKAU_JALUR": "ada homepass yang tidak terjangkau dari FDT",
     "WARN_TIANG_LUAR_BOUNDARY": "ada tiang di luar boundary",
     "WARN_JALUR_LUAR_BOUNDARY": "ada jalur kabel di luar boundary",
-    "WARN_JALUR_MELINTAS_TOL": "ada jalur kabel yang memotong jalan tol",
-    "WARN_JALUR_MELINTAS_REL": "ada jalur kabel yang memotong rel kereta",
+    "JALUR_MELINTAS_TOL": "ada jalur kabel yang memotong jalan tol (wajib izin BPJT/BUJT atau pindah rute)",
+    "JALUR_MELINTAS_REL": "ada jalur kabel yang memotong rel kereta (wajib izin DJKA/KAI atau pindah rute)",
+    "WARN_JALUR_MELINTAS_JALAN_BESAR": "ada jalur kabel yang memotong jalan besar (perlu izin penyelenggara jalan)",
+    "WARN_TIANG_DEKAT_JALAN_TOL": "ada tiang yang terlalu dekat jalan tol",
+    "WARN_TIANG_DEKAT_REL": "ada tiang yang terlalu dekat rel kereta",
     "WARN_JALUR_BERTUMPUK": "ada garis jalur yang digambar dobel",
     "WARN_TSSR_ID_BEDA": "ID cluster di TSSR berbeda",
     "WARN_TSSR_HP_BEDA": "jumlah homepass di TSSR berbeda",

@@ -1,5 +1,33 @@
 # Changelog
 
+## 3.15.0 – fokus alat 1, standar 10 persilangan tol/rel/jalan besar (revisi pembuat 10 November 2026)
+
+- **Fokus alat 1**: alat 2-4 disembunyikan (menu dan Processing Toolbox). Munculkan lagi kapan saja dengan mencentang
+  **Vektor > Seranta > Show tools 2-4**; hapus centang untuk menyembunyikan. Kode alat 2-4 tetap ada di paket.
+- **Standar 10 – persilangan jalan tol / rel / jalan besar** (tambahan Seranta di luar 9 standar Review Strand), dari
+  kajian regulasi resmi:
+  - `JALUR_MELINTAS_TOL` (**ERROR**, alasan Reject): izin rumija tol dari Dirjen Bina Marga atas rekomendasi teknis BPJT
+    & BUJT (PP 23/2024; Permen PU 6/2025; portal Perizinan PU "Crossing Utilitas (Pipa/Kabel)"); kabel udara melintang tol
+    praktis tidak disetujui, metode lazim boring/HDD dengan pit di luar rumija tol (>= 30 m, PP 34/2006 Ps. 40).
+  - `JALUR_MELINTAS_REL` (**ERROR**): izin Dirjen Perkeretaapian + izin prinsip KAI (PM 36/2011 Ps. 7, 8, 11-12; PP
+    56/2009 Ps. 82): >= 6,20 m dari kepala rel & tiang >= 10 m dari as rel terluar, atau >= 150 cm di bawah subgrade.
+  - `WARN_JALUR_MELINTAS_JALAN_BESAR`: jalan nasional/arteri (OSM trunk/primary) **atau lebar terbaca >= 4 lajur /
+    >= 14 m** (PP 34/2006 Ps. 32: jalan raya minimal 2 lajur per arah @ 3,5 m + median); izin penyelenggara jalan
+    (Permen PU 20/PRT/M/2010 Ps. 4, 5, 12: kabel udara >= 5 m, tanah >= 1,5 m, tiang >= 1 m dari tepi bahu/trotoar).
+  - `WARN_TIANG_DEKAT_JALAN_TOL` (< 15 m dari jalur tol = di rumija 30 m) dan `WARN_TIANG_DEKAT_REL` (< 10 m dari as rel)
+    untuk rute sejajar yang tidak memotong.
+  - `INFO_JALUR_MELINTAS_JALAN_SEDANG` (kolektor) dan `INFO_JALUR_MELINTAS_SUNGAI` (Permen PUPR 28/2015 Ps. 22).
+  - Lebar jalan (`width`) dan jumlah lajur (`lanes`, `lanes:forward/backward`) dari OSM kini dibaca. Rute yang menyusuri
+    jalan (memotong garis as jalan dengan sudut < 25°) tidak lagi dihitung sebagai menyeberang (jalan tol/rel tetap).
+- **Perbaikan unduhan data jalan**: di 3.14.1 cek persilangan selalu "tidak dicek" di banyak jaringan (overpass-api.de
+  menjawab 406, server lain tidak menjawab; laporan Bitung: "Expecting value"). Kini: 3 server Overpass dengan validasi
+  jawaban, lalu cadangan API utama OpenStreetMap 0.6 untuk kotak cluster kecil; hasil di-cache 30 hari.
+- **RT/RW di nama berkas** (`WARN_NAMA_BERKAS_WILAYAH_BEDA`): mis. folder & HPDB "RT 17" tetapi BAKP bernama "RT_023".
+  Temuan RT/RW kini membuat standar 3 **[CEK]** (sebelumnya tetap "--" bila FINDIM tidak ada sehingga kartu HTML tampil
+  "belum diverifikasi").
+- Uji nyata: Bitung Kakenturan Satu Lingk. 2 & 3 (Jalan Tol Manado-Bitung), Tegal Dukuhwringin RW 03 (Jalur KA
+  Tegal-Prupuk), Pasir Putih RT 17 (CLUSTER_NAME "RT 23", BAKP "RT_023").
+
 ## 3.14.1 – ringkasan standar lebih jelas, cek RT/RW HPDB, persilangan jalan tol/rel (revisi pembuat 9 November 2026)
 
 - **Ringkasan 9 standar ditulis per bagian**, tiap bagian punya status sendiri, sehingga terlihat bagian mana yang membuat

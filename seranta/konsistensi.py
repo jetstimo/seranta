@@ -370,3 +370,17 @@ def neighbour_odd(xy_m, vals, radius_m=60.0, k=6, min_nb=4, share=0.8):
         if maj != nums[i] and n_maj >= share * len(nb) and nums[i] not in cnt:
             out.append((i, nums[i], maj, n_maj, len(nb)))
     return out
+
+
+def filename_area_mismatch(ref_label, files):
+    """3.15.0: nomor RT/RW di NAMA BERKAS cluster (HPDB, KMZ, BAKP, TSSR, evidence) yang berbeda dari nama wilayah cluster.
+    Kasus Pasir Putih RT 17 (Nov 2026): folder & HPDB 'RT 17', tetapi BAKP bernama '..._RT_023_...' -> BAKP/berkas milik
+    wilayah lain ikut tersalin. files = [(jenis, nama_berkas)]. -> [(jenis, nama_berkas, 'RT 23', 'RT 17')]"""
+    ref = area_ref(ref_label)
+    out = []
+    for kind, fn in files:
+        got = area_ref(os.path.splitext(os.path.basename(str(fn)))[0])
+        for key in ("RT", "RW"):
+            if ref[key] and got[key] and not got[key] <= ref[key]:
+                out.append((kind, os.path.basename(str(fn)), "%s %s" % (key, _fmt(got[key])), "%s %s" % (key, _fmt(ref[key]))))
+    return out

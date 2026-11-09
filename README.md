@@ -14,10 +14,13 @@ Seranta™ and the Seranta logo are trademarks of Joseph Edward Timothy Siahaan.
 QGIS → **Plugins → Manage and Install Plugins → All** → search **Seranta** → **Install**.
 New versions appear under **Upgradeable**; no ZIP needed.
 
-## The four tools (Processing Toolbox → Seranta, or menu Vector → Seranta)
+## Tools (Processing Toolbox → Seranta, or menu Vector → Seranta)
+Since 3.15.0 Seranta focuses on **tool 1**; tools 2-4 are hidden. Tick **Vector → Seranta → Show tools 2-4** to bring
+them back (menu and Processing Toolbox), untick to hide them again.
+
 | Tool | When | What you get |
 |---|---|---|
-| 1. Survey QC & Design Input | before design | homepass layer, pole KMZ, road layer, survey checks incl. cross-cluster duplicates, review remarks, `RINGKASAN_QC.html` |
+| 1. Survey QC & Design Input | before design | homepass layer, pole KMZ, road layer, survey checks incl. cross-cluster duplicates, toll road / railway / major road crossings (standard 10, OpenStreetMap), review remarks, `RINGKASAN_QC.html` |
 | 2. FDT & FAT Allocation | planning | FAT groups along the route, colocation vs new FDT, link budget, `ALOKASI_FDT.html` |
 | 3. Post-Design Tables | after design | FDT-FAT code table, colour-coded closure tables (KMZ/HTML) |
 | 4. Design Package QC | before hand-over | 22 rules incl. seven package rules, one layer per rule, `QC_APD.html`, reviewer worklist `QC_APD_TEMUAN.xlsx`, CSV/JSON |

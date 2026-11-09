@@ -29,7 +29,8 @@ MAX_LEN = 255
 PREFIX = {"REJECT": "Reject:", "APPROVE DENGAN CATATAN": "Approve dgn catatan:", "APPROVE": "Approve"}
 STD_TITLE = {1: "Jarak HP ke tiang", 2: "Boundary RFS / Funnel / cluster lain", 3: "Wilayah HPDB vs FINDIM",
              4: "HP duplikat & kecocokan HPDB-KMZ", 5: "HP di luar boundary (Funnel & KMZ)", 6: "Status desain cluster",
-             7: "Bisa colo ke FDT existing", 8: "BAKP (izin warga)", 9: "Jarak tiang ke tiang NP"}
+             7: "Bisa colo ke FDT existing", 8: "BAKP (izin warga)", 9: "Jarak tiang ke tiang NP",
+             10: "Persilangan tol / rel / jalan besar"}
 ID_RX = re.compile(r"(?<!\d)(\d{9,12})(?!\d)")
 
 
