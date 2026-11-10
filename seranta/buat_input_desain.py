@@ -6743,7 +6743,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     src_ = "data jalan lokal %s; %s" % (", ".join(os.path.basename(x_) for x_ in loc_[:2]), _osm.ATTRIBUTION)
                 else:
                     feedback.setProgressText("Data jalan OpenStreetMap (persilangan tol/rel/jalan besar)")
-                    roads_, src_ = _osm.fetch(bb_, cdir_, feedback)
+                    pk_, pk_src_ = _osm.package(bb_, cdir_, feedback) if bool(qcp("osm_package", True)) else ([], "")
+                    if pk_:
+                        roads_, src_ = _osm.load_local(pk_, bb_), pk_src_
+                    else:
+                        roads_, src_ = _osm.fetch(bb_, cdir_, feedback)
                 if roads_ is None:
                     osm_line = "  Persilangan jalan tol/rel/jalan besar (OpenStreetMap): tidak dicek - %s" % src_
                     std10 = (None, "tidak dicek - %s. Cek manual di citra: jalur tidak boleh memotong jalan tol/rel tanpa "
