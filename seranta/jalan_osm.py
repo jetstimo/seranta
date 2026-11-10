@@ -267,17 +267,18 @@ def load_local(paths, bbox):
 #      cluster, dan kotak unduhan dibulatkan ke petak 0,01 derajat (+-1,1 km) sehingga cluster bertetangga dalam satu
 #      batch memakai unduhan yang sama;
 #   2. server dicoba berurutan mulai dari yang terakhir berhasil; tiap server dibatasi SERVER_LIMIT_S (server Overpass
-#      bisa mengantrekan kueri sampai 15 detik sebelum menjalankannya), tanpa byte selama REQ_TIMEOUT_MS -> batal;
+#      bisa mengantrekan kueri sampai 15 detik sebelum menjalankannya), seluruh percobaan TOTAL_LIMIT_S;
 #   3. pemutus sirkuit: server yang menolak (406/429) diistirahatkan REST_BLOCK_S, yang sibuk/diam (504/timeout)
 #      REST_BUSY_S, disimpan di cache sehingga cluster & sesi berikutnya langsung melewatinya;
-#   4. semua server gagal -> cache kedaluwarsa dipakai (diberi tanggal), dan kegagalan diingat FAIL_MEMO_S sehingga batch
-#      tidak menunggu di setiap cluster.
+#   4. semua server gagal -> cache kedaluwarsa dipakai (diberi tanggal), dan kegagalan diingat FAIL_MEMO_S (di memori
+#      dan di cache, jadi berlaku juga setelah QGIS dibuka ulang) sehingga batch tidak menunggu di setiap cluster.
 GRID_DEG = 0.01
-REQ_TIMEOUT_MS = 20000
-SERVER_LIMIT_S = 30.0
-REST_BLOCK_S = 1800
-REST_BUSY_S = 300
-FAIL_MEMO_S = 600
+REQ_TIMEOUT_MS = 15000
+SERVER_LIMIT_S = 20.0      # antrean server Overpass <= 15 detik + waktu kueri kecil
+TOTAL_LIMIT_S = 35.0       # batas seluruh percobaan untuk satu cluster
+REST_BLOCK_S = 6 * 3600
+REST_BUSY_S = 1800
+FAIL_MEMO_S = 1800
 _MEMO = {}            # kotak -> (waktu, js, sumber)
 _FAIL = {"t": 0.0, "why": ""}
 _JOBS = []
@@ -333,7 +334,7 @@ def _clip(roads, bbox):
 
 def _state(cache_dir, update=None):
     """Keadaan server di cache: {'good': host terakhir berhasil, 'rest': {host: istirahat_sampai}}."""
-    st = {"good": None, "rest": {}}
+    st = {"good": None, "rest": {}, "fail_t": 0.0, "fail_why": ""}
     if not cache_dir:
         return st
     p = os.path.join(cache_dir, "osm_server.json")
@@ -342,6 +343,7 @@ def _state(cache_dir, update=None):
             got = json.load(fh)
         st["good"] = got.get("good")
         st["rest"] = {k: float(v) for k, v in (got.get("rest") or {}).items() if float(v) > time.time()}
+        st["fail_t"], st["fail_why"] = float(got.get("fail_t") or 0), str(got.get("fail_why") or "")
     except Exception:
         pass
     if update:
@@ -416,7 +418,7 @@ def _ask(url, body):
         return None, "%s: %s" % (host, str(e)[:60]), "busy"
 
 
-def _one(url, body, feedback=None):
+def _one(url, body, feedback=None, limit_s=SERVER_LIMIT_S):
     """Jalankan _ask di thread Qt dengan batas SERVER_LIMIT_S (QGIS tetap bisa dibatalkan)."""
     import queue
     from qgis.PyQt.QtCore import QThread
@@ -429,14 +431,14 @@ def _one(url, body, feedback=None):
     _JOBS[:] = [o for o in _JOBS if o.isRunning()] + [j]     # simpan acuan sampai thread selesai
     j.start()
     t0 = time.time()
-    while time.time() - t0 < SERVER_LIMIT_S:
+    while time.time() - t0 < limit_s:
         if feedback is not None and feedback.isCanceled():
             return None, "dibatalkan", "cancel"
         try:
             return q.get(timeout=0.2)
         except queue.Empty:
             continue
-    return None, "%s: tidak menjawab dalam %.0f detik" % (url.split("/")[2], SERVER_LIMIT_S), "busy"
+    return None, "%s: tidak menjawab dalam %.0f detik" % (url.split("/")[2], limit_s), "busy"
 
 
 def overpass_query(b, timeout_s=25):
@@ -478,7 +480,10 @@ def fetch(bbox, cache_dir, feedback=None, timeout_s=25):
             return _clip(parse_overpass(js), bbox), _src_label(
                 js, "cache LAMA %s, server tidak terjangkau" % time.strftime("%d-%m-%Y", time.localtime(mt)))
         return None, why
-    if now - _FAIL["t"] < FAIL_MEMO_S:
+    st = _state(cache_dir)
+    if st["fail_t"] > _FAIL["t"]:
+        _FAIL.update(t=st["fail_t"], why=st["fail_why"])
+    if 0 <= now - _FAIL["t"] < FAIL_MEMO_S:
         return stale("%s (dicoba %d menit lalu; dicoba lagi otomatis setelah %d menit)" % (
             _FAIL["why"], int((now - _FAIL["t"]) / 60), FAIL_MEMO_S // 60))
     try:
@@ -486,15 +491,17 @@ def fetch(bbox, cache_dir, feedback=None, timeout_s=25):
     except Exception as e:
         return None, "modul jaringan QGIS tidak tersedia (%s)" % e
     body = b"data=" + bytes(QUrl.toPercentEncoding(overpass_query(b, timeout_s)))
-    st = _state(cache_dir)
     hosts = sorted(OVERPASS, key=lambda u: 0 if u.split("/")[2] == st["good"] else 1)
-    js, name, fails = None, None, []
+    js, name, fails, t0 = None, None, [], time.time()
     for url in hosts:
         host = url.split("/")[2]
+        if time.time() - t0 > TOTAL_LIMIT_S - 3:
+            fails.append("%s: dilewati (batas waktu %d detik)" % (host, TOTAL_LIMIT_S))
+            continue
         if host in st["rest"]:
             fails.append("%s: diistirahatkan %d menit lagi" % (host, max(1, int((st["rest"][host] - now) / 60))))
             continue
-        js, why, kind = _one(url, body, feedback)
+        js, why, kind = _one(url, body, feedback, min(SERVER_LIMIT_S, max(3.0, TOTAL_LIMIT_S - (time.time() - t0))))
         if js is not None:
             name = host
             break
@@ -508,13 +515,14 @@ def fetch(bbox, cache_dir, feedback=None, timeout_s=25):
                "taruh paket data jalan lokal (*OSM*.gpkg atau ekstrak Geofabrik *.osm.pbf) di folder data referensi"
                % "; ".join(str(t) for t in fails)[:200])
         _FAIL.update(t=time.time(), why=why)
+        _state(cache_dir, lambda s_: s_.update(fail_t=_FAIL["t"], fail_why=why))
         return stale(why)
     _FAIL["t"] = 0.0
     js["elements"] = [e for e in js.get("elements", []) if classify(e.get("tags") or {})]
     js["seranta_v"] = 2
     src = _src_label(js, "%s, %s" % (name, time.strftime("%d-%m-%Y")))
     _MEMO[b] = (time.time(), js, src)
-    _state(cache_dir, lambda s_: s_.__setitem__("good", name))
+    _state(cache_dir, lambda s_: s_.update(good=name, fail_t=0.0, fail_why=""))
     if cache_dir:
         try:
             os.makedirs(cache_dir, exist_ok=True)

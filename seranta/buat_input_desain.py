@@ -3265,7 +3265,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             lst = by_no[0]
             rows.append(("Jalur kabel dan tiang", min((r["sev"] for r in lst), key=lambda v: sev_rank.get(v, 9)), len(lst),
                          "pemeriksaan tambahan jalur & tiang"))
-        word = [r for r in recs if r["kind"] not in noisy]
+        word = recs      # 3.15.0: semua temuan masuk Word (dulu INFO_HP_ALAMAT_SAMA dilewati -> daftar Word != HTML/SHP)
         path = outp("LAPORAN_QC.docx")
         _docx.qc_report(path, "Laporan QC Survei - %s" % cluster.replace("_", " "),
                         "QC data survei sebelum desain - %s v%s" % (__product__, __version__),
@@ -7058,6 +7058,21 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         if 8 in std and std[8][1]:
             # kode teknis pemeriksa BAKP (mis. 'BAKP_NOT_SUPPLIED: ...') tidak perlu tampil di ringkasan
             std[8] = (std[8][0], re.sub(r"^[A-Z][A-Z0-9_]{3,}:\s*", "", std[8][1]))
+        # 3.15.0: status standar harus sama dengan temuannya di SEMUA keluaran (ringkasan teks, HTML, Word, QC_TEMUAN).
+        # Audit Nov 2026: standar 1, 4, 9 tertulis [OK]/Lolos padahal memuat temuan WARNING (mis. HP jauh lewat jalur,
+        # koordinat HP beda foto, rentang > batas regulasi), dan standar 2 '--' padahal ada temuan boundary. Aturan:
+        # ada temuan ERROR/WARNING di suatu standar -> standar itu [CEK]; teks bagian lain (yang lolos / tidak dicek)
+        # tetap ditulis. Standar 7 dikecualikan (status False-nya berarti 'perlu FDT baru', keputusan perencanaan).
+        n_std_ = {}
+        for it_ in qc:
+            if qc_severity(it_[1]) in ("ERROR", "WARNING"):
+                k_ = qc_label(it_[1])[0]
+                n_std_[k_] = n_std_.get(k_, 0) + 1
+        for k_, n_ in n_std_.items():
+            if k_ in std and k_ != 7 and std[k_][0] is not False:
+                was_ = "syarat utama lolos" if std[k_][0] is True else "sebagian tidak dicek"
+                std[k_] = (False, "%s | Temuan terkait [CEK]: %d titik perlu diperbaiki/ditinjau (%s; rinciannya di daftar "
+                                  "temuan)" % (std[k_][1], n_, was_))
         summ = ["RINGKASAN STANDAR REVIEW STRAND",
                 "  Arti status: [OK] lolos | [CEK] ada temuan, perbaiki atau tinjau | [--] tidak dicek otomatis (alasan ditulis)."
                 " Standar yang berisi beberapa bagian menulis status tiap bagian, jadi terlihat bagian mana yang membuat [CEK]."]
