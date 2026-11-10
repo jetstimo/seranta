@@ -1,0 +1,55 @@
+name: data-jalan
+# Paket data jalan Indonesia untuk standar 10 Seranta (persilangan tol/rel/jalan besar/sungai), dari ekstrak Geofabrik
+# (data (c) OpenStreetMap contributors, ODbL). Dijalankan manual atau tiap tanggal 3; hasil = aset rilis "data-jalan".
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 2 3 * *"
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Alat
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq osmium-tool gdal-bin python3-gdal
+          osmium --version | head -1; ogr2ogr --version
+      - name: Unduh dan saring per pulau
+        run: |
+          set -e
+          mkdir -p out work
+          for p in java sumatra kalimantan sulawesi nusa-tenggara maluku papua; do
+            echo "== $p"
+            curl -sSL --fail --retry 3 -A "seranta-data-jalan (github.com/jetstimo/seranta)" \
+              -o work/$p.osm.pbf https://download.geofabrik.de/asia/indonesia/$p-latest.osm.pbf
+            osmium tags-filter -o work/$p.f.osm.pbf work/$p.osm.pbf \
+              w/highway=motorway,motorway_link,trunk,trunk_link,primary,primary_link,secondary,secondary_link,tertiary,tertiary_link,construction \
+              w/railway=rail,light_rail,narrow_gauge,subway,construction \
+              w/waterway=river,canal w/toll=yes
+            rm work/$p.osm.pbf
+            ogr2ogr -f GPKG out/jalan_$p.gpkg work/$p.f.osm.pbf lines \
+              -nln jalan_osm -lco SPATIAL_INDEX=YES -oo CONFIG_FILE=scripts/osmconf_jalan.ini
+            rm work/$p.f.osm.pbf
+            ls -la out/jalan_$p.gpkg
+          done
+      - name: Indeks
+        run: python3 scripts/indeks_data_jalan.py out
+      - name: Rilis
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: data-jalan
+          name: Paket data jalan Indonesia (OpenStreetMap)
+          prerelease: true
+          make_latest: false
+          body: |
+            Paket data jalan untuk standar 10 Seranta (jalan tol, jalan nasional/provinsi/kolektor, rel kereta, sungai/kanal),
+            per pulau, disaring dari ekstrak Geofabrik. Diunduh otomatis oleh Seranta (sekali per pulau, diperbarui bulanan).
+
+            Data (c) OpenStreetMap contributors, tersedia di bawah Open Database License (ODbL) 1.0 -
+            https://www.openstreetmap.org/copyright . Paket ini basis data turunan dan tetap berlisensi ODbL.
+          files: |
+            out/jalan_*.gpkg
+            out/indeks.json
