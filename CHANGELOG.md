@@ -1,5 +1,11 @@
 # Changelog
 
+## 3.15.1 – perbaikan pemindaian keamanan (11 November 2026)
+
+- Isi sama dengan 3.15.0. Versi 3.15.0 diblokir pemindaian keamanan plugins.qgis.org (Bandit B110, satu `try/except/pass`
+  di `jalan_osm.py` saat membaca berkas keadaan server): pengecualian itu kini dicatat ke log. Nama enum Qt di modul yang
+  sama dibuat kompatibel Qt6. CI kini menjalankan Bandit tanpa batas tingkat, sama dengan pemindaian situs.
+
 ## 3.15.0 – fokus alat 1, standar 10 persilangan tol/rel/jalan besar (revisi pembuat 10 November 2026)
 
 - **Hanya alat 1**: Seranta kini hanya menampilkan **Survey QC & Design Input** (tanpa nomor). Alat 2-4 tidak ada lagi di
