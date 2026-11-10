@@ -458,14 +458,15 @@ def _state(cache_dir, update=None):
     if not cache_dir:
         return st
     p = os.path.join(cache_dir, "osm_server.json")
-    try:
-        with open(p, encoding="utf-8") as fh:
-            got = json.load(fh)
-        st["good"] = got.get("good")
-        st["rest"] = {k: float(v) for k, v in (got.get("rest") or {}).items() if float(v) > time.time()}
-        st["fail_t"], st["fail_why"] = float(got.get("fail_t") or 0), str(got.get("fail_why") or "")
-    except Exception:
-        pass
+    if os.path.exists(p):
+        try:
+            with open(p, encoding="utf-8") as fh:
+                got = json.load(fh)
+            st["good"] = got.get("good")
+            st["rest"] = {k: float(v) for k, v in (got.get("rest") or {}).items() if float(v) > time.time()}
+            st["fail_t"], st["fail_why"] = float(got.get("fail_t") or 0), str(got.get("fail_why") or "")
+        except Exception as e:      # berkas keadaan rusak -> mulai dari keadaan kosong
+            _log.note(e)
     if update:
         update(st)
         try:
@@ -500,21 +501,25 @@ def _http(url, post=None, feedback=None, timeout_ms=REQ_TIMEOUT_MS):
         req.setTransferTimeout(int(timeout_ms))      # Qt >= 5.15: batalkan bila server diam
     except Exception as e:
         _log.note(e)
+    # enum Qt5/Qt6: di Qt6 anggota enum ada di dalam kelas enumnya (KnownHeaders, Attribute, ErrorCode)
+    hdr = getattr(QNetworkRequest, "KnownHeaders", QNetworkRequest)
+    att = getattr(QNetworkRequest, "Attribute", QNetworkRequest)
+    no_err = getattr(getattr(QgsBlockingNetworkRequest, "ErrorCode", QgsBlockingNetworkRequest), "NoError")
     br = QgsBlockingNetworkRequest()
     if post is not None:
-        req.setHeader(QNetworkRequest.ContentTypeHeader, "application/x-www-form-urlencoded")
+        req.setHeader(getattr(hdr, "ContentTypeHeader"), "application/x-www-form-urlencoded")
         err = br.post(req, QByteArray(post), True, feedback)
     else:
         err = br.get(req, True, feedback)
     rep = br.reply()
     try:
-        code = rep.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+        code = rep.attribute(getattr(att, "HttpStatusCodeAttribute"))
     except Exception:
         code = None
     raw = bytes(rep.content()) if rep is not None else b""
-    if err != QgsBlockingNetworkRequest.NoError and not raw:
+    if err != no_err and not raw:
         return None, (br.errorMessage() or "galat jaringan")[:120]
-    return (int(code) if code else (200 if err == QgsBlockingNetworkRequest.NoError else 0)), raw
+    return (int(code) if code else (200 if err == no_err else 0)), raw
 
 
 def _ask(url, body):
