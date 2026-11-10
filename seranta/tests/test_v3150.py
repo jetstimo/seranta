@@ -90,6 +90,14 @@ with tempfile.TemporaryDirectory() as td:
     ok(J._state(td)["rest"].get("a.example") == 9e12 and J._state(td)["good"] is None, "keadaan server tersimpan")
 J._MEMO.clear()
 
+# paket data jalan: pilih pulau dari kotak + petak 1 derajat
+it = {"file": "jalan_sulawesi.gpkg", "bbox": [118.0, -8.0, 127.0, 6.0], "sel": ["125_1", "124_1"]}
+ok(J._pkg_hit(it, (125.19, 1.45, 125.2, 1.46)) and not J._pkg_hit(it, (120.5, -3.2, 120.6, -3.1)), "petak paket")
+ok(J._pkg_hit({"bbox": [118.0, -8.0, 127.0, 6.0]}, (120.5, -3.2, 120.6, -3.1)), "tanpa petak -> pakai kotak")
+ok(not J._pkg_hit(it, (110.0, -7.0, 110.1, -6.9)), "di luar kotak")
+ok(J.lanes_of({"lanes_forward": "2", "lanes_backward": "2"}) == 4, "kolom lajur paket")
+ok(J.PKG_BASE.startswith("https://github.com/jetstimo/seranta/releases/download/data-jalan/"), "alamat paket")
+
 # nama berkas memuat RT lain (Pasir Putih RT 17: BAKP bernama RT_023)
 fm = K.filename_area_mismatch("PASIR PUTIH RT 17_91HP_REV_up", [
     ("BAKP", "BAKP_JAMBI_21100232552_RT_023_Pasir_Putih_1150HP_AIA.pdf"),

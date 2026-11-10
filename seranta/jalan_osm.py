@@ -86,7 +86,8 @@ def _num(v):
 
 def lanes_of(t):
     n = _num(t.get("lanes"))
-    f, b = _num(t.get("lanes:forward")), _num(t.get("lanes:backward"))
+    f = _num(t.get("lanes:forward") or t.get("lanes_forward"))
+    b = _num(t.get("lanes:backward") or t.get("lanes_backward"))
     if f is not None and b is not None:
         n = max(n or 0, f + b)
     return n
@@ -216,6 +217,118 @@ def pbf_package(pbf, cache_dir, feedback=None):
     except Exception as e:
         _log.note(e)
         return None
+
+
+# ---- 3.15.0: PAKET DATA JALAN SERANTA (sumber utama, cepat) ------------------------------------------------------
+# Server Overpass publik sering sibuk/menolak (uji lapangan 10 Nov 2026: 2 dari 6 cluster 'tidak dicek'). Paket ini dibuat
+# bulanan oleh alur kerja GitHub 'data-jalan' dari ekstrak Geofabrik per pulau (jalan tol, nasional/provinsi/kolektor,
+# rel, sungai/kanal saja), diunduh SEKALI per pulau ke cache lalu dibaca seketika tanpa internet. Sesuai anjuran
+# kebijakan Overpass ("use extracts if you need a lot of data"). Data (c) OpenStreetMap contributors, ODbL.
+PKG_BASE = "https://github.com/jetstimo/seranta/releases/download/data-jalan/"
+PKG_INDEX_DAYS = 7          # indeks dicek ulang paling sering seminggu sekali
+PKG_REQ_TIMEOUT_MS = 20000  # tanpa byte selama 20 detik -> batal
+
+
+def _pkg_dir(cache_dir):
+    return os.path.join(cache_dir, "paket_jalan")
+
+
+def _pkg_index(cache_dir, feedback=None):
+    """indeks.json paket (dari cache; diperbarui dari GitHub bila lebih tua dari PKG_INDEX_DAYS). -> dict atau None."""
+    d = _pkg_dir(cache_dir)
+    p = os.path.join(d, "indeks.json")
+    old = None
+    try:
+        with open(p, encoding="utf-8") as fh:
+            old = json.load(fh)
+        if time.time() - os.path.getmtime(p) < PKG_INDEX_DAYS * 86400:
+            return old
+    except Exception:
+        old = None
+    st = _state(cache_dir)
+    if time.time() < st["rest"].get("paket", 0):
+        return old
+    try:
+        code, raw = _http(PKG_BASE + "indeks.json", None, feedback, 10000)
+        if code == 200 and raw.lstrip().startswith(b"{"):
+            js = json.loads(raw.decode("utf-8"))
+            if js.get("paket"):
+                os.makedirs(d, exist_ok=True)
+                with open(p, "w", encoding="utf-8") as fh:
+                    json.dump(js, fh)
+                return js
+    except Exception as e:
+        _log.note(e)
+    _state(cache_dir, lambda s_: s_["rest"].__setitem__("paket", time.time() + REST_BUSY_S))
+    return old
+
+
+def _pkg_hit(item, bbox):
+    b = item.get("bbox") or [0, 0, 0, 0]
+    if b[2] < bbox[0] or b[0] > bbox[2] or b[3] < bbox[1] or b[1] > bbox[3]:
+        return False
+    cells = item.get("sel")
+    if not cells:
+        return True
+    want = {"%d_%d" % (x, y) for x in range(int(math.floor(bbox[0])), int(math.floor(bbox[2])) + 1)
+            for y in range(int(math.floor(bbox[1])), int(math.floor(bbox[3])) + 1)}
+    return bool(want & set(cells))
+
+
+def package(bbox, cache_dir, feedback=None):
+    """Berkas paket data jalan (GeoPackage per pulau) yang mencakup bbox; diunduh bila belum ada / ada versi baru.
+    -> ([path], keterangan) ; daftar kosong bila paket belum bisa dipakai (offline dan belum pernah diunduh)."""
+    import hashlib
+    if not cache_dir:
+        return [], ""
+    idx = _pkg_index(cache_dir, feedback)
+    if not idx:
+        return [], ""
+    d = _pkg_dir(cache_dir)
+    out = []
+    for it in idx.get("paket", []):
+        if not _pkg_hit(it, bbox):
+            continue
+        fn = os.path.basename(str(it.get("file", "")))
+        if not fn.endswith(".gpkg"):
+            continue
+        p = os.path.join(d, fn)
+        mark = p + ".sha256"
+        have = None
+        try:
+            with open(mark, encoding="utf-8") as fh:
+                have = fh.read().strip()
+        except Exception:
+            have = None
+        if os.path.exists(p) and have == it.get("sha256"):
+            out.append(p)
+            continue
+        if time.time() < _state(cache_dir)["rest"].get("paket", 0):
+            if os.path.exists(p):
+                out.append(p)       # versi lama masih dipakai
+            continue
+        if feedback is not None:
+            feedback.pushInfo("Mengunduh paket data jalan %s (%.0f MB) - sekali saja, lalu dipakai tanpa internet ..."
+                              % (fn, (it.get("bytes") or 0) / 1e6))
+        ok = False
+        try:
+            code, raw = _http(PKG_BASE + fn, None, feedback, PKG_REQ_TIMEOUT_MS)
+            if code == 200 and raw and hashlib.sha256(raw).hexdigest() == it.get("sha256"):
+                os.makedirs(d, exist_ok=True)
+                with open(p + ".part", "wb") as fh:
+                    fh.write(raw)
+                os.replace(p + ".part", p)
+                with open(mark, "w", encoding="utf-8") as fh:
+                    fh.write(it.get("sha256"))
+                ok = True
+        except Exception as e:
+            _log.note(e)
+        if ok or os.path.exists(p):
+            out.append(p)
+        if not ok:
+            _state(cache_dir, lambda s_: s_["rest"].__setitem__("paket", time.time() + REST_BUSY_S))
+    return out, "paket data jalan Seranta %s (data per %s; %s)" % (
+        ", ".join(os.path.basename(x) for x in out), idx.get("dibuat", "?"), ATTRIBUTION)
 
 
 def find_local(ref_dir, cache_dir=None, feedback=None):

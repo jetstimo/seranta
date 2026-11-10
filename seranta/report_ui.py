@@ -15,6 +15,7 @@ Part of Seranta - FTTH Design Assistant.
 Copyright (C) 2026 Joseph Edward Timothy Siahaan. Licensed under GPL-3.0-or-later (see LICENSE).
 """
 import base64
+import re
 import html as _h
 import os
 
@@ -423,7 +424,7 @@ def howto():
                 "<div class='%s'><b>%s</b><small>%s</small></div>" % (c, E(t), E(d)) for c, t, d in rows))
 
 
-def toolbar(placeholder="Cari ID temuan, kode perangkat, tiang, atau kata kunci", word_href=None):
+def toolbar(placeholder="Cari ID temuan, kode perangkat, tiang, atau kata kunci", word_href=None, word_name=""):
     return ("<div class='tools'><input id='q' type='search' placeholder='%s' aria-label='Cari temuan'>"
             "<label class='tg'><input type='checkbox' id='undone'> Belum dicek</label>"
             "<span class='prog' id='prog' aria-live='polite'></span>"
@@ -432,8 +433,11 @@ def toolbar(placeholder="Cari ID temuan, kode perangkat, tiang, atau kata kunci"
             "<button class='btn' type='button' onclick='window.print()'>Cetak / PDF</button>"
             "<button class='btn' id='hbtn' type='button' aria-label='Bantuan pintasan keyboard'>?</button></div>" % (
                 E(placeholder),
-                ("<a class='btn pri' href='%s' download title='Laporan Word berisi gambar peta setiap temuan'>"
-                 "Unduh laporan Word</a>" % E(word_href)) if word_href else ""))
+                # 3.15.0: nama unduhan memuat kode cluster (dulu selalu 'LAPORAN_QC.docx' -> 'LAPORAN_QC (5).docx' di folder
+                # Download, tidak ketahuan milik cluster mana)
+                ("<a class='btn pri' href='%s' download%s title='Laporan Word berisi gambar peta setiap temuan'>"
+                 "Unduh laporan Word</a>" % (E(word_href), (" ='%s'" % E(word_name)).replace(" =", "=") if word_name else ""))
+                if word_href else ""))
 
 
 def _num(v):
@@ -561,7 +565,8 @@ def page(title, tool_name, heading, verdict_html, meta_pairs, counts, route_item
 <footer><div class="wrap">%s</div></footer>%s<script>%s</script></body></html>""" % (
         E(title), font_css(), CSS, E(run_key or title), E(tool_name), E(heading), verdict_html, meta_list(meta_pairs),
         tally(counts) if counts is not None else "", route(route_items),
-        toolbar(word_href=word_href) if with_tools else "", body, footer_html, _DIALOGS, JS)
+        toolbar(word_href=word_href, word_name=("%s_LAPORAN_QC.docx" % re.sub(r"[^A-Za-z0-9_.-]+", "_", str(run_key))[:80])
+                if run_key else "") if with_tools else "", body, footer_html, _DIALOGS, JS)
 
 
 def verdict_sentence(counts, n_rules=None):

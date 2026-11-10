@@ -18,11 +18,19 @@ for fn in sorted(os.listdir(out)):
     lyr = ds.GetLayerByName("jalan_osm")
     x0, x1, y0, y1 = lyr.GetExtent()
     n = lyr.GetFeatureCount()
+    cells = set()          # petak 1 derajat yang berisi data: Seranta hanya mengunduh pulau yang benar-benar mencakup cluster
+    for f in lyr:
+        g = f.GetGeometryRef()
+        if g is not None:
+            e = g.GetEnvelope()
+            for x in range(int(e[0] // 1), int(e[1] // 1) + 1):
+                for y in range(int(e[2] // 1), int(e[3] // 1) + 1):
+                    cells.add("%d_%d" % (x, y))
     ds = None
     with open(p, "rb") as fh:
         sha = hashlib.sha256(fh.read()).hexdigest()
     items.append({"file": fn, "bbox": [round(x0, 4), round(y0, 4), round(x1, 4), round(y1, 4)], "features": n,
-                  "bytes": os.path.getsize(p), "sha256": sha})
+                  "bytes": os.path.getsize(p), "sha256": sha, "sel": sorted(cells)})
     print(fn, n, os.path.getsize(p))
 if not items or any(i["features"] < 100 for i in items):
     sys.exit("paket kosong/terlalu kecil - rilis dibatalkan")

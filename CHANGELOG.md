@@ -30,6 +30,10 @@
     berikutnya langsung melewatinya; kegagalan total diingat 30 menit (juga setelah QGIS dibuka ulang);
   - hasil di memori + cache 30 hari yang dipakai cluster bertetangga; semua server gagal -> cache lama dipakai (diberi
     tanggal); sumber selalu memuat atribusi "(c) OpenStreetMap contributors, ODbL";
+  - **paket data jalan Seranta (sumber utama)**: jalan tol, jalan nasional/provinsi/kolektor, rel dan sungai/kanal per
+    pulau, dibuat bulanan dari ekstrak Geofabrik oleh alur kerja GitHub `data-jalan` (aset rilis `data-jalan`, ODbL).
+    Seranta mengunduhnya sekali per pulau lalu membaca seketika tanpa internet; server Overpass publik hanya cadangan.
+    Uji lapangan 10 Nov 2026 (6 cluster): 2 dari 6 "tidak dicek" karena server publik sibuk - dengan paket ini tidak lagi;
   - API penyuntingan api.openstreetmap.org **tidak dipakai** (OSMF API Usage Policy: "not for read-only purposes");
   - **paket data jalan lokal** untuk pemakaian rutin/batch/offline: taruh `*OSM*.gpkg` atau ekstrak Geofabrik
     `*.osm.pbf` (download.geofabrik.de/asia/indonesia.html) di folder data referensi; .pbf diubah sekali menjadi paket
@@ -38,7 +42,8 @@
   QC pada Bitung, Tegal, Pasir Putih): standar yang memuat temuan ERROR/WARNING kini selalu **[CEK]** - sebelumnya
   standar 1, 4, 9 bisa tertulis [OK]/Lolos dan standar 2 "--" padahal ada temuan di dalamnya (mis. HP jauh lewat jalur,
   koordinat HP beda foto, rentang di atas batas regulasi, tiang di luar boundary). Laporan Word kini memuat **semua**
-  temuan (dulu catatan "alamat sama" dilewati sehingga jumlahnya bisa beda dari HTML/SHP).
+  temuan (dulu catatan "alamat sama" dilewati sehingga jumlahnya bisa beda dari HTML/SHP). Tombol **Unduh laporan
+  Word** kini memberi nama berkas ber-kode cluster (dulu selalu `LAPORAN_QC.docx` -> `LAPORAN_QC (5).docx`).
 - **RT/RW di nama berkas** (`WARN_NAMA_BERKAS_WILAYAH_BEDA`): mis. folder & HPDB "RT 17" tetapi BAKP bernama "RT_023".
   Temuan RT/RW kini membuat standar 3 **[CEK]** (sebelumnya tetap "--" bila FINDIM tidak ada sehingga kartu HTML tampil
   "belum diverifikasi").
