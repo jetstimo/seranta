@@ -290,9 +290,9 @@ def package(bbox, cache_dir, feedback=None):
         if not _pkg_hit(it, bbox):
             continue
         fn = os.path.basename(str(it.get("file", "")))
-        if not fn.endswith(".gpkg"):
+        if not fn.endswith((".gpkg", ".gpkg.zip")):
             continue
-        p = os.path.join(d, fn)
+        p = os.path.join(d, fn[:-4] if fn.endswith(".zip") else fn)
         mark = p + ".sha256"
         have = None
         try:
@@ -315,8 +315,15 @@ def package(bbox, cache_dir, feedback=None):
             code, raw = _http(PKG_BASE + fn, None, feedback, PKG_REQ_TIMEOUT_MS)
             if code == 200 and raw and hashlib.sha256(raw).hexdigest() == it.get("sha256"):
                 os.makedirs(d, exist_ok=True)
+                if fn.endswith(".zip"):
+                    import io
+                    import zipfile
+                    with zipfile.ZipFile(io.BytesIO(raw)) as zf:
+                        data = zf.read(os.path.basename(p))      # hanya anggota bernama paket itu sendiri
+                else:
+                    data = raw
                 with open(p + ".part", "wb") as fh:
-                    fh.write(raw)
+                    fh.write(data)
                 os.replace(p + ".part", p)
                 with open(mark, "w", encoding="utf-8") as fh:
                     fh.write(it.get("sha256"))

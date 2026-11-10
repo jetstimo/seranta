@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
-"""Tulis out/indeks.json: daftar paket data jalan per pulau (nama berkas, kotak wilayah, ukuran, SHA-256, tanggal)."""
+"""Kompres tiap paket (.gpkg -> .gpkg.zip) dan tulis out/indeks.json: nama berkas, kotak wilayah, petak 1 derajat
+yang berisi data, ukuran, SHA-256 berkas zip, tanggal."""
 import hashlib
 import json
 import os
 import sys
 import time
+import zipfile
 
 from osgeo import ogr
 
@@ -27,11 +29,15 @@ for fn in sorted(os.listdir(out)):
                 for y in range(int(e[2] // 1), int(e[3] // 1) + 1):
                     cells.add("%d_%d" % (x, y))
     ds = None
-    with open(p, "rb") as fh:
+    z = p + ".zip"
+    with zipfile.ZipFile(z, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as zf:
+        zf.write(p, fn)
+    os.remove(p)
+    with open(z, "rb") as fh:
         sha = hashlib.sha256(fh.read()).hexdigest()
-    items.append({"file": fn, "bbox": [round(x0, 4), round(y0, 4), round(x1, 4), round(y1, 4)], "features": n,
-                  "bytes": os.path.getsize(p), "sha256": sha, "sel": sorted(cells)})
-    print(fn, n, os.path.getsize(p))
+    items.append({"file": fn + ".zip", "bbox": [round(x0, 4), round(y0, 4), round(x1, 4), round(y1, 4)], "features": n,
+                  "bytes": os.path.getsize(z), "sha256": sha, "sel": sorted(cells)})
+    print(fn, n, os.path.getsize(z))
 if not items or any(i["features"] < 100 for i in items):
     sys.exit("paket kosong/terlalu kecil - rilis dibatalkan")
 with open(os.path.join(out, "indeks.json"), "w", encoding="utf-8") as fh:

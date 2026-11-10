@@ -35,7 +35,7 @@ jobs:
             rm work/$p.f.osm.pbf
             ls -la out/jalan_$p.gpkg
           done
-      - name: Indeks
+      - name: Indeks dan kompres
         run: python3 scripts/indeks_data_jalan.py out
       - name: Rilis
         uses: softprops/action-gh-release@v2
@@ -51,5 +51,5 @@ jobs:
             Data (c) OpenStreetMap contributors, tersedia di bawah Open Database License (ODbL) 1.0 -
             https://www.openstreetmap.org/copyright . Paket ini basis data turunan dan tetap berlisensi ODbL.
           files: |
-            out/jalan_*.gpkg
+            out/jalan_*.gpkg.zip
             out/indeks.json
