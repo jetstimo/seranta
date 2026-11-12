@@ -78,14 +78,19 @@ def dist_m(x1, y1, x2, y2):
 
 
 def _pip(x, y, ring):
-    inside, j = False, len(ring) - 1
+    """Titik di dalam cincin, aturan bilangan lilitan tidak nol (3.15.2; sama dengan buat_input_desain._pip): area yang
+    dilingkupi dua kali oleh garis batas yang menimpa dirinya sendiri dihitung di dalam, bukan di luar."""
+    wn, j = 0, len(ring) - 1
     for i in range(len(ring)):
         xi, yi = ring[i]
         xj, yj = ring[j]
-        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / ((yj - yi) or 1e-30) + xi:
-            inside = not inside
+        if yj <= y:
+            if yi > y and (xi - xj) * (y - yj) - (x - xj) * (yi - yj) > 0:
+                wn += 1
+        elif yi <= y and (xi - xj) * (y - yj) - (x - xj) * (yi - yj) < 0:
+            wn -= 1
         j = i
-    return inside
+    return wn != 0
 
 
 def in_poly(x, y, poly):
@@ -162,13 +167,47 @@ def overlap_area(polys_a, polys_b, max_samples=40000):
     step = max(1.0, math.sqrt(w * h / float(max_samples)))
     nx, ny = max(1, int(w / step)), max(1, int(h / step))
     sx, sy = (x1 - x0) / nx, (y1 - y0) / ny
-    hits = []
-    for i in range(nx):
-        x = x0 + (i + 0.5) * sx
-        for j in range(ny):
-            y = y0 + (j + 0.5) * sy
-            if any(in_poly(x, y, p) for p in polys_a) and any(in_poly(x, y, p) for p in polys_b):
-                hits.append((x, y))
+    # 3.15.3: sampel yang sama, dihitung per baris (garis sapuan): titik potong tiap cincin dengan baris y dicari sekali,
+    # lalu tiap sampel cukup pencarian biner. Aturan di-dalam sama dengan _pip (bilangan lilitan), jadi hasilnya sama,
+    # tetapi tidak lagi menelusuri semua titik sudut poligon untuk setiap sampel (dulu +-1 detik per pasangan cluster).
+    from bisect import bisect_right
+
+    def ring_row(ring, y):
+        ev, j = [], len(ring) - 1
+        for i in range(len(ring)):
+            xi, yi = ring[i]
+            xj, yj = ring[j]
+            if yj <= y:
+                if yi > y:
+                    ev.append((xj + (y - yj) * (xi - xj) / (yi - yj), 1))
+            elif yi <= y:
+                ev.append((xj + (y - yj) * (xi - xj) / (yi - yj), -1))
+            j = i
+        ev.sort()
+        suf = [0] * (len(ev) + 1)
+        for k in range(len(ev) - 1, -1, -1):
+            suf[k] = suf[k + 1] + ev[k][1]
+        return [e[0] for e in ev], suf
+
+    def rows(polys, y):
+        return [(ring_row(p[0], y), [ring_row(h, y) for h in p[1]]) for p in polys]
+
+    def inside(rw, x):
+        for (xs, suf), holes in rw:
+            if xs and suf[bisect_right(xs, x)] != 0 and not any(
+                    hx and hs[bisect_right(hx, x)] != 0 for hx, hs in holes):
+                return True
+        return False
+    found = []
+    for j in range(ny):
+        y = y0 + (j + 0.5) * sy
+        ra, rb = rows(polys_a, y), rows(polys_b, y)
+        for i in range(nx):
+            x = x0 + (i + 0.5) * sx
+            if inside(ra, x) and inside(rb, x):
+                found.append((i, j, x, y))
+    found.sort()                      # urutan sama dengan versi lama (x dulu, lalu y)
+    hits = [(x, y) for _i, _j, x, y in found]
     if not hits:
         return 0.0, None, []
     area = len(hits) * (sx * kx) * (sy * ky)
@@ -718,12 +757,19 @@ def _bnd_gap_m(A, B):
     if not A or not B:
         return None
     best = 1e12
+    # 3.15.3: kotak pembatas tiap poligon dipakai sebagai batas bawah jarak (hasil sama persis): poligon yang kotaknya
+    # tidak memuat titik tidak diuji 'di dalam', dan poligon yang kotaknya sudah lebih jauh dari jarak terbaik dilewati.
     for P, Q in ((A, B), (B, A)):
+        qb = [(q, _bbox_pts(q[0])) for q in Q]
         for poly in P:
             for x, y in poly[0][::max(1, len(poly[0]) // 400)]:
-                if any(in_poly(x, y, q) for q in Q):
+                if any(b and b[0] <= x <= b[2] and b[1] <= y <= b[3] and in_poly(x, y, q) for q, b in qb):
                     return 0.0
-                best = min(best, min(edge_dist_m(x, y, q) for q in Q))
+                kx, ky = _geo.m_per_deg(y)
+                for q, b in qb:
+                    if b and math.hypot(max(0.0, b[0] - x, x - b[2]) * kx, max(0.0, b[1] - y, y - b[3]) * ky) >= best:
+                        continue
+                    best = min(best, edge_dist_m(x, y, q))
     return best
 
 

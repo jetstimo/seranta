@@ -48,6 +48,7 @@ ZMAX_DEFAULT = {"sat": ZSAFE, "osm": 19}
 CACHE_MIN = 1024 * 1024 * 1024   # 1 GB cache jaringan QGIS
 _ZOOM_CACHE = {}                 # (z8_x, z8_y) -> zoom asli tertinggi
 _PENDING = []                    # balasan jaringan yang sedang berjalan (agar tidak dibuang garbage collector)
+_INFLIGHT = set()                # wilayah yang zoom aslinya sedang ditanyakan (satu rantai permintaan per wilayah)
 
 
 def choice():
@@ -142,6 +143,11 @@ def probe_native_zoom(lyr, lon, lat):
     if key in _ZOOM_CACHE:
         _set_zmax(lyr, _ZOOM_CACHE[key])
         return
+    # 3.15.5: satu pertanyaan per wilayah. Dulu tiap layer yang dimuat (batch 12 cluster: +-140 layer) memulai rantai
+    # permintaan jaringan baru sebelum jawaban pertama datang; di jaringan lambat/proxy QGIS bisa tertahan +-10 menit.
+    if key in _INFLIGHT:
+        return
+    _INFLIGHT.add(key)
     try:
         from qgis.core import QgsNetworkAccessManager
         from qgis.PyQt.QtCore import QUrl
@@ -168,6 +174,7 @@ def probe_native_zoom(lyr, lon, lat):
             if ok or z <= ZSAFE + 1:
                 zz = z if ok else ZSAFE
                 _ZOOM_CACHE[key] = zz
+                _INFLIGHT.discard(key)
                 from qgis.core import QgsProject
                 target = QgsProject.instance().mapLayer(lid)
                 if target is not None:

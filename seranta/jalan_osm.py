@@ -707,7 +707,12 @@ def crossings(segs, roads, kx, ky, merge_m=15.0):
             for c, d in zip(pm, pm[1:]):
                 hit = _seg_x(A, B, c, d)
                 if hit and r["kind"] not in ("tol", "rel") and _angle(A, B, c, d) < PARALLEL_DEG:
-                    continue
+                    # 3.15.2: sudut kecil hanya diabaikan bila salah satu ujung rentang masih di badan jalan (jalur
+                    # menyusuri as jalan). Bila kedua ujung sudah di luar setengah lebar jalan, kabel benar-benar
+                    # menyeberang secara serong dan tetap dihitung (dulu persilangan serong < 25 derajat luput).
+                    half = max(3.0, float(r.get("width") or {"besar": 14.0, "sedang": 7.0}.get(r["kind"], 6.0)) / 2.0)
+                    if min(_pt_line(A, pm), _pt_line(B, pm)) < half:
+                        continue
                 if hit:
                     (x, y), _t = hit
                     if any(o["kind"] == r["kind"] and math.hypot(o["_x"] - x, o["_y"] - y) <= merge_m for o in out):

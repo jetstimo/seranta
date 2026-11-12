@@ -518,6 +518,9 @@ TOOL1_KIND = [
     ("WARN_HP_TANPA_EVIDENCE", "Ada rumah di HPDB yang tidak punya foto survei (evidence) di laporan evidence maupun di KMZ.",
      "Lengkapi foto rumah tersebut."),
     ("WARN_CLUSTER_NAME_KOSONG", "Kolom CLUSTER_NAME di HPDB kosong.", "Isi nama cluster sesuai FINDIM / Funnel."),
+    ("WARN_ADMIN_KELURAHAN_BELUM_DI_FINDIM", "Kelurahan yang tertulis di HPDB tidak ditemukan di file FINDIM, tetapi file FINDIM "
+     "yang dipakai sudah lama (lebih dari 90 hari) dan tidak ada ejaan mirip di kecamatan yang sama: belum tentu salah.",
+     "Minta FINDIM terbaru lalu jalankan ulang; bila tetap tidak ada, perbaiki nama kelurahan di HPDB."),
     ("WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR", "ID cluster belum ada di FINDIM, tetapi lebih baru dari semua ID di file FINDIM "
      "yang dipakai: kemungkinan cluster baru yang belum terdaftar.", "Minta FINDIM terbaru sebelum menolak karena ID."),
     ("HP_JAUH_DARI_TIANG", "Rumah terlalu jauh dari tiang terdekat.", "Tambahkan tiang di dekat rumah atau periksa koordinat rumah."),

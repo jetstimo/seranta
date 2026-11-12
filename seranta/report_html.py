@@ -12,7 +12,8 @@ _E = _h.escape
 _ST = {True: ("OK", "ok"), False: ("CEK", "bad"), None: ("--", "na")}
 _SEV = dict(zip(("ERROR", "WARNING", "INFO", "UNVERIFIED", "PASS", "CEK"), ("bad", "wrn", "inf", "unv", "ok", "bad")))
 _SEVT = {"ERROR": "bad-t", "WARNING": "wrn-t", "CEK": "bad-t"}
-SOFT_STD = {7}          # standar yang "tidak terpenuhi" berarti keputusan perencanaan, bukan kesalahan data
+LAST_HTML = {}          # path -> isi laporan yang baru ditulis (dipakai laporan_grup._embed)
+SOFT_STD = {7}        # standar yang "tidak terpenuhi" berarti keputusan perencanaan, bukan kesalahan data
 
 _CSS = """
 :root{--ink:#14213d;--mut:#5b6474;--line:#dfe3ea;--ok:#1a7f37;--okb:#e7f5ea;--bad:#c62828;--badb:#fdecec;
@@ -62,6 +63,7 @@ def build(path, meta, std, judul, extra_lines, bakp, files, full_text):
     fid_map = meta.get("fid_map") or {}          # (kind, lon7, lat7, ket) -> F-0001 (sama dengan QC_TEMUAN & Word)
     snaps = meta.get("snaps") or {}              # F-0001 -> data URI gambar peta
     evid = meta.get("evidence") or {}            # F-0001 -> bukti terstruktur (aturan vs nilai, kutipan data sumber, jejak)
+    blk = (meta.get("remarks") or {}).get("blocking") or []      # kode temuan yang menjadi alasan reject (remarks.py)
     counts = {}
     for st, _no, _lab, n, _ex, _src, _slug in (meta.get("qc_counts") or []):
         sv = "ERROR" if st == "CEK" else st
@@ -78,13 +80,18 @@ def build(path, meta, std, judul, extra_lines, bakp, files, full_text):
         return min(sevs, key=lambda v: U.SEV_ORDER.index(v) if v in U.SEV_ORDER else 9) if sevs else (
             "WARNING" if k in SOFT_STD else "ERROR")
 
-    def finds(lst, limit=40):
+    def finds(lst, limit=None):
+        # 3.15.6: SEMUA temuan didaftar di kartu standarnya (dulu 40 per standar, sisanya "+N titik lain"), sehingga
+        # HTML saja sudah lengkap dan sama dengan Word dan QC_TEMUAN.shp tanpa perlu mengunduh Word.
+        limit = len(lst) if limit is None else limit
         if not lst:
             return ""
         lis = []
         for t in lst[:limit]:
             sev, lab, ket, lat, lon = t[:5]
             kind = t[5] if len(t) > 5 else ""
+            if sev != "ERROR" and kind and any(kind == b_ or (b_.endswith("_") and kind.startswith(b_)) for b_ in blk):
+                lab += " (alasan reject)"
             arti, aksi = X.tool1_kind_text(kind)
             fid = fid_map.get((kind, lon, lat, ket))
             lis.append(U.finding_li(sev, lab, "", ket, aksi, ("<code>%s</code> %s" % (_E(kind), _E(arti))) if kind else "",
@@ -120,7 +127,7 @@ def build(path, meta, std, judul, extra_lines, bakp, files, full_text):
             "s0", sev, "Jalur kabel dan tiang (pemeriksaan tambahan)", "%d temuan" % len(gen), c,
             "Ujung jalur, belokan dan percabangan tanpa tiang, tiang nganggur, kabel rendah, dan peluang efisiensi.",
             "Hal-hal ini tidak masuk standar review bernomor, tetapi menentukan apakah jalur bisa dibangun dengan rapi.",
-            "Perbaiki yang berwarna merah/kuning; yang biru adalah saran penghematan.", finds(gen, 60),
+            "Perbaiki yang berwarna merah/kuning; yang biru adalah saran penghematan.", finds(gen),
             is_open=sev in ("ERROR", "WARNING")))
     extra = "".join("<li>%s</li>" % _E(x.strip()) for x in extra_lines if x.strip())
     sec = []
@@ -189,6 +196,16 @@ def build(path, meta, std, judul, extra_lines, bakp, files, full_text):
         verdict = "Tidak ada pelanggaran, tetapi <b>%d standar belum bisa dicek</b> karena datanya belum ada." % n_unv
     else:
         verdict = "Semua %d standar review terpenuhi. Data siap dipakai untuk desain." % len(keys)
+    # 3.15.3: keputusan review (Reject / Approve dengan catatan / Approve) dan remarks yang SAMA PERSIS dengan REMARKS.txt,
+    # REMARKS_BATCH.csv, laporan gabungan dan Word ditulis paling atas. Dulu kepala laporan hanya menghitung standar yang
+    # perlu dicek, sehingga pembaca HTML tidak melihat keputusan dan bisa menyimpulkan berbeda dari remarks.
+    rm = meta.get("remarks") or {}
+    if rm.get("status"):
+        col = {"REJECT": "#c62828", "APPROVE": "#1a7f37"}.get(rm["status"], "#b54708")
+        verdict = ("<span style='display:block;font-size:1.15em;font-weight:700;color:%s'>Keputusan review otomatis: %s</span>"
+                   "<span style='display:block;margin:2px 0 6px'>%s</span>%s" % (
+                       col, _E({"REJECT": "REJECT", "APPROVE": "APPROVE"}.get(rm["status"], "APPROVE DENGAN CATATAN")),
+                       _E(rm.get("text") or ""), verdict))
     js = """<script>(function(){var key="seranta-bakp-"+%s,boxes=[].slice.call(document.querySelectorAll("input[data-k]"));
 function load(){try{return JSON.parse(localStorage.getItem(key)||"{}")}catch(e){return {}}}
 function save(s){try{localStorage.setItem(key,JSON.stringify(s))}catch(e){}}
@@ -206,4 +223,9 @@ var s=load();boxes.forEach(function(b){b.checked=!!s[b.dataset.k];b.addEventList
     doc = doc.replace("</body>", js + "</body>")
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(doc)
+    # 3.15.2: isi laporan diingat sebentar agar laporan gabungan (batch / grup 1 PIC) tidak membaca ulang berkas yang
+    # baru ditulis (pembacaan ulang berkas besar yang baru dibuat +-1 detik per cluster di Windows).
+    LAST_HTML[os.path.normcase(os.path.abspath(path))] = doc
+    while len(LAST_HTML) > 40:
+        LAST_HTML.pop(next(iter(LAST_HTML)))
     return path

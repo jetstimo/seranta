@@ -21,7 +21,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.15.1"
+__version__ = "3.15.7"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -741,6 +741,22 @@ def _clean_number(v):
         return "%d" % f
     return "%.15g" % f
 
+# 3.15.7: salah eja judul kolom koordinat yang lazim di HPDB lapangan (mis. 'HOMEPASS_LONGTITUDE'). Dulu sheet HPDB
+# dengan ejaan ini tidak dikenali, sheet tiang yang berkolom LATITUDE/LONGITUDE dipakai sebagai HPDB, dan seluruh HP
+# dilaporkan tidak cocok dengan KMZ (review Tegal Dawuhan RW 01 2026: 11 baris tiang dibaca, 89 HP, 100 ERROR palsu).
+HDR_TYPO_RX = re.compile(r"(?i)LONG?T+ITUDE|LONGT?ITUTE|LATT+ITUDE|LATT?ITUTE")
+
+
+def fix_header_typo(s):
+    """Ejaan baku LATITUDE/LONGITUDE untuk judul kolom (huruf besar/kecil asal dipertahankan sebagai huruf besar)."""
+    def rep(m):
+        t = m.group(0).upper()
+        if t.startswith("LON"):
+            return "LONGITUDE" if t != "LONGITUDE" else m.group(0)
+        return "LATITUDE" if t != "LATITUDE" else m.group(0)
+    return HDR_TYPO_RX.sub(rep, s)
+
+
 def read_xlsx(path, max_empty=200, max_scan=20000, want=None):
     """Kembalikan list (nama_sheet, baris) untuk setiap worksheet.
     Berhenti membaca sheet setelah `max_empty` baris kosong berturut-turut
@@ -804,7 +820,10 @@ def read_xlsx(path, max_empty=200, max_scan=20000, want=None):
                                 val = v
                             else:
                                 val = _clean_number(v)
-                    cells[idx] = val.strip()
+                    val = val.strip()
+                    if rnum <= 40 and val and HDR_TYPO_RX.search(val):
+                        val = fix_header_typo(val)
+                    cells[idx] = val
                 row = [""] * (max(cells) + 1) if cells else []
                 for i, v in cells.items():
                     row[i] = v
@@ -834,14 +853,22 @@ HIDDEN_CHAR_RX = _tambah.HIDDEN_CHAR_RX
 
 
 def _pip(x, y, ring):
-    inside, j = False, len(ring) - 1
+    """Titik di dalam cincin (aturan bilangan lilitan tidak nol).
+    3.15.2: dulu aturan ganjil-genap. Untuk poligon biasa hasilnya sama; bedanya pada garis batas yang digambar
+    menimpa dirinya sendiri (Funnel/BOUNDARY gambar tangan yang melingkar): bagian yang tertutup dua kali dulu
+    dihitung DI LUAR, sehingga rumah di sana dilaporkan di luar Funnel (review Minahasa 2026, Funnel Lingkungan 1
+    Tataaran Patar: +-8.600 m2 tertutup dua kali). Sekarang seluruh area yang dilingkupi garis dihitung di dalam."""
+    wn, j = 0, len(ring) - 1
     for i in range(len(ring)):
         xi, yi = ring[i]
         xj, yj = ring[j]
-        if (yi > y) != (yj > y) and x < (xj - xi) * (y - yi) / ((yj - yi) or 1e-30) + xi:
-            inside = not inside
+        if yj <= y:
+            if yi > y and (xi - xj) * (y - yj) - (x - xj) * (yi - yj) > 0:
+                wn += 1
+        elif yi <= y and (xi - xj) * (y - yj) - (x - xj) * (yi - yj) < 0:
+            wn -= 1
         j = i
-    return inside
+    return wn != 0
 
 
 def in_poly(x, y, poly):
@@ -992,7 +1019,34 @@ def _funnel_geom(poly):
     if g.isNull() or g.isEmpty():
         return None
     if not g.isGeosValid():
-        v = g.makeValid()
+        # 3.15.2: poligon yang garisnya menimpa dirinya sendiri digambar dengan aturan yang SAMA dengan perhitungan
+        # (_pip, bilangan lilitan): semua petak yang dilingkupi garis ikut, bukan dilubangi. Dulu makeValid melubangi
+        # bagian yang tertutup dua kali sehingga layer FUNNEL_SEKITAR di peta berbeda dari poligon yang dipakai menghitung.
+        v = None
+        try:
+            noded = QgsGeometry.unaryUnion([QgsGeometry.fromPolylineXY(outer)])
+            faces = QgsGeometry.polygonize([noded])
+            keep = []
+            for fc in (faces.asGeometryCollection() if faces is not None and not faces.isNull() else []):
+                c = fc.pointOnSurface()
+                if c is None or c.isNull() or fc.area() <= 0:
+                    continue
+                q = c.asPoint()
+                if _pip(q.x(), q.y(), poly[0]):
+                    keep.append(fc)
+            if keep:
+                v = QgsGeometry.unaryUnion(keep)
+                for h in holes:
+                    hg = QgsGeometry.fromPolygonXY([h])
+                    if hg.isGeosValid():
+                        v = v.difference(hg)
+                if v is None or v.isNull() or v.isEmpty() or not v.isGeosValid():
+                    v = None
+        except Exception as _e:
+            _log.note(_e)
+            v = None
+        if v is None:
+            v = g.makeValid()
         if v is None or v.isNull() or v.isEmpty():
             v = QgsGeometry.fromPolygonXY([outer]).makeValid()   # terakhir: tanpa lubang
         g = v
@@ -1879,6 +1933,8 @@ QC_LABELS = [
     (r"^WARN_HP_TANPA_EVIDENCE", 4, "HP tanpa foto evidence", "W4_HP_TANPA_EVIDENCE",
      "Standar Review Strand: tiap HP berfoto survei"),
     (r"^WARN_CLUSTER_NAME_KOSONG", 3, "CLUSTER_NAME kosong di HPDB", "W3_CLUSTER_NAME_KOSONG", "format HPDB / FINDIM"),
+    (r"^WARN_ADMIN_KELURAHAN_BELUM_DI_FINDIM", 3, "Kelurahan belum ada di FINDIM (file FINDIM lama)",
+     "W3_KELURAHAN_BELUM_DI_FINDIM", "FINDIM (data referensi bisa tertinggal dari wilayah baru)"),
     (r"^WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR", 3, "ID cluster baru belum ada di FINDIM", "W3_ID_BELUM_DI_FINDIM",
      "FINDIM OLT CLUSTER (data referensi bisa tertinggal dari pembuatan ID baru)"),
     (r"^HP_JAUH_DARI_TIANG", 1, "HP lebih dari batas jarak ke tiang", "S1_HP_JAUH_TIANG",
@@ -2072,6 +2128,21 @@ def qc_dasar(kind):
     return next(d for rx, d in QC_DASAR if re.search(rx, kind))
 
 
+# 3.15.2: satuan kolom 'Nilai' di Word/HTML menurut jenis temuan. Dulu semua nilai selain sudut belokan diberi 'm',
+# sehingga jumlah rumah/tiang/foto tertulis sebagai meter (mis. '57 m' untuk 57 HP tanpa foto). Jenis yang tidak
+# dikenal ditulis tanpa satuan.
+QC_UNIT = [
+    (r"BELOKAN", "derajat"), (r"BERIRISAN", "m2"),
+    (r"TANPA_EVIDENCE|CLUSTER_NAME|RT_RW|SATU_PIC|DIGABUNG", "HP"), (r"FOTO_EVIDENCE", "foto"),
+    (r"TIANG_GANDA|TIANG_DUPLIKAT|POLE_SHEET", "tiang"), (r"BOUNDARY_TIDAK_VALID", "titik potong"), (r"SIMPANG", "arah"),
+    (r"^HP_JAUH|RENTANG|KABEL_RENDAH|FUNNEL|HP_LUAR_BOUNDARY|TEPI_BOUNDARY|AKSES|LABEL_SAMA|BERTUMPUK|DEKAT|UJUNG_JALUR|"
+     r"LUAR_BOUNDARY|MUNGKIN_DUPLIKAT|BERGESER|MELINTAS|JAUH_LEWAT", "m")]
+
+
+def qc_unit(kind):
+    return next((u for rx, u in QC_UNIT if re.search(rx, kind)), "")
+
+
 def qc_item(it):
     """Normalisasi temuan -> (titik, kode, keterangan, garis atau None, nilai, batas)."""
     p, kind, ket = it[0], it[1], it[2]
@@ -2152,6 +2223,7 @@ def read_dbf(path, encoding="utf-8"):
 
 PARAM_LABEL = [(r"^HP_JAUH", "Jarak HP ke tiang terdekat"), (r"RENTANG", "Bentang tiang ke tiang (sepanjang jalur)"),
                (r"BELOKAN", "Sudut belokan jalur"), (r"^INFO_KABEL_RENDAH", "Tinggi kabel di tengah bentang (perkiraan)"),
+               (r"MELINTAS_JALAN", "Tinggi kabel di tengah bentang yang melintang jalan (perkiraan)"),
                (r"BOUNDARY|FUNNEL", "Jarak HP dari garis batas"), (r"DUPLIKAT", "Jarak antar HP"), (r"COLO", "Jarak / kapasitas FDT")]
 
 
@@ -2172,7 +2244,7 @@ def _qc_evidence(recs, hp_rows, poles, names, kinds, heights, src):
         if val is not None or lim is not None:
             lab = next((t for rx, t in PARAM_LABEL if re.search(rx, kind)), r.get("title") or "Nilai")
             ev["rule"] = [(lab, lim, ("%.2f" % val).rstrip("0").rstrip(".") if isinstance(val, float) else val, unit)]
-            if kind.startswith("INFO_KABEL_RENDAH"):
+            if kind.startswith("INFO_KABEL_RENDAH") or "MELINTAS_JALAN" in kind:
                 ev["note"] = "Untuk kabel rendah, nilai di bawah syarat berarti kabel lebih rendah dari ruang bebas minimum."
         rows = []
         for n_ in sorted({int(x) for x in re.findall(r"baris (\d+)", r.get("arti") or "")})[:4]:
@@ -2513,6 +2585,12 @@ def check_admin(att, kel, kec, city, prov):
     cands = [f for f in att["findim"] if nk in f["kv"]] if nk else []
     if not cands:
         pool = [f for f in att["findim"] if nt and nt in f["tv"]] or att["findim"]
+        # 3.15.4: saran ejaan hanya dari kecamatan yang sama dengan yang tertulis di HPDB. Dulu nama mirip di
+        # kecamatan lain ikut disarankan (mis. 'Mantenan' Kec. Mertoyudan -> 'Mantingan' Kec. Salam) dan menyesatkan.
+        if nc and any(nc in f["cv"] for f in pool):
+            pool = [f for f in pool if nc in f["cv"]]
+        elif nc:
+            pool = []
         sug = difflib.get_close_matches(nk, list({f["n_kel"]: 1 for f in pool}), n=3, cutoff=0.75)
         names = []
         for sname in sug:
@@ -2738,21 +2816,26 @@ class QcStyler(QgsProcessingLayerPostProcessorInterface):
             if node is None:
                 return
             parent = node.parent()
-            sub = parent.findGroup("QC TEMUAN") or parent.insertGroup(0, "QC TEMUAN")
-            if parent is not sub:
-                sub.addChildNode(node.clone())
+            # 3.15.2: sub-grup 'QC TEMUAN' dicari HANYA di grup cluster layer ini. Dulu findGroup() mencari ke seluruh
+            # pohon layer, sehingga pada batch layer temuan satu cluster bisa masuk ke 'QC TEMUAN' cluster lain
+            # (review Minahasa 2026: S9 Tataaran Patar 02 tampil di grup Tuutu 03).
+            own = root.findGroup(self.group) if self.group else None
+            if parent is not None and parent.name() == "QC TEMUAN" and (
+                    own is None or (parent.parent() is not None and parent.parent().name() == own.name())):
+                sub = parent
+            else:
+                base = own if own is not None else parent
+                sub = next((c for c in base.children() if hasattr(c, "findGroups") and c.name() == "QC TEMUAN"), None) \
+                    or base.insertGroup(0, "QC TEMUAN")
+                # urutan: standar (S1..S9) dulu, lalu temuan tiang/jalur, lalu Info.
+                # 3.15.5: layer baru langsung disisipkan di posisinya. Dulu seluruh sub-grup disusun ulang (disalin lalu
+                # dihapus) setiap kali satu layer dimuat: batch 12 cluster +-1.000 operasi pohon layer, +-10 detik.
+                def rank(nm):
+                    return (nm.startswith("Info"), not nm.startswith("S"), nm)
+                me = rank(node.name())
+                idx = next((i for i, k in enumerate(sub.children()) if rank(k.name()) > me), len(sub.children()))
+                sub.insertChildNode(idx, node.clone())
                 parent.removeChildNode(node)
-            # urutan: standar (S1..S9) dulu, lalu temuan tiang/jalur, lalu Info
-            kids = list(sub.children())
-
-            def rank(n):
-                nm = n.name()
-                return (nm.startswith("Info"), not nm.startswith("S"), nm)
-            if [k.name() for k in kids] != [k.name() for k in sorted(kids, key=rank)]:
-                for k in sorted(kids, key=rank):
-                    sub.addChildNode(k.clone())
-                for k in kids:
-                    sub.removeChildNode(k)
             sub.setExpanded(True)
         except Exception as _e:
             _log.note(_e)
@@ -2971,7 +3054,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
     # ---------- helpers ----------
     @staticmethod
     def _norm(s):
-        return re.sub(r"[^A-Z0-9]", "", str(s or "").upper())
+        s = str(s or "")
+        return re.sub(r"[^A-Z0-9]", "", (fix_header_typo(s) if HDR_TYPO_RX.search(s) else s).upper())
 
     def _pick_sheet(self, sheets):
         """Pilih sheet HPDB dari daftar (nama, baris)."""
@@ -3183,7 +3267,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
 
     @staticmethod
     def _qc_word(qc, outp, inp, kode, cluster, std, judul, poles, names, kinds, hp_xy, segs, own_bnd, funnel_polys, feedback,
-                 max_img=80, hp_attrs=None, heights=None, hp_rows=None, src=None, others=None):
+                 max_img=80, hp_attrs=None, heights=None, hp_rows=None, src=None, others=None, remarks=None):
         """Gambar peta per temuan (folder QC_GAMBAR) dan laporan Word <KODE>_LAPORAN_QC.docx.
         Kembali (nama file Word, {F-0001: data URI})."""
         import math
@@ -3236,9 +3320,14 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             obj = ket.split(":")[0].split(" (")[0].strip() if ":" in ket[:60] else ""
             sev = qc_severity(kind)
             lab = qc_label(kind)[1]
+            # 3.15.3: temuan 'perlu ditinjau' yang menurut aturan review menjadi alasan reject diberi tanda yang sama
+            # di Word dan HTML, supaya tingkat temuan tidak tampak bertentangan dengan keputusan Reject
+            if sev != "ERROR" and any(kind == b_ or (b_.endswith("_") and kind.startswith(b_))
+                                      for b_ in ((remarks or {}).get("blocking") or [])):
+                lab += " (alasan reject)"
             arti, aksi = X.tool1_kind_text(kind)
             recs.append({"fid": "F-%04d" % n_, "sev": sev, "kind": kind, "title": lab, "obj": obj, "arti": ket,
-                         "fix": aksi, "value": val, "limit": lim, "unit": ("derajat" if "BELOKAN" in kind else "m") if val is not None else "",
+                         "fix": aksi, "value": val, "limit": lim, "unit": qc_unit(kind) if val is not None else "",
                          "lat": p.y(), "lon": p.x(), "dasar": qc_source(kind), "source": "",
                          "line": [(q.x(), q.y()) for q in pts] if pts else None, "label": arti})
         pick = [r for r in recs if r["sev"] in ("ERROR", "WARNING")]
@@ -3269,6 +3358,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         path = outp("LAPORAN_QC.docx")
         _docx.qc_report(path, "Laporan QC Survei - %s" % cluster.replace("_", " "),
                         "QC data survei sebelum desain - %s v%s" % (__product__, __version__),
+                        # 3.15.3: keputusan & remarks yang sama persis dengan REMARKS.txt / HTML / laporan gabungan
+                        ([("Keputusan review (otomatis)", remarks.get("status")), ("Remarks", remarks.get("text"))]
+                         if remarks and remarks.get("status") else []) +
                         [("Cluster", cluster), ("Kode", kode), ("Dibuat", _dt.datetime.now().strftime("%d-%m-%Y %H:%M")),
                          ("Jumlah temuan", "%d (gambar peta: %d)" % (len(recs), len(imgs))),
                          ("Berkas pendukung", "RINGKASAN_QC.html, QC_TEMUAN.shp/.kmz, folder QC_GAMBAR")],
@@ -3434,6 +3526,23 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     "full review." % (outdir, len(clusters)))
             if len(clusters) > 1 or clusters[0] != outdir:
                 feedback.pushInfo("BATCH MODE: %d cluster folders found in %s" % (len(clusters), outdir))
+            # 3.15.2: berkas survei dengan jalur > batas Windows (260 karakter) tidak terbaca, sehingga cluster-nya
+            # terlewat TANPA pesan dan hasil cluster tetangganya ikut berubah. Sekarang diperingatkan dengan jelas.
+            try:
+                long_ = []
+                for r_, ds_, fs_ in os.walk(outdir):
+                    ds_[:] = [] if r_[len(outdir):].count(os.sep) >= 3 else [
+                        d_ for d_ in ds_ if not d_.upper().startswith(("INPUT", "_"))]
+                    long_ += [os.path.join(r_, f_) for f_ in fs_ if len(os.path.join(r_, f_)) >= 250
+                              and os.path.splitext(f_)[1].lower() in (".xlsx", ".xls", ".csv", ".kmz", ".kml")]
+                if long_:
+                    getattr(feedback, "pushWarning", feedback.pushInfo)(
+                        "WARNING - PATH TOO LONG: %d survey file(s) have a full path of 250+ characters (Windows limit 260) "
+                        "and may be SKIPPED, which also changes the cross-cluster result of their neighbours. Move the "
+                        "folder closer to the drive root (e.g. C:\\QC\\...) or shorten folder names, then run again. "
+                        "First: %s" % (len(long_), long_[0]))
+            except OSError as _e:
+                _log.note(_e)
         if len(clusters) == 1:
             res = self._run_cluster(clusters[0], o, context, feedback)
             if open_rep:
@@ -3608,7 +3717,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             targets = [r_.get("inp") for r_ in g["members"] if r_.get("inp")] + ([outdir] if outdir else [])
             for t_ in targets:
                 try:
-                    _grup.write_report(os.path.join(t_, name), g, sm, "%s v%s" % (__product__, __version__), when)
+                    # 3.15.3: nama dipendekkan bila jalur lengkap melewati batas Windows (dulu rekap grup gagal ditulis
+                    # di folder cluster bernama panjang, mis. hasil ekstrak ZIP Google Drive)
+                    nm_ = next((c_ for c_ in (name, "REKAP_GRUP_1PIC_%s_+%d.txt" % (sm["ids"][0], len(sm["ids"]) - 1),
+                                              "REKAP_GRUP.txt") if len(os.path.join(t_, c_)) <= 250), "REKAP_GRUP.txt")
+                    _grup.write_report(os.path.join(t_, nm_), g, sm, "%s v%s" % (__product__, __version__), when)
                 except Exception as e:
                     feedback.reportError("Group summary not written in %s: %s" % (t_, e), fatalError=False)
 
@@ -3793,10 +3906,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         def save(lyr, path, name):
             self._write(lyr, path, "ESRI Shapefile", context)
             try:      # gaya ikut file: dibuka manual di QGIS pun langsung berwarna & berlabel
-                sl = QgsVectorLayer(path, name, "ogr")
-                if sl.isValid() and style_qc_layer(sl):
-                    sl.saveNamedStyle(os.path.splitext(path)[0] + ".qml")
-                del sl
+                # 3.15.3: gaya diambil dari layer memori yang baru ditulis (kolom & geometri sama), tanpa membuka ulang
+                # tiap shapefile lewat OGR (dulu +-40 ms per kategori temuan, +-0,5 detik per cluster).
+                if style_qc_layer(lyr):
+                    lyr.saveNamedStyle(os.path.splitext(path)[0] + ".qml")
             except Exception as _e:
                 _log.note(_e)
         # gabungan (titik)
@@ -4151,6 +4264,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             for v, ks in byv.items():
                 if jenis == "alamat sama" and len(ks) > 3:
                     adr_generic.append((v, len(ks)))    # satu alamat untuk banyak HP: alamat tidak spesifik
+                    continue
+                # 3.15.4: pasangan yang sudah dilaporkan sebagai duplikat/label sama tidak diulang sebagai 'alamat sama'
+                # (dulu satu pasang rumah muncul dua kali: ERROR duplikat label + INFO alamat sama)
+                if jenis == "alamat sama" and len(ks) == 2 and (min(ks), max(ks)) in lbl_set:
                     continue
                 if len(ks) > 1 and not any(set(ks) <= set(g) for _j, g in dup_groups):
                     dup_groups.append((jenis, ks))
@@ -4548,10 +4665,23 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         # Dua garis jalur yang saling menumpang (mis. jalur utama + garis 'Penanda' di folder yang sama) menghasilkan
         # rentang tiang yang sama dua kali (A-B dan B-A). Satu rentang fisik = satu penilaian.
         seen_span, n_dup_span = set(), 0
+        # 3.15.2: tiang yang tercatat dua kali di KMZ (koordinat sama / <= 1 m, mis. NP-10 dan NP-28 di titik yang sama)
+        # dianggap SATU tiang saat mengenali rentang ganda. Dulu garis jalur yang digambar dua kali lewat tiang dobel
+        # menghasilkan dua temuan untuk satu rentang fisik (review Minahasa 2026: NP-28 - NP-04 dan NP-10 - NP-04).
+        canon_pole = {}
+        used_p = sorted({k_[1] for s_ in spans for k_ in (s_[0], s_[1]) if k_[0] == "P"})
+        for n_i, i_ in enumerate(used_p):
+            canon_pole[i_] = i_
+            kx_, ky_ = _geo.m_per_deg(poles[i_].y())
+            for j_ in used_p[:n_i]:
+                if (abs(poles[i_].y() - poles[j_].y()) * ky_ <= 1.0 and abs(poles[i_].x() - poles[j_].x()) * kx_ <= 1.0
+                        and _m.hypot((poles[i_].x() - poles[j_].x()) * kx_, (poles[i_].y() - poles[j_].y()) * ky_) <= 1.0):
+                    canon_pole[i_] = canon_pole[j_]
+                    break
         for ka, kb, L, pts in spans:
             if ka[0] != "P" or kb[0] != "P":
                 continue          # ujung jalur tanpa tiang: dicek di analisa ujung jalur
-            key_ = (frozenset((ka, kb)), int(round(L / 2.0)))
+            key_ = (frozenset((canon_pole.get(ka[1], ka[1]), canon_pole.get(kb[1], kb[1]))), int(round(L / 2.0)))
             if key_ in seen_span:
                 n_dup_span += 1
                 continue
@@ -5318,10 +5448,16 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     pts = [p for r, p in data if tuple((r[i].strip() if i is not None and i < len(r) else "") for i in ixk) == (kel, kec, city, prov)]
                     cx_ = sum(q.x() for q in pts) / len(pts)
                     cy_ = sum(q.y() for q in pts) / len(pts)
-                    qc.append((QgsPointXY(cx_, cy_), "ADMIN_" + stt,
+                    # 3.15.4: kelurahan yang tidak ditemukan di FINDIM LAMA (> 90 hari) dan tanpa ejaan mirip di kecamatan
+                    # yang sama belum tentu salah (wilayah baru belum masuk FINDIM) -> WARNING 'minta FINDIM terbaru',
+                    # selaras dengan perlakuan ID cluster yang belum terdaftar. Salah ketik (ada ejaan mirip) tetap ERROR.
+                    lama_ = stt == "KELURAHAN_TIDAK_ADA" and findim_stale_ and not sug
+                    qc.append((QgsPointXY(cx_, cy_), "WARN_ADMIN_KELURAHAN_BELUM_DI_FINDIM" if lama_ else "ADMIN_" + stt,
                                "%d HP: %s/%s/%s -> FINDIM %s%s" % (n, kel, kec, city,
                                                                    ("Kec. %s, %s" % (best["kec"], best["city"])) if best else "tidak ada",
-                                                                   (". Mungkin maksudnya %s" % sug[0]) if sug else "")))
+                                                                   (". Mungkin maksudnya %s" % sug[0]) if sug else (
+                                                                       "; file FINDIM yang dipakai sudah lama - belum tentu salah, "
+                                                                       "minta FINDIM terbaru sebelum menolak" if lama_ else ""))))
                 if best and ipos is not None:
                     pos = {r[ipos] for r, _ in data if ipos < len(r) and r[ipos] not in ("", "-")}
                     if best["pos"] and pos and pos != {best["pos"]}:
@@ -5382,10 +5518,28 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     newer_ = bool(same_) and int(cl_id) > max(same_)
                     import difflib as _dl
                     lab_ = re.sub(r"[^A-Z0-9 ]", " ", cluster_label(outdir, hpdb).upper())
-                    sug_ = sorted(((_dl.SequenceMatcher(None, lab_, re.sub(r"[^A-Z0-9 ]", " ", str(v_[0]).upper())).ratio(), k_, v_[0])
-                                   for k_, v_ in att["olt"].items()), reverse=True)[:1]
+                    # 3.15.3: batas atas murah (real_quick_ratio/quick_ratio) dulu; ratio() penuh hanya untuk nama yang masih
+                    # mungkin >= 0,6. Hasil sama, tetapi tidak lagi +-5 detik per cluster yang ID-nya belum ada di FINDIM.
+                    sm_ = _dl.SequenceMatcher(None)
+                    sm_.set_seq1(lab_)
+                    sug_ = []
+                    for k_, v_ in att["olt"].items():
+                        nm_ = re.sub(r"[^A-Z0-9 ]", " ", str(v_[0]).upper())
+                        if 2.0 * min(len(lab_), len(nm_)) < 0.6 * (len(lab_) + len(nm_)):
+                            continue          # batas atas dari panjang saja (= real_quick_ratio) sebelum menyiapkan pembanding
+                        sm_.set_seq2(nm_)
+                        if sm_.real_quick_ratio() >= 0.6 and sm_.quick_ratio() >= 0.6:
+                            sug_.append((sm_.ratio(), k_, v_[0]))
+                    sug_ = sorted(sug_, reverse=True)[:1]
                     sug_txt = ("; nama mirip di FINDIM: %s %s" % (sug_[0][1], sug_[0][2])) if sug_ and sug_[0][0] >= 0.6 else ""
-                    if newer_:
+                    if not newer_ and findim_stale_:
+                        # 3.15.4: FINDIM lama -> WARNING (dulu ERROR di daftar temuan padahal remarks hanya mencatatnya)
+                        rep.append("  ! ID cluster %s belum ada di OLT CLUSTER - file FINDIM sudah lama, minta FINDIM terbaru%s"
+                                   % (cl_id, sug_txt))
+                        qc.append((data[0][1], "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
+                                   "ID %s belum ada di OLT CLUSTER; file FINDIM yang dipakai sudah lama (lebih dari 90 hari) - "
+                                   "minta FINDIM terbaru sebelum menolak%s" % (cl_id, sug_txt)))
+                    elif newer_:
                         rep.append("  ! ID cluster %s belum ada di OLT CLUSTER - ID ini lebih baru dari ID terbesar di FINDIM "
                                    "(%d): kemungkinan cluster baru belum terdaftar, minta FINDIM terbaru%s" % (cl_id, max(same_), sug_txt))
                         qc.append((data[0][1], "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
@@ -6759,6 +6913,45 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         return names[k_[1]] if k_[0] == "P" else "titik jalur"
                     xr_ = _osm.crossings([("%s - %s" % (_pn(ka_), _pn(kb_)), (a_.x(), a_.y()), (b_.x(), b_.y()))
                                           for ka_, kb_, _L, a_, b_ in seg_list], roads_, kx_o, ky_o)
+                    # 3.15.2: tiap persilangan dikaitkan dengan RENTANG TIANG yang benar-benar melintang (setelah rentang
+                    # dipecah di tiang yang berdiri di garis), lalu tinggi kabel di tengah rentang itu dibandingkan dengan
+                    # ruang bebas jalan. Dulu nama rentang diambil dari ruas garis (bisa melewati tiang di tengahnya) dan
+                    # tinggi kabel hanya dicatat sebagai info umum karena tidak diketahui rentang mana yang melintang jalan.
+                    def _span_at(lon_, lat_):
+                        best_ = None
+                        px_, py_ = lon_ * kx_o, lat_ * ky_o
+                        for ka_, kb_, L_, pts_ in spans:
+                            for a_, b_ in zip(pts_, pts_[1:]):
+                                ax_, ay_ = a_.x() * kx_o, a_.y() * ky_o
+                                dx_, dy_ = b_.x() * kx_o - ax_, b_.y() * ky_o - ay_
+                                t_ = max(0.0, min(1.0, ((px_ - ax_) * dx_ + (py_ - ay_) * dy_) / ((dx_ * dx_ + dy_ * dy_) or 1e-12)))
+                                d_ = ((px_ - ax_ - t_ * dx_) ** 2 + (py_ - ay_ - t_ * dy_) ** 2) ** 0.5
+                                if best_ is None or d_ < best_[0]:
+                                    best_ = (d_, ka_, kb_, L_)
+                        return best_ if best_ and best_[0] <= 3.0 else None
+                    for x_ in xr_:
+                        x_["clr"] = None
+                        sp0_ = _span_at(x_["lon"], x_["lat"])
+                        if not sp0_:
+                            continue
+                        _d0, ka_, kb_, L_ = sp0_
+                        x_["seg"] = "%s - %s" % (_pn(ka_), _pn(kb_))
+                        x_["span_m"] = L_
+                        if ka_[0] == "P" and kb_[0] == "P" and heights[ka_[1]] and heights[kb_[1]]:
+                            x_["hs"] = "/".join("%g" % heights[k_[1]] for k_ in (ka_, kb_))
+                            x_["clr"] = min(attach_height(heights[k_[1]], embed_frac) for k_ in (ka_, kb_)) - sag_ratio * L_
+
+                    def _clr(x_):
+                        if x_.get("clr") is None:
+                            return ""
+                        return (" Rentang yang melintang %.0f m (tiang %s m): perkiraan kabel di tengah bentang +-%.1f m, %s"
+                                % (x_["span_m"], x_["hs"], x_["clr"],
+                                   ("memenuhi ruang bebas %.1f m." % clear_road) if x_["clr"] >= clear_road else
+                                   ("KURANG dari ruang bebas %.1f m di atas jalan: pakai tiang lebih tinggi (9 m) di kedua "
+                                    "sisi atau perpendek bentang." % clear_road)))
+
+                    def _cv(x_):
+                        return (None, round(x_["clr"], 2), clear_road) if x_.get("clr") is not None else ()
                     used_ = sorted({k_[1] for ka_, kb_, _L, _a, _b in seg_list for k_ in (ka_, kb_) if k_[0] == "P"})
                     cross_poles_ = {nm_ for x_ in xr_ if x_["kind"] in ("tol", "rel") for nm_ in x_["seg"].split(" - ")}
                     near_ = _osm.near_poles([(names[i_], (poles[i_].x(), poles[i_].y())) for i_ in used_
@@ -6808,14 +7001,16 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                        "bupati/wali kota) (Permen PU 20/PRT/M/2010 Pasal 4 dan 5; perizinan via OSS menurut "
                                        "Permen PU 6/2025). Kabel udara >= %.1f m dari permukaan jalan tertinggi, kabel tanah "
                                        ">= 1,5 m, tiang >= 1 m dari tepi bahu/trotoar (Pasal 12). Jalan raya: rumija >= 25 m, "
-                                       "bentang melintang panjang - pastikan tiang di kedua sisi dan izin sebelum desain final.%s"
-                                       % (x_["name"], x_.get("hw", ""), _wd(x_), lok_, src_, clear_road, sp_)))
+                                       "bentang melintang panjang - pastikan tiang di kedua sisi dan izin sebelum desain final.%s%s"
+                                       % (x_["name"], x_.get("hw", ""), _wd(x_), lok_, src_, clear_road, _clr(x_), sp_))
+                                      + _cv(x_))
                         elif x_["kind"] == "sedang":
                             qc.append((pt_, "INFO_JALUR_MELINTAS_JALAN_SEDANG",
                                        "Jalur kabel melintang jalan kolektor/penghubung %s (%s%s; %s; data %s): kabel udara "
                                        ">= %.1f m dari permukaan jalan tertinggi (Permen PU 20/PRT/M/2010 Pasal 12 ayat 6) dan "
-                                       "izin penyelenggara jalan sesuai status jalan.%s"
-                                       % (x_["name"], x_.get("hw", ""), _wd(x_), lok_, src_, clear_road, sp_)))
+                                       "izin penyelenggara jalan sesuai status jalan.%s%s"
+                                       % (x_["name"], x_.get("hw", ""), _wd(x_), lok_, src_, clear_road, _clr(x_), sp_))
+                                      + _cv(x_))
                         else:
                             qc.append((pt_, "INFO_JALUR_MELINTAS_SUNGAI",
                                        "Jalur kabel melintasi sungai/kanal %s (%s; data %s): rentangan kabel di sempadan "
@@ -7116,6 +7311,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             # remarks.build sudah mendukung findim_stale sejak 3.6 tetapi belum pernah diisi: ID cluster baru yang belum ada
             # di FINDIM usang (Pematangsiantar 2026: FINDIM 9 Nov 2022, 1455 hari) ikut jadi alasan reject
             rmk = _remarks.build(fl_, rowmap=hid_row, findim_stale=findim_stale_, route=route_int)
+            try:      # 3.15.3: kode alasan reject (sama untuk gaya rinci & sederhana) untuk penanda di HTML/Word
+                rmk["blocking"] = sorted({getattr(p_, "key", "") for p_ in _remarks.phrases(
+                    fl_, hid_row, findim_stale_, route_int)[0] if p_[1]} - {""})
+            except Exception as _e:
+                _log.note(_e)
             if kmz_only:
                 rmk["text"] = _kt(rmk["text"])
                 rmk["length"] = len(rmk["text"])
@@ -7129,6 +7329,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 rs_["notes"] = rmk["notes"]
                 rs_["dropped"] = rmk["dropped"]
                 rs_["rinci"] = rmk["text"]
+                rs_["blocking"] = rmk.get("blocking") or rs_.get("blocking") or []
                 rmk = rs_
             # 3.14.0: jenis data dinilai otomatis - 1 PIC/berdampingan atau cluster mandiri
             if pic_group:
@@ -7245,7 +7446,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             word_name, snaps_uri, map_data = self._qc_word(
                 qc, outp, inp, kode, cluster_label(outdir, hpdb), std, judul, poles, names, kinds,
                 locals().get("hp_xy") or [], segs, own_bnd, [f["poly"] for f in (locals().get("own_f") or [])], feedback,
-                hp_attrs=hp_attrs, heights=heights, hp_rows=hp_rows, src=src_, others=cross_scene)
+                hp_attrs=hp_attrs, heights=heights, hp_rows=hp_rows, src=src_, others=cross_scene, remarks=rmk)
             from . import mapview as _mv
             map_html = _mv.block(map_data, "Peta temuan QC survei")
         except Exception as e:
@@ -7259,7 +7460,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                  "profile": "%s (%s)" % (opt["prof"]["name"], opt["prof"]["src"]),
                  "ref_dir": funnel_dir, "refs": refs, "qc_counts": qc_counts(qc), "qc_by_std": qc_by_std(qc),
                  "qc_profile_id": qprof.get("profile_id"), "rule_version": qprof.get("rule_version"),
-                 "fid_map": fid_map, "snaps": snaps_uri, "word": word_name, "map_html": map_html,
+                 "fid_map": fid_map, "snaps": snaps_uri, "word": word_name, "map_html": map_html, "remarks": rmk,
                  "evidence": (map_data or {}).get("EV", {}) if "map_data" in locals() else {},
                  "qc_params": [(k, e.get("v"), e.get("unit"), _qc.DASAR_LABEL.get(e.get("dasar"), e.get("dasar")),
                                 e.get("sumber"), e.get("status")) for k, e in qprof["params"].items()

@@ -340,8 +340,15 @@ def _embed(r, base_dir):
     p = r.get("laporan") or ""
     if not p.lower().endswith(".html") or not os.path.isfile(p):
         return None
-    with open(p, "r", encoding="utf-8") as fh:
-        h = fh.read()
+    h = None
+    try:
+        from . import report_html as _rh
+        h = _rh.LAST_HTML.get(os.path.normcase(os.path.abspath(p)))
+    except Exception:
+        h = None
+    if h is None:
+        with open(p, "r", encoding="utf-8") as fh:
+            h = fh.read()
     w = r.get("word") or ""
     if w:
         bn = os.path.basename(w)

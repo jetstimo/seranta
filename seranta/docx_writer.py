@@ -301,6 +301,14 @@ def qc_report(path, title, subtitle, meta_rows, summary_rows, findings, images, 
         if k < len(findings[:max_findings]) - 1 and (k + 1) % 2 == 0:
             d.page_break()
     if len(findings) > max_findings:
-        d.para([("+%d temuan lain tidak dimuat di dokumen ini; daftar lengkap ada di laporan HTML/CSV." % (len(findings) - max_findings),
-                 {"italic": True})])
+        # 3.15.2: sisanya tetap didaftar (tabel ringkas tanpa gambar), jadi Word memuat SEMUA temuan. Dulu hanya ditulis
+        # 'daftar lengkap ada di laporan HTML', padahal HTML juga membatasi daftar per standar.
+        rest = findings[max_findings:]
+        d.heading("Temuan lain (%d, tanpa gambar)" % len(rest), 1)
+        d.para([("Rincian bergambar di atas memuat %d temuan pertama (paling berat dulu). %d temuan berikut didaftar "
+                 "ringkas; lokasi tiap titik ada di QC_TEMUAN.shp/.kmz dan panel Navigator QC." % (max_findings, len(rest)),
+                 {"color": "393939"})])
+        d.table([("ID", "Tingkat", "Temuan", "Keterangan")] +
+                [(f["fid"], SEV_WORD.get(f["sev"], f["sev"]), f.get("title") or "", f.get("arti") or "-") for f in rest],
+                widths_cm=[1.8, 2.8, 4.2, 8.0])
     return d.save(path)

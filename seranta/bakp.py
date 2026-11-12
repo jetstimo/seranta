@@ -468,7 +468,13 @@ def shrink(a, max_side):
     if f <= 1:
         return a
     hh, ww = (h // f) * f, (w // f) * f
-    return a[:hh, :ww].reshape(hh // f, f, ww // f, f, 3).mean(axis=(1, 3)).astype(np.uint8)
+    # 3.15.2: jumlah bilangan bulat per sumbu lalu bagi (hasil sama persis dengan rata-rata float yang dipotong ke
+    # uint8, tetapi beberapa kali lebih cepat: dulu langkah ini +-1 detik per BAKP hasil scan)
+    acc = np.zeros((hh // f, ww // f, 3), dtype=np.uint32)
+    for i in range(f):
+        for j in range(f):
+            acc += a[i:hh:f, j:ww:f]
+    return (acc // (f * f)).astype(np.uint8)
 
 
 def fit(a, max_side):

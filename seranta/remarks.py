@@ -50,6 +50,7 @@ PRIORITY = [
     "WARN_JALUR_MELINTAS_JALAN_BESAR", "WARN_TIANG_DEKAT_JALAN_TOL", "WARN_TIANG_DEKAT_REL",
     "WARN_HP_KOORDINAT_BEDA_FOTO", "WARN_JALUR_LEWAT_AREA_TANPA_IZIN",
     "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
+    "WARN_ADMIN_KELURAHAN_BELUM_DI_FINDIM",
     "COLO_TITIK_MASUK_TIDAK_DI_JALUR", "COLO_HP_TIDAK_TERJANGKAU_JALUR", "WARN_TIANG_LUAR_BOUNDARY", "WARN_JALUR_LUAR_BOUNDARY",
     "WARN_JALUR_BERTUMPUK",
     "WARN_TSSR_ID_BEDA", "WARN_TSSR_HP_BEDA", "WARN_TSSR_DIPAKAI_BERSAMA", "INFO_HP_TERCOVER_TIANG_SAUDARA", "INFO_HP_DI_BOUNDARY_SAUDARA_1PIC", "INFO_RENTANG_DITUMPU_TIANG_SAUDARA",
@@ -489,6 +490,8 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
                 "sheet Pole beda dgn KMZ")
         elif key == "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR":
             notes.append("ID cluster belum terdaftar di FINDIM OLT CLUSTER (cek FINDIM terbaru)")
+        elif key == "WARN_ADMIN_KELURAHAN_BELUM_DI_FINDIM":
+            notes.append("kelurahan di HPDB belum ada di FINDIM; file FINDIM lama - cek versi terbaru dulu, bukan alasan reject")
         # ---- 3.9.5 (review Jambi Argenta, Tegal, Minahasa, Cianjur November 2026) ----
         elif key == "HP_DI_AREA_TANPA_IZIN":
             m = re.search(r"di dalam area '([^']*)'", L[0]["ket"] or "")
@@ -815,11 +818,17 @@ def build_simple(findings, rowmap=None, findim_stale=False, max_len=MAX_LEN, rou
     blocking = any(p[1] for p in ph)
     status, head = ("REJECT", "Reject: ") if blocking else ("APPROVE DENGAN CATATAN", "Approve dengan catatan: ")
     ph.sort(key=lambda t: (not t[1], t[0]))
-    items = []
+    # 3.15.4: remarks lebih mudah dibaca. REJECT hanya menyebut ALASAN REJECT (paling banyak tiga, yang terberat dulu);
+    # hal lain yang bukan alasan reject tidak dicampur ke kalimat reject, tetapi tetap tercatat di REMARKS.txt (daftar
+    # 'temuan lain') dan di laporan. Approve dengan catatan menyebut paling banyak tiga catatan.
+    items, lain = [], []
     for p in ph:
         t = _simple_of(p)
-        if t and t not in items:
-            items.append(t)
+        if not t or t in items or t in lain:
+            continue
+        (items if (p[1] or not blocking) else lain).append(t)
+    semua = list(items)
+    items = items[:3]
 
     def compose(it, more):
         if not it:
@@ -828,14 +837,16 @@ def build_simple(findings, rowmap=None, findim_stale=False, max_len=MAX_LEN, rou
         body = body[0].upper() + body[1:]
         return head + body + (", dan masalah lain" if more else "") + ". " + SIMPLE_TAIL
     used = list(items)
-    text = compose(used, False)
+    text = compose(used, len(semua) > len(used))
     while len(text) > max_len and len(used) > 1:
         used.pop()
         text = compose(used, True)
     if len(text) > max_len:
         text = text[:max_len - 1].rstrip() + "."
-    dropped = [t for t in items if t not in used]
-    return {"status": status, "text": text, "length": len(text), "used": used, "dropped": dropped, "notes": notes}
+    dropped = [t for t in semua if t not in used] + lain
+    # 3.15.3: kode temuan yang menjadi alasan reject, agar HTML dan Word menandai temuan yang sama
+    return {"status": status, "text": text, "length": len(text), "used": used, "dropped": dropped, "notes": notes,
+            "blocking": sorted({getattr(p, "key", "") for p in ph if p[1]} - {""})}
 
 
 def build(findings, rowmap=None, findim_stale=False, max_len=MAX_LEN, route=True, style="rinci"):

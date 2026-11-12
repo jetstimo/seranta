@@ -213,8 +213,12 @@ def _csv_head(path, nrows=25):
     return [("csv", rows)]
 
 
+_HDR_TYPO = re.compile(r"(?i)LONG?T+ITUDE|LONGT?ITUTE|LATT+ITUDE|LATT?ITUTE")   # 3.15.7: sama dengan buat_input_desain
+
+
 def _norm(s):
-    return re.sub(r"[^A-Z0-9]", "", str(s or "").upper())
+    s = _HDR_TYPO.sub(lambda m: "LONGITUDE" if m.group(0).upper().startswith("LON") else "LATITUDE", str(s or ""))
+    return re.sub(r"[^A-Z0-9]", "", s.upper())
 
 
 def _coord_ok(lat, lon):
