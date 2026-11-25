@@ -21,7 +21,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.15.10"
+__version__ = "3.15.11"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -3401,7 +3401,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             options=self.SPAN_SCOPE_OPTS, defaultValue=0))
         self._adv(QgsProcessingParameterNumber(
             self.FUN_TOL, self.tr("Homepass outside the service boundary but within this distance = edge note (m; 0 = strict)"),
-            type=NUM_DOUBLE, defaultValue=15.0, minValue=0))
+            type=NUM_DOUBLE, defaultValue=0.0, minValue=0))
         self._adv(QgsProcessingParameterBoolean(
             self.CROSS, self.tr("Cross-cluster check: duplicate homepasses and homepasses inside a neighbouring cluster boundary"),
             defaultValue=True))
@@ -4498,7 +4498,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         snap_m, span_max, hp_max = o["snap_m"], o["span_max"], o["hp_max"]
         refill, workdir, funnel_dir = o["refill"], o["workdir"], o["funnel_dir"]
         colo_max, hp_per_spl, max_spl, colo_log = o["colo_max"], o["hp_per_spl"], o["max_spl"], o["colo_log"]
-        exist_span, hp_tol, fun_tol = o["exist_span"], o["hp_tol"], o.get("fun_tol", 15.0)
+        exist_span, hp_tol, fun_tol = o["exist_span"], o["hp_tol"], o.get("fun_tol", 0.0)
         # profil standar QC (profiles/*.json): angka berbasis regulasi/standar/riset + status pengesahan
         qprof = o.get("qc_profile") or _qc.get_profile("APD_1X4")[0]
 
