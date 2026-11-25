@@ -1,7 +1,9 @@
 name: Release
 # Rilis baru: naikkan "version" dan "changelog" di seranta/metadata.txt, commit, lalu buat tag yang sama, mis.
 #   git tag v3.4.1 && git push origin v3.4.1
-# Workflow ini menguji, membuat ZIP, melampirkannya ke GitHub Release, lalu mengunggahnya ke plugins.qgis.org.
+# Rilis resmi (3.15.9+) ditandatangani di laptop dan zip-nya dilampirkan manual: saat tag didorong workflow ini HANYA
+# memeriksa (versi, uji, validasi ZIP) dan TIDAK mengunggah apa pun, supaya zip bertanda tangan tidak ditimpa
+# (3.15.7: zip rilis tertimpa zip buatan CI). Unggah otomatis hanya lewat tombol "Run workflow" (workflow_dispatch).
 on:
   push:
     tags: ["v*"]
@@ -22,7 +24,7 @@ jobs:
       - name: Tag must match metadata version
         id: ver
         run: |
-          V=$(grep -m1 '^version=' seranta/metadata.txt | cut -d= -f2)
+          V=$(grep -m1 '^version=' seranta/metadata.txt | cut -d= -f2 | tr -d '\r ')
           echo "tag=v$V" >> "$GITHUB_OUTPUT"
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             test "v$V" = "${GITHUB_REF_NAME}" || { echo "Tag ${GITHUB_REF_NAME} != metadata v$V"; exit 1; }
@@ -40,6 +42,8 @@ jobs:
           python seranta/tests/test_v314.py
           python seranta/tests/test_v3141.py
           python seranta/tests/test_v3150.py
+          python seranta/tests/test_v351.py
+          python seranta/tests/test_v353.py
       - name: Brand-neutral texts
         env:
           BRAND_DENYLIST: ${{ secrets.BRAND_DENYLIST }}
@@ -47,6 +51,7 @@ jobs:
       - name: Build ZIP
         run: python scripts/release.py seranta dist --strict
       - name: GitHub Release
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.ver.outputs.tag }}
@@ -55,5 +60,5 @@ jobs:
           files: dist/*.zip
           generate_release_notes: true
       - name: Upload to plugins.qgis.org
-        if: ${{ env.OSGEO_USER != '' }}
+        if: ${{ github.event_name == 'workflow_dispatch' && env.OSGEO_USER != '' }}
         run: python scripts/upload_plugin.py dist/seranta.*.zip
