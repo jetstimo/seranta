@@ -242,7 +242,7 @@ def _group_remarks(kind, status, wil, mem, n_hp, ov_pairs, ov_hp, pole_new, pole
                                                 ("%s+ FDT baru" % (" " if nx else "")) if plan["baru"] else ""),
                      "FDT tdk terpadu"))
     if n_mix:
-        cand.append(("%d HP berlabel cluster lain di HPDB" % n_mix, "label HPDB campur"))
+        cand.append(("%d HP CLUSTER_NAME HPDB tidak seragam (mis. ditulis per RT)" % n_mix, "label HPDB campur"))
     if pole_ex:
         cand.append(("%d tiang eksisting dicatat 2 cluster" % pole_ex, "tiang eksisting ganda"))
     if docs_short:
@@ -407,7 +407,7 @@ def summarize(g, hp_per_spl=32, fdt_cap=384, ratio=4):
                  "dari tiang bersama, bukan alasan reject" % (n_cov, "; ".join(
                      "%s %d HP" % (_sname(r), r["hp_cover_sib"]) for r in mem if r.get("hp_cover_sib"))))
     if n_mix:
-        L.append("  Label HPDB       : %s" % "; ".join("%s %d HP berlabel cluster lain" % (_sname(r), r["label_mix"])
+        L.append("  Label HPDB       : %s" % "; ".join("%s %d HP CLUSTER_NAME tidak seragam" % (_sname(r), r["label_mix"])
                                                      for r in mem if r.get("label_mix")))
     L.append("  Hubungan antar anggota:")
     all_bakp = len(bakp_k) == len(mem)
@@ -567,7 +567,7 @@ def summarize_strand(st, grp_sums, hp_per_spl=32, fdt_cap=384):
     if any(s_["plan"]["terpadu"] is False for _g, s_ in subs):
         cand.append(("rencana FDT sub-jaringan tdk terpadu", "FDT tdk terpadu"))
     if mix:
-        cand.append(("%d HP berlabel cluster lain di HPDB" % sum(r["label_mix"] for r in mix), "label HPDB campur"))
+        cand.append(("%d HP CLUSTER_NAME HPDB tidak seragam (mis. ditulis per RT)" % sum(r["label_mix"] for r in mix), "label HPDB campur"))
     if n_rej:
         cand.append(("%d/%d cluster reject" % (n_rej, len(mem)), "%d reject" % n_rej))
     ncl = ("%d dari %d cluster" % (len(mem), n_all)) if outside else ("%d cluster" % len(mem))

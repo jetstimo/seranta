@@ -41,6 +41,55 @@ mis. sudut belok, toleransi snap, dan toleransi FAT ke tiang.
 - **K-Means/K-Medoids penempatan ODP** (Transient Undip 2019, 2023): mendukung FAT di medoid HP yang digeser ke tiang.
 - **Handbook KMZ internal** (34 kasus QC hlm. 22–40) dan **config desain otomatis** splitter 1x4 / 1x8: FAT 8–16 (target 15), MAXPPDIST 120/130 m, FDT 384/480 HP, splitter 1:4 maks 12 / 1:8 maks 8, COLO ≤ 1 km, slack 250 m, loop ≤ 100 m / 2 span.
 
+## Alat 1 — keputusan Reject / Approve dengan catatan (kajian 3.15.8)
+Prinsip: **setiap pelanggaran aturan/standar review = REJECT**, tanpa ambang jumlah (keputusan pengguna 22 Nov 2026: "jarak
+tiang ke rumah > 50 m tetap ketat tidak boleh, begitu pula tiang ke tiang > 60 m"). APPROVE DENGAN CATATAN hanya untuk hal
+yang bukan pelanggaran aturan: estimasi yang perlu dicek lapangan, batas regulasi daerah yang belum tentu berlaku, data
+pembanding usang, dan info.
+
+| Golongan alasan REJECT | Kode | Aturan yang dilanggar |
+|---|---|---|
+| Jarak HP ke tiang | HP_JAUH_DARI_TIANG (> 50 m) | Standar 1; Handbook kasus 12 |
+| Jarak tiang ke tiang | RENTANG_NP_NP / RENTANG_NP_EP (> 60 m) | Standar 9; USDA RUS 1751F-630 |
+| Tiang tanpa route | TIANG_NGANGGUR (tiang baru tidak dilewati jalur) | masukan pengguna 23 Nov 2026 |
+| Kabel harus ditumpu tiang | JALUR_TANPA_TIANG, UJUNG_JALUR_TANPA_TIANG, WARN_SIMPANG_TANPA_TIANG, JALUR_TERPUTUS | sama dengan batas span; sambungan & tambat di tiang (FOA; ITU-T G.984.1) |
+| HP dobel / data tidak cocok | HP_DUPLIKAT_*, HP_HPDB_TIDAK_ADA_DI_KMZ, HP_KMZ_TIDAK_ADA_DI_HPDB, ADMIN_ | Standar 3 dan 4 |
+| Area & izin | HP_LUAR_FUNNEL, HP_LUAR_BOUNDARY, HP/TIANG_DI_AREA_TANPA_IZIN, HP_DI_FUNNEL_LAIN, HP_DI_RFS_*, FUNNEL_SENDIRI_REJECT, BOUNDARY_TIDAK_ADA | Standar 2, 5, 6 |
+| Dobel dengan cluster lain | CLUSTER_GANDA_DESAIN, HP_DUPLIKAT_LINTAS_CLUSTER, HP_DI_BOUNDARY_CLUSTER_LAIN, WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN (tiang di/dicatat cluster lain = catatan BOQ sejak 23 Nov 2026) | Standar 2 dan 4 (HP & BOQ dihitung dua kali) |
+| BAKP (izin warga) | UNV_BAKP_NOT_SUPPLIED (BAKP tidak dilampirkan; BAKP kelurahan di folder induk / cluster saudara sewilayah dipakai bersama dengan catatan), BAKP_HP_KURANG, BAKP tempelan/diedit, ID BAKP beda | Standar 8 |
+| Hukum persilangan | JALUR_MELINTAS_OBSTACLE (data obstacle tim), WARN_JALUR_MELINTAS_REL_NONAKTIF, JALUR_MELINTAS_TOL, JALUR_MELINTAS_REL, **WARN_TIANG_DEKAT_JALAN_TOL (< 15 m)**, **WARN_TIANG_DEKAT_REL (< 10 m, rel aktif)** | PP 23/2024; PP 34/2006 Ps. 40; PM Perhubungan 36/2011 Ps. 7 & 11 (3.15.8: tiang di rumija tol / ruang sisi rel aktif kini alasan reject, setara memotong tol/rel) |
+
+**Masukan pengguna 23 Nov 2026 (3.15.8):**
+1. Wilayah: kelurahan & kecamatan HPDB dan BAKP merujuk FINDIM (hpdb attributes). Beda wilayah atau ejaan = REJECT; kelurahan
+   yang tidak ada di FINDIM kini selalu REJECT (dulu peringatan bila FINDIM > 90 hari). Daftar periksa BAKP menulis wilayah
+   FINDIM sebagai nilai wajib; nama file BAKP yang menyebut kelurahan/kecamatan lain di kota yang sama =
+   WARN_BAKP_WILAYAH_LAIN_DI_NAMA_FILE (hanya bila wilayah HPDB cocok FINDIM).
+2. Tiang yang masuk/tercatat di cluster lain (WARN_TIANG_GANDA_LINTAS_CLUSTER, TIANG_BARU_GANDA_SAUDARA) = catatan BOQ, bukan
+   alasan reject.
+3. Tiang baru tanpa route (TIANG_NGANGGUR) = REJECT.
+4. 1 PIC: HP duplikat dengan cluster lain tetap REJECT; kemungkinan duplikat (WARN/INFO_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER)
+   wajib tertulis di remarks sebagai catatan.
+5. OBSTACLE tim ('Obstacle (Rel KAI, Toll, dll).kmz' di folder referensi): jalur kabel yang memotong rel KA aktif/non aktif,
+   jalan tol, rencana tol, kawasan hutan lindung/industri/militer, atau memotong/menyusuri (>= 20 m dalam 10 m) jalan rencana
+   penurunan kabel = JALUR_MELINTAS_OBSTACLE (ERROR, REJECT). Rel KA non aktif dari OSM (bukan rel lori) juga REJECT.
+
+**NO SPACE = lahan kosong (keputusan pengguna 24 Nov 2026):** poligon 'NO SPACE' di folder BOUNDARY bukan area tolak izin. Tiang & jalur yang lewat = boleh; HP di dalamnya = WARN_HP_DI_AREA_NO_SPACE (cek poligon/koordinat). Area bertuliskan tidak dapat izin / tanpa izin / ditolak / DROP tetap HP/TIANG_DI_AREA_TANPA_IZIN (REJECT).
+
+**Siapa yang salah (lintas cluster, 3.15.8):** bila funnel kedua cluster berbeda, tiang dobel, HP di BOUNDARY cluster lain
+dan BOUNDARY bertumpuk dinilai menurut funnel. Cluster yang tiang/BOUNDARY-nya keluar dari funnel sendiri = alasan reject;
+cluster yang benar (tiang/HP/irisan di funnel sendiri) cukup catatan INFO_TIANG_MILIK_CLUSTER_INI_DICATAT_SAUDARA,
+INFO_HP_BENAR_BOUNDARY_SAUDARA_MASUK, INFO_BOUNDARY_SAUDARA_MASUK_FUNNEL_INI (uji Tomohon Matani Satu, Minahasa Tuutu &
+Tataaran Patar, 23 Nov 2026). Tanpa data funnel atau bila titik di kedua/tidak di funnel mana pun: kedua cluster tetap reject.
+
+**Nomor rumah sama di cluster tetangga (3.15.8):** bukan HP duplikat bila tiap rumah ada di BOUNDARY clusternya sendiri
+(tidak di BOUNDARY cluster lain) dan masing-masing bagian dari deret nomor clusternya di jalan itu (nomor n+-1/n+-2 dalam
+30 m) - penomoran rumah per RT/RW (uji Tegal Pedagangan: Jl. Jeruk No 06-08 RW 04 RT 2 vs RW 03 RT 03, +-25 m).
+INFO_HP_NOMOR_SAMA_DERET_BEDA, cek citra bila ragu.
+
+Bukan alasan reject (catatan): HP > 50 m hanya bila diukur lewat jalur/akses (estimasi, cek akses), span 50-60 m (batas
+regulasi daerah), HP yang dijangkau tiang cluster
+saudara 1 PIC, persilangan jalan besar (izin rutin penyelenggara jalan), rel nonaktif (izin aset KAI), ID cluster yang belum
+ada di FINDIM usang.
 ## Alat 1 — QC strand
 | Pemeriksaan | Nilai (profil APD_1X4) | Tingkat | Dasar |
 |---|---|---|---|
@@ -103,7 +152,7 @@ dengan tiang terdekat (kabel drop lebih pendek). Parameter `cross_name_match_m` 
 Dengan feeder 5 km, konfigurasi 1:4 × 1:8 (1:32) menghasilkan ±26,7 dB. Hasil ini masih ≤ 28 dB, tetapi sisa margin hanya ±1,3 dB.
 
 ## Alat 1 — catatan hasil uji lapangan 3.3.0
-- Rentang yang melebihi batas kurang dari akurasi GPS ponsel (±5 m) tetap CEK, tetapi diberi catatan "ukur ulang di lapangan" (selisih ukur bukan bukti pelanggaran; GPS.gov, Merry & Bettinger 2019).
+- Tanpa toleransi (3.15.8, keputusan pengguna 22 Nov 2026): setiap kelebihan dari batas, walau di bawah 1 m, adalah pelanggaran dan alasan reject (dulu selisih <= 1 m hanya catatan "ukur ulang").
 - Titik foto bukti (sub-folder EVIDANCE/EVIDENCE di dalam folder HP) dipakai untuk memasangkan HPDB, tetapi tidak dilaporkan sebagai HP lebih.
 
 ## Alat 4 — QC APD pasca-desain (34 kasus Handbook KMZ)
@@ -142,6 +191,8 @@ ini dilaporkan **UNVERIFIED**, bukan lolos. Kasus 23/26 dicek oleh alat 3 dari s
 | WARN_POLE_SHEET_BEDA_KMZ | Sheet tiang HPDB: tinggi beda, posisi > 5 m, baris koordinat ganda | WARNING | Konsistensi HPDB-KMZ |
 | WARN_HP_TANPA_EVIDENCE | HP tanpa foto ≤ 5 m atau berlabel sama ≤ 30 m (Evidence*.xlsx + folder EVIDENCE KMZ) | WARNING | Standar Review Strand |
 | WARN_CLUSTER_NAME_KOSONG | CLUSTER_NAME kosong/'-' | WARNING | Format HPDB |
+| WARN_ADMIN_FINDIM_TIDAK_KONSISTEN | Baris FINDIM pembanding tidak konsisten di dalam barisnya sendiri (kolom deskriptif vs kolom akhir: kota/kabupaten beda dan kelurahan/kecamatan beda) - 3.15.8 | WARNING (bukan alasan reject; standar 3 [CEK] belum terverifikasi) | Data referensi cacat |
+| WARN_CLUSTER_GANDA_DESAIN | Desain di FDT sekitar (<= 1,5x batas colo) bernama cluster sama/mirip dengan ID lain - 3.15.8 | WARNING (standar 6 [CEK]) | Cegah cluster ganda / double tagging |
 | WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR | ID tidak ada di OLT CLUSTER dan lebih besar dari ID terbesar berawalan 7 digit sama | WARNING | Data referensi tertinggal |
 | Duplikat label | Nomor rumah sama di blok berbeda (HOMEPASS_ADDRESS_BLOCK terisi keduanya) bukan duplikat | — | Alamat |
 | Tinggi tiang | 'NP-11' (tanda hubung) = nomor urut; NP+angka tanpa 'M' hanya 6/7/9 m | — | Review Jambi |
@@ -452,6 +503,8 @@ OSM bukan status hukum jalan; temuan adalah indikasi untuk ditinjau. Kajian 10 N
 | WARN_TIANG_DEKAT_REL | tiang NP baru < 10 m dari as rel | WARNING | PM 36/2011 Ps. 7 huruf b; PP 56/2009 Ps. 59 ayat 1, Ps. 82 |
 | INFO_JALUR_MELINTAS_JALAN_SEDANG | memotong secondary/tertiary (sudut >= 25°) | INFO | Permen PU 20/PRT/M/2010 Ps. 5, 12 ayat 6 |
 | INFO_JALUR_MELINTAS_SUNGAI | memotong waterway=river/canal | INFO | Permen PUPR 28/PRT/M/2015 Ps. 22; Permen PUPR 3/2023 |
+| WARN_JALUR_MELINTAS_REL_NONAKTIF | memotong railway=disused/abandoned/preserved/razed atau disused:/abandoned:/razed:railway, historic=railway, atau garis di file lokal *REL_NONAKTIF* / *ASET_KAI* (3.15.8: dilengkapi kueri Overpass khusus, cache 180 hari) | WARNING | PP 56/2009 Ps. 59 ayat 1 (bangunan di ruang milik jalur KA wajib izin pemilik prasarana); izin pemanfaatan aset KAI (Daop/Divre) |
+| INFO_JALUR_MELINTAS_REL_LORI | rel nonaktif bernama/operator lori, Decauville, PG, PTPN, usage=industrial, atau gauge < 1000 mm | INFO | bukan jalur KA umum, bukan aset KAI; izin pemilik lahan PG/PTPN bila masih miliknya |
 
 Pembanding internasional: NESC (IEEE C2) Tabel 232-1 (kabel komunikasi: 4,7 m di atas jalan, 7,2 m di atas rel);
 ITU-T L.56/L.158 (kabel optik sepanjang rel). Desain di atas rel disarankan >= 7 m.

@@ -37,11 +37,16 @@ def find_tssr(folder):
             from . import kenali as _k
         except ImportError:
             import kenali as _k
-        for f in sorted(os.listdir(folder)):
-            p = os.path.join(folder, f)
-            if f.lower().endswith(".docx") and not f.startswith("~$") and os.path.isfile(p) \
-                    and not re.search(r"BAKP|BERITA|KESEPAKATAN|PERI[JZ]INAN", f, re.IGNORECASE) and _k.docx_is_tssr(p):
-                hits.append(p)
+        # 3.15.8: juga satu tingkat subfolder (mis. 'DOKUMEN\laporan survei.docx'), sama seperti pencarian menurut nama
+        for root, dirs, files in os.walk(folder):
+            rel = os.path.relpath(root, folder)
+            depth = 0 if rel == "." else rel.count(os.sep) + 1
+            dirs[:] = sorted(d for d in dirs if not d.upper().startswith(SKIP_DIRS)) if depth < 1 else []
+            for f in sorted(files):
+                p = os.path.join(root, f)
+                if f.lower().endswith(".docx") and not f.startswith("~$") \
+                        and not re.search(r"BAKP|BERITA|KESEPAKATAN|PERI[JZ]INAN", f, re.IGNORECASE) and _k.docx_is_tssr(p):
+                    hits.append(p)
     return hits
 
 

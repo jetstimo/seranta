@@ -459,12 +459,26 @@ TOOL1_KIND = [
     ("WARN_TIANG_DEKAT_JALAN_TOL", "Tiang baru berdiri < 15 m dari jalur jalan tol: kemungkinan di dalam ruang milik jalan tol "
      "(lebar minimal 30 m, PP 34/2006 Pasal 40 ayat 1).", "Geser tiang menjauhi tol, atau pastikan batas pagar rumija di "
      "lapangan; penempatan sejajar di rumija tol wajib izin Dirjen Bina Marga + BPJT/BUJT."),
+    ("JALUR_MELINTAS_OBSTACLE", "Jalur kabel melintasi obstacle dari data obstacle tim: rel KA aktif/non aktif, jalan tol atau "
+     "rencana tol, jalan rencana penurunan kabel, kawasan hutan lindung, kawasan industri atau kawasan militer.",
+     "Pindahkan rute agar tidak melintasi obstacle, atau lampirkan izin pemilik/pengelola kawasan bila memang diizinkan."),
+    ("WARN_BAKP_WILAYAH_LAIN_DI_NAMA_FILE", "Nama file BAKP menyebut kelurahan/kecamatan lain dari cluster ini (menurut FINDIM).",
+     "Pastikan BAKP dibuat untuk kelurahan & kecamatan cluster ini sesuai FINDIM; wilayah berbeda = reject."),
+    ("WARN_ID_CLUSTER_TIDAK_DIKETAHUI", "ID cluster (9-12 digit) tidak ditemukan di nama berkas/folder maupun isi berkas.",
+     "Beri nama berkas sesuai pola <ID>_<nama cluster> (HPDB, KMZ, BAKP, TSSR) agar ID di FINDIM, di BAKP dan cluster ganda "
+     "bisa dicek otomatis."),
+    ("WARN_TIANG_DEKAT_REL_NONAKTIF", "Tiang baru berdiri < 10 m dari rel kereta nonaktif (data OSM).",
+     "Jalur KA tidak beroperasi, tetapi lahannya umumnya aset KAI: pastikan tiang di luar lahan KAI atau ada izin "
+     "pemanfaatan aset (PP 56/2009 Pasal 59)."),
     ("WARN_TIANG_DEKAT_REL", "Tiang baru berdiri < 10 m dari as rel kereta (PM Perhubungan 36/2011 Pasal 7 huruf b).",
      "Geser tiang >= 10 m dari as rel; utilitas sejajar rel hanya di luar ruang manfaat jalur KA, masuk ruang milik jalur KA "
      "wajib izin pemilik prasarana (PP 56/2009 Pasal 59 dan 82)."),
     ("INFO_JALUR_MELINTAS_JALAN_SEDANG", "Jalur kabel melintang jalan kolektor/penghubung (secondary/tertiary di OSM).",
      "Kabel udara >= 5 m dari permukaan jalan tertinggi (Permen PU 20/PRT/M/2010 Pasal 12 ayat 6) dan izin penyelenggara "
      "jalan sesuai status jalan. Cek aturan daerah yang bisa lebih ketat."),
+    ("INFO_JALUR_MELINTAS_REL_LORI", "Jalur kabel melintasi bekas rel lori pabrik gula/perkebunan (data OSM).",
+     "Rel lori (Decauville, lebar 600-750 mm) milik PG/PTPN, bukan jalur KA umum dan bukan aset KAI. Cek di lapangan; "
+     "bila lahannya masih milik PG/PTPN, minta izin pemiliknya."),
     ("INFO_JALUR_MELINTAS_SUNGAI", "Jalur kabel melintasi sungai/kanal (data OSM).",
      "Rentangan kabel di sempadan sungai wajib izin dengan rekomendasi teknis pengelola SDA (Permen PUPR 28/2015 Pasal 22). "
      "Pastikan tiang di kedua tepi dan bentang tidak melebihi batas."),
@@ -521,6 +535,32 @@ TOOL1_KIND = [
     ("WARN_ADMIN_KELURAHAN_BELUM_DI_FINDIM", "Kelurahan yang tertulis di HPDB tidak ditemukan di file FINDIM, tetapi file FINDIM "
      "yang dipakai sudah lama (lebih dari 90 hari) dan tidak ada ejaan mirip di kecamatan yang sama: belum tentu salah.",
      "Minta FINDIM terbaru lalu jalankan ulang; bila tetap tidak ada, perbaiki nama kelurahan di HPDB."),
+    ("WARN_ADMIN_FINDIM_TIDAK_KONSISTEN", "Baris FINDIM yang menjadi pembanding tidak konsisten di dalam barisnya sendiri "
+     "(kolom deskriptif dan kolom akhir menyebut kota/kabupaten dan kelurahan/kecamatan yang berbeda), jadi wilayah HPDB "
+     "belum bisa dinilai otomatis. Ini bukan alasan reject.",
+     "Cocokkan wilayah HPDB dengan stempel BAKP dan peta, lalu minta FINDIM terbaru / laporkan baris FINDIM yang rusak."),
+    ("WARN_TIANG_BARU_DEKAT_SAUDARA", "Tiang baru cluster ini berdiri berdekatan (<= 25 m) dengan tiang baru cluster saudara "
+     "satu jaringan di jalur kabel yang sama: satu ruas memakai dua deret tiang.",
+     "Pakai tiang bersama untuk kabel kedua cluster, hapus tiang yang berlebih, dan catat tiang itu sekali di BOQ."),
+    ("WARN_HP_KOORDINAT_BEDA_KMZ","Satu baris HPDB dan satu titik KMZ tidak berpasangan tetapi saling terdekat dalam 10 m: "
+     "kemungkinan rumah yang sama dengan koordinat sedikit bergeser. Jarak ke tiang juga dinilai dengan titik KMZ.",
+     "Samakan koordinat HPDB dengan titik KMZ (atau sebaliknya) setelah dicek di lapangan/citra."),
+    ("ADMIN_KOLOM_BERGESER", "Kolom wilayah HPDB bergeser satu tingkat: nama kecamatan ditulis di kolom kelurahan dan nama "
+     "kota di kolom kecamatan (dibuktikan dari nama cluster, kode pos, dan FINDIM).",
+     "Isi kolom SUBDISTRICT/DISTRICT/CITY sesuai wilayah yang disebut di temuan."),
+    ("WARN_JALUR_LINTAS_FUNNEL_1PIC","Ujung, percabangan, atau bagian jalur cluster ini tersambung tepat ke tiang/jalur "
+     "cluster saudara yang satu jaringan 1 PIC tetapi funnel-nya berbeda. Jalurnya tidak lepas, namun bergantung pada "
+     "jaringan cluster lain.", "Bangun kedua cluster bersama, catat tiang bersama sekali di BOQ, dan rapikan garis agar "
+     "tepat di tiang."),
+    ("CLUSTER_GANDA_DESAIN","Area cluster ini sudah didesain: desain lain di Design Lite bernama cluster sama (ID lain) dan "
+     "minimal separuh jalur kabel cluster ini berimpit (<= 5 m) dengan kabel desain itu. Rumah yang sama akan tercatat dua kali.",
+     "Konfirmasi ke PIC apakah ID ini pengganti; bila ya, batalkan/hapus desain lama di Design Lite dulu, lalu ajukan ulang."),
+    ("INFO_JALUR_BERIMPIT_DESIGN_LITE", "Sebagian besar jalur cluster ini berimpit dengan kabel desain lain di Design Lite "
+     "(nama cluster berbeda).", "Pastikan bukan area yang sama; jalur bersama di jalan yang sama boleh."),
+    ("WARN_CLUSTER_GANDA_DESAIN","Di FDT sekitar sudah ada desain cluster dengan nama sama atau mirip tetapi ID berbeda: "
+     "kemungkinan cluster ini survei ulang / pengganti cluster lama, atau terdaftar dua kali. Rekomendasi colo bisa menghitung "
+     "homepass yang sama dua kali.",
+     "Konfirmasi ke PIC: apakah ID ini menggantikan ID lama (desain lama dibatalkan) atau memang area lain."),
     ("WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR", "ID cluster belum ada di FINDIM, tetapi lebih baru dari semua ID di file FINDIM "
      "yang dipakai: kemungkinan cluster baru yang belum terdaftar.", "Minta FINDIM terbaru sebelum menolak karena ID."),
     ("HP_JAUH_DARI_TIANG", "Rumah terlalu jauh dari tiang terdekat.", "Tambahkan tiang di dekat rumah atau periksa koordinat rumah."),

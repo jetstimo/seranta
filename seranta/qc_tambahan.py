@@ -22,7 +22,10 @@ except ImportError:          # diuji tanpa paket
 # 3.9.5: poligon di folder BOUNDARY yang menandai area TANPA izin / tanpa ruang (review Cianjur Nyalindung 2026:
 # 'TIDAK DAPAT IZIN', 'NO SPACE'). Bukan bagian cakupan cluster: HP/tiang di dalamnya = temuan, bukan "di dalam BOUNDARY".
 EXCL_AREA_RX = re.compile(r"tidak\s*(dapat|ada|boleh|bisa|dapet)\s*(izin|ijin)|tanpa\s*(izin|ijin)|\bno[\s_-]*(space|permit|access)\b"
-                          r"|not\s*(allowed|permitted)|\bexclu|\blarangan\b|\bdilarang\b|\bditolak\b|\bwarga\s*menolak",
+                          r"|not\s*(allowed|permitted)|\bexclu|\blarangan\b|\bdilarang\b|\bditolak\b|\bwarga\s*menolak"
+                          # 3.15.8: poligon 'DROP' (juga salah ketik 'DRUP') di folder BOUNDARY = area yang dikeluarkan
+                          # (uji Cianjur Mekarsari RW 07: 4 poligon DROP dulu ikut dihitung sebagai boundary cluster)
+                          r"|^\s*dr[ou]p(ped)?\s*(area)?\s*\d*\s*$|\bdrop\s*area\b",
                           re.IGNORECASE)
 # karakter tak terlihat di sel HPDB (zero-width, arah teks, BOM, karakter pengganti U+FFFD, kontrol selain tab/baris baru)
 HIDDEN_CHAR_RX = re.compile("[\u200b-\u200f\u202a-\u202e\u2060-\u2064\ufeff\ufffd\x00-\x08\x0b\x0c\x0e-\x1f]")

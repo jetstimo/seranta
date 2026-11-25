@@ -18,10 +18,15 @@ Modul murni Python agar bisa diuji otomatis. Masukan: daftar temuan (kode, keter
 import re
 
 MAX_LEN = 255
-MARGIN_M = 1.0          # selisih <= 1 m dari batas: di bawah galat GPS ponsel (4,9 m) -> catatan, bukan alasan reject
+# 3.15.8 (keputusan pengguna 22 Nov 2026: "lebih 1 meter saja tetap reject"): tanpa toleransi - setiap kelebihan dari
+# batas (HP > 50 m ke tiang, span > 60 m, bentang jalur tanpa tiang > 60 m) adalah alasan reject. Dulu selisih <= 1 m
+# (di bawah galat GPS ponsel) hanya dicatat 'ukur ulang'.
+MARGIN_M = 0.0
 
 # Peringatan yang dianggap menghalangi persetujuan (satu rumah/tiang di dua cluster)
-BLOCKING_WARN = {"WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "WARN_TIANG_GANDA_LINTAS_CLUSTER", "WARN_ID_CLUSTER_GANDA",
+BLOCKING_WARN = {"WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "WARN_ID_CLUSTER_GANDA",
+                 # 3.15.8: rel KA nonaktif = obstacle (data obstacle tim: Rel Non Aktif) -> jalur yang memotongnya reject
+                 "WARN_JALUR_MELINTAS_REL_NONAKTIF",
                  # 3.13.0: percabangan kabel di antara tiang = sambungan tergantung di bentang; sambungan (splice closure)
                  # dipasang di tiang (Fiber Optic Association, Aerial Workmanship)
                  "WARN_SIMPANG_TANPA_TIANG"}
@@ -32,30 +37,39 @@ BLOCKING_WARN = {"WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "WARN_TIANG_GANDA_LINTA
 ROUTE_KEYS = {"JALUR_TANPA_TIANG", "JALUR_TERPUTUS", "UJUNG_JALUR_TANPA_TIANG", "WARN_SIMPANG_TANPA_TIANG",
               "WARN_JALUR_TERPUTUS", "WARN_JALUR_BERSILANG_TANPA_TIANG", "WARN_JALUR_BERTUMPUK",
               "INFO_JALUR_TERSAMBUNG_LEWAT_SAUDARA", "COLO_TITIK_MASUK_TIDAK_DI_JALUR", "COLO_HP_TIDAK_TERJANGKAU_JALUR",
-              "WARN_TIANG_LUAR_BOUNDARY", "WARN_JALUR_LUAR_BOUNDARY", "INFO_TIANG_JALUR_DI_BOUNDARY_SAUDARA"}
+              "WARN_TIANG_LUAR_BOUNDARY", "WARN_JALUR_LUAR_BOUNDARY", "INFO_TIANG_JALUR_DI_BOUNDARY_SAUDARA",
+              "WARN_JALUR_LINTAS_FUNNEL_1PIC"}
 
 # Urutan prioritas (paling berat dulu). Kode yang tidak ada di sini tidak masuk remarks.
 PRIORITY = [
+    "CLUSTER_GANDA_DESAIN",                                                                             # 3.15.8
     "CLUSTER_LAIN_DIGABUNG", "BOUNDARY_MEMUAT_CLUSTER_LAIN", "HP_DUPLIKAT_LINTAS_CLUSTER", "HP_DI_RFS_DONE", "HP_DI_RFS_EXTENSION", "HP_DI_FUNNEL_LAIN",
-    "HP_DI_BOUNDARY_CLUSTER_LAIN", "WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "BAKP_HP_KURANG", "BAKP_STEMPEL_TTD_TEMPELAN_DIGITAL",
+    "HP_DI_BOUNDARY_CLUSTER_LAIN", "WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "UNV_BAKP_NOT_SUPPLIED", "BAKP_HP_KURANG",
+    "BAKP_STEMPEL_TTD_TEMPELAN_DIGITAL", "WARN_ID_CLUSTER_TIDAK_DIKETAHUI", "UNV_BAKP_DARI_CLUSTER_SAUDARA",
     "BAKP_ADA_GAMBAR_TEMPELAN", "BAKP_NAMA_FILE_ID_BEDA", "WARN_BAKP_ID_METADATA_BEDA", "BAKP_DIEDIT_APLIKASI_GRAFIS", "FUNNEL_SENDIRI_REJECT",
     "HP_LUAR_FUNNEL", "HP_LUAR_BOUNDARY", "HP_DI_AREA_TANPA_IZIN", "TIANG_DI_AREA_TANPA_IZIN", "HP_JAUH_DARI_TIANG", "RENTANG_NP_NP", "RENTANG_NP_EP",
     "JALUR_TANPA_TIANG", "JALUR_TERPUTUS", "UJUNG_JALUR_TANPA_TIANG", "WARN_SIMPANG_TANPA_TIANG",      # 3.13.0 integritas jalur
-    "JALUR_MELINTAS_TOL", "JALUR_MELINTAS_REL",                                                          # 3.15.0 standar 10
-    "HP_DUPLIKAT_KOORDINAT", "HP_DUPLIKAT_ID", "HP_DUPLIKAT_LABEL", "HP_HPDB_TIDAK_ADA_DI_KMZ", "HP_KMZ_TIDAK_ADA_DI_HPDB",
+    "JALUR_MELINTAS_TOL", "JALUR_MELINTAS_REL", "JALUR_MELINTAS_OBSTACLE",                                                          # 3.15.0 standar 10
+    "HP_DUPLIKAT_KOORDINAT", "HP_DUPLIKAT_ID", "HP_DUPLIKAT_LABEL", "WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER",
+    "INFO_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER", "WARN_BAKP_WILAYAH_LAIN_DI_NAMA_FILE", "HP_HPDB_TIDAK_ADA_DI_KMZ", "HP_KMZ_TIDAK_ADA_DI_HPDB",
     "HP_SUDAH_ADA_DI_DESIGN_LITE", "TIANG_BARU_SUDAH_ADA", "WARN_TIANG_GANDA_LINTAS_CLUSTER", "WARN_ID_CLUSTER_GANDA",
-    "ADMIN_", "WARN_TIANG_DUPLIKAT_KMZ", "WARN_BELOKAN_TANPA_TIANG", "WARN_JALUR_TERPUTUS", "WARN_JALUR_BERSILANG_TANPA_TIANG",
+    "BOUNDARY_TIDAK_ADA", "TIANG_BARU_GANDA_SAUDARA", "WARN_CLUSTER_GANDA_DESAIN", "WARN_TIANG_BARU_DEKAT_SAUDARA",          # 3.15.8
+    "ADMIN_", "WARN_ADMIN_FINDIM_TIDAK_KONSISTEN", "WARN_TIANG_DUPLIKAT_KMZ", "WARN_BELOKAN_TANPA_TIANG", "WARN_JALUR_TERPUTUS", "WARN_JALUR_BERSILANG_TANPA_TIANG",
     "WARN_POLE_SHEET_BEDA_KMZ", "WARN_CLUSTER_NAME_KOSONG",
     "WARN_HPDB_CLUSTER_NAME_CAMPUR", "WARN_HPDB_RT_RW_TIDAK_SESUAI", "WARN_NAMA_BERKAS_WILAYAH_BEDA", "WARN_BOUNDARY_TIDAK_VALID",
     "WARN_JALUR_MELINTAS_JALAN_BESAR", "WARN_TIANG_DEKAT_JALAN_TOL", "WARN_TIANG_DEKAT_REL",
-    "WARN_HP_KOORDINAT_BEDA_FOTO", "WARN_JALUR_LEWAT_AREA_TANPA_IZIN",
+    "WARN_HP_KOORDINAT_BEDA_FOTO", "WARN_JALUR_LEWAT_AREA_TANPA_IZIN", "WARN_HP_DI_AREA_NO_SPACE",
     "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
     "WARN_ADMIN_KELURAHAN_BELUM_DI_FINDIM",
+    "WARN_JALUR_LINTAS_FUNNEL_1PIC", "WARN_HP_KOORDINAT_BEDA_KMZ", "WARN_JALUR_MELINTAS_REL_NONAKTIF",  # 3.15.8
+    "WARN_TIANG_DEKAT_REL_NONAKTIF",
     "COLO_TITIK_MASUK_TIDAK_DI_JALUR", "COLO_HP_TIDAK_TERJANGKAU_JALUR", "WARN_TIANG_LUAR_BOUNDARY", "WARN_JALUR_LUAR_BOUNDARY",
     "WARN_JALUR_BERTUMPUK",
     "WARN_TSSR_ID_BEDA", "WARN_TSSR_HP_BEDA", "WARN_TSSR_DIPAKAI_BERSAMA", "INFO_HP_TERCOVER_TIANG_SAUDARA", "INFO_HP_DI_BOUNDARY_SAUDARA_1PIC", "INFO_RENTANG_DITUMPU_TIANG_SAUDARA",
     "INFO_TITIK_JALUR_DI_TIANG_SAUDARA", "INFO_JALUR_TERSAMBUNG_LEWAT_SAUDARA", "INFO_TIANG_JALUR_DI_BOUNDARY_SAUDARA",
-    "INFO_BOUNDARY_BERIRISAN_1PIC", "WARN_HPDB_KARAKTER_TERSEMBUNYI", "INFO_BAKP_HASIL_SCAN",      # hanya catatan (bukan alasan reject, tidak mengubah status)
+    "INFO_BOUNDARY_BERIRISAN_1PIC", "WARN_HPDB_KARAKTER_TERSEMBUNYI", "INFO_BAKP_HASIL_SCAN",
+    "INFO_HP_BENAR_BOUNDARY_SAUDARA_MASUK", "INFO_BOUNDARY_SAUDARA_MASUK_FUNNEL_INI", "INFO_TIANG_MILIK_CLUSTER_INI_DICATAT_SAUDARA",
+    "INFO_HP_NOMOR_SAMA_DERET_BEDA",      # hanya catatan (bukan alasan reject, tidak mengubah status)
 ]
 
 
@@ -250,12 +264,19 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
                     "%d HP >%s m ke tiang" % (len(real), lim))
         elif key in ("HP_DUPLIKAT_LABEL", "HP_DUPLIKAT_KOORDINAT", "HP_DUPLIKAT_ID"):
             parts = []
+            kmz_only = all((f["ket"] or "").startswith("KMZ:") for f in L)
             for f in L[:2]:
                 r = _rows_of(f["ket"], rowmap)
                 lab = re.search(r"'([^']+)'", f["ket"])
+                if (f["ket"] or "").startswith("KMZ:"):
+                    # 3.15.8: titik KMZ digambar dua kali (HPDB benar) - jangan ditulis 'HPDB baris X double'
+                    parts.append("titik KMZ %s digambar 2x (rumah HPDB baris %s)" % (
+                        ("'%s'" % lab.group(1)) if lab else "", " & ".join(str(x) for x in r[:3]) or "?"))
+                    continue
                 parts.append("HPDB baris %s%s double" % (" & ".join(str(x) for x in r[:3]),
                                                           (" label %s" % lab.group(1)) if lab and key == "HP_DUPLIKAT_LABEL" else ""))
-            add(key, "; ".join(parts) + (" (+%d lain)" % (n - 2) if n > 2 else ""), "%d HP double di HPDB" % n)
+            add(key, "; ".join(parts) + (" (+%d lain)" % (n - 2) if n > 2 else ""),
+                "%d HP double di %s" % (n, "KMZ" if kmz_only else "HPDB"))
         elif key == "HP_LUAR_FUNNEL":
             mx = max((f.get("val") or 0) for f in L)
             add(key, "%d HP di luar funnel (baris %s; s/d %s m)" % (n, rows_compact(rows, 4), num(mx, 0)),
@@ -357,9 +378,15 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
             # versi pendek agar tetap masuk 255 karakter bila banyak temuan lain (review Jambi 2026: 17 tiang ganda RT 10
             # tidak tercantum karena frasa panjangnya tidak muat)
             ex_all = bool(parts) and all("tiang eksisting dicatat 2x" in x for x in parts)
+            # 3.15.8: tiang EKSISTING (milik pihak lain) yang tercatat di dua cluster satu jaringan bukan BOQ tiang baru
+            # ganda -> catatan administrasi, bukan alasan reject (uji Tegal Pepedan RW 03/04: satu-satunya 'alasan reject'
+            # kedua cluster adalah 2 tiang EP bersama). Tiang BARU ganda tetap alasan reject (BOQ ganda).
             add(key, "; ".join(parts) or "tiang dipakai cluster lain",
                 ("%d tiang ganda dgn %d cluster lain (%s)" % (tot, len(parts), "eksisting" if ex_all else "BOQ"))
-                if parts else None)
+                if parts else None,
+                # 3.15.8 (masukan pengguna 23 Nov 2026: "pole masuk cluster lain tidak apa-apa"): tiang yang juga tercatat /
+                # berdiri di cluster lain bukan alasan reject; catatan agar BOQ tiang dihitung sekali
+                blocking=False)
         elif key.startswith("BAKP_"):
             for f in L:
                 t = f["ket"]
@@ -388,6 +415,14 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
                 elif key == "BAKP_HP_KURANG":
                     add(key, t)
                 break
+        elif key == "UNV_BAKP_NOT_SUPPLIED":
+            # 3.15.8: tanpa BAKP tidak ada bukti izin warga (standar 8) -> alasan reject (dulu tidak masuk remarks: Approve)
+            add(key, "BAKP (izin warga) belum dilampirkan", blocking=True)
+        elif key == "UNV_BAKP_DARI_CLUSTER_SAUDARA":
+            add(key, "BAKP wilayah dipakai bersama dgn cluster saudara: pastikan memuat cluster ini",
+                "BAKP dipakai bersama cluster saudara", blocking=False)
+        elif key == "WARN_ID_CLUSTER_TIDAK_DIKETAHUI":
+            add(key, "ID cluster tidak ditemukan di nama/isi berkas: cek ID manual", "ID cluster tidak diketahui")
         elif key == "ADMIN_":
             stale = [f for f in L if f["kind"] == "ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR"]
             other = [f for f in L if f not in stale]
@@ -399,7 +434,14 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
             if other:
                 nn = sum(int(re.match(r"^(\d+) HP", f["ket"]).group(1)) if re.match(r"^(\d+) HP", f["ket"]) else 0 for f in other)
                 txt = []
-                if any(f["kind"] != "ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR" for f in other):
+                gs_ = [f for f in other if f["kind"] == "ADMIN_KOLOM_BERGESER"]
+                mg_ = re.search(r"Kel\. (.+?), Kec\. (.+?), (.+?) \(kolom wilayah", gs_[0]["ket"] or "") if gs_ else None
+                if mg_:
+                    # 3.15.8: kolom wilayah bergeser satu tingkat -> sebut wilayah yang benar
+                    txt.append("kolom wilayah HPDB bergeser, harus Kel. %s, Kec. %s, %s (%d baris)" % (
+                        mg_.group(1), mg_.group(2), mg_.group(3), nn) if nn else
+                        "kolom wilayah HPDB bergeser, harus Kel. %s, Kec. %s" % (mg_.group(1), mg_.group(2)))
+                elif any(f["kind"] != "ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR" for f in other):
                     txt.append("wilayah HPDB beda FINDIM (%d baris)" % nn if nn else "wilayah HPDB beda FINDIM")
                 if any(f["kind"] == "ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR" for f in other):
                     txt.append("ID cluster tidak ada di FINDIM OLT CLUSTER")
@@ -453,9 +495,12 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
             tk = [re.search(r"tikor ([-\d.]+, [-\d.]+)", f["ket"]) for f in L]
             tk = [m.group(1) for m in tk if m]
             if n <= 2 and tk:
-                add(key, "; ".join("%s nganggur (tikor %s)" % (a, b) for a, b in zip(nm, tk)), "%d tiang NP nganggur" % n)
+                # 3.15.8 (masukan pengguna 23 Nov 2026): tiang baru tanpa route = alasan reject
+                add(key, "; ".join("%s nganggur (tikor %s)" % (a, b) for a, b in zip(nm, tk)), "%d tiang NP nganggur" % n,
+                    blocking=True)
             else:
-                add(key, "%s tidak dilewati jalur" % (", ".join(nm[:3]) if n <= 3 else "%d tiang NP" % n), "%d tiang NP nganggur" % n)
+                add(key, "%s tidak dilewati jalur" % (", ".join(nm[:3]) if n <= 3 else "%d tiang NP" % n), "%d tiang NP nganggur" % n,
+                    blocking=True)
         elif key == "WARN_HP_JAUH_LEWAT_JALUR":
             add(key, "%d HP >%s m ke tiang lewat jalur/akses (baris %s): cek akses" % (
                 n, num(L[0].get("lim") or 50, 0), rows_compact(rows, 4)), "%d HP jauh lewat jalur" % n)
@@ -490,6 +535,74 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
                 "sheet Pole beda dgn KMZ")
         elif key == "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR":
             notes.append("ID cluster belum terdaftar di FINDIM OLT CLUSTER (cek FINDIM terbaru)")
+        elif key == "WARN_ADMIN_FINDIM_TIDAK_KONSISTEN":
+            m = re.search(r"baris (\S+):", L[0]["ket"] or "")
+            add(key, "wilayah belum terverifikasi: data FINDIM %stidak konsisten (bukan alasan reject)"
+                % ("%s " % m.group(1) if m else ""), "wilayah belum terverifikasi (FINDIM tidak konsisten)", blocking=False)
+        elif key == "BOUNDARY_TIDAK_ADA":
+            add(key, "KMZ tanpa BOUNDARY cluster: lengkapi poligon boundary")
+        elif key == "TIANG_BARU_GANDA_SAUDARA":
+            pr_ = []
+            for f in L[:3]:
+                m = re.match(r"^(\S+) \(tiang baru\) hanya ([\d.]+) m dari tiang baru (\S+) cluster (.+?):", f["ket"] or "")
+                if m:
+                    pr_.append("%s = %s %s" % (m.group(1), m.group(3), short_cluster(m.group(4))))
+            add(key, "tiang baru dicatat 2x dgn cluster saudara (%s): catat di satu cluster saja" % "; ".join(pr_),
+                "%d tiang baru dicatat 2 cluster (BOQ ganda)" % n, blocking=False)     # 3.15.8: catatan BOQ, bukan reject
+        elif key == "WARN_TIANG_BARU_DEKAT_SAUDARA":
+            pr_ = []
+            for f in L[:2]:
+                m = re.match(r"^(\S+) \(tiang baru\) hanya ([\d.]+) m dari tiang baru (\S+) cluster (.+?) di jalur", f["ket"] or "")
+                if m:
+                    pr_.append("%s %s m dari %s %s" % (m.group(1), num(float(m.group(2))), m.group(3),
+                                                      short_cluster(m.group(4))))
+            add(key, "tiang baru berdampingan dgn tiang baru cluster saudara di jalur sama (%s%s): pakai tiang bersama" % (
+                "; ".join(pr_), " dst" if n > 2 else ""), "%d tiang baru dobel dgn cluster saudara" % n)
+        elif key == "JALUR_MELINTAS_OBSTACLE":
+            # 3.15.8: data obstacle tim (rel aktif/non aktif, tol & rencana tol, jalan penurunan kabel, hutan lindung,
+            # kawasan industri/militer) - jalur yang melintas = alasan reject
+            jn = {}
+            for f in L:
+                m = re.search(r"OBSTACLE ([^:(]+?) (?:'|\()", f["ket"] or "")
+                k_ = (m.group(1).strip() if m else "obstacle")
+                jn[k_] = jn.get(k_, 0) + 1
+            add(key, "jalur melintasi obstacle: %s - pindah rute" % ", ".join("%s (%d titik)" % kv for kv in jn.items()),
+                "jalur melintasi obstacle %d titik" % n)
+        elif key in ("WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER", "INFO_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER"):
+            # 3.15.8 (masukan pengguna: 1 PIC jangan ada HP dobel dgn cluster lain): kemungkinan dobel wajib tampil
+            oth = sorted({short_cluster(m.group(1)) for f in L for m in [re.search(r"tercatat di cluster (.+?)(?: baris|:)", f["ket"] or "")] if m})
+            add(key, "%d HP mungkin dobel dgn %s (baris %s): cek citra, hapus salah satu bila rumah sama" % (
+                n, ", ".join(oth[:2]) or "cluster lain", rows_compact(rows, 4)), "%d HP mungkin dobel lintas cluster" % n,
+                blocking=False, prio_key="WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER")
+        elif key == "WARN_BAKP_WILAYAH_LAIN_DI_NAMA_FILE":
+            add(key, "nama file BAKP menyebut wilayah lain: pastikan BAKP untuk kel./kec. cluster ini",
+                "BAKP menyebut wilayah lain", blocking=False)
+        elif key == "WARN_JALUR_MELINTAS_REL_NONAKTIF":
+            add(key, "jalur memotong rel KA nonaktif (obstacle) di %d titik: pindah rute" % n,
+                "%d titik melintas rel nonaktif" % n)
+        elif key == "WARN_HP_KOORDINAT_BEDA_KMZ":
+            add(key, "%d HP koordinat HPDB beda %s KMZ (baris %s): samakan koordinat" % (
+                n, "<= 10 m dari" if n > 1 else "%s m dari" % num(L[0].get("val") or 0), rows_compact(rows, 4)),
+                "%d HP koordinat HPDB beda dari KMZ" % n)
+        elif key == "WARN_JALUR_LINTAS_FUNNEL_1PIC":
+            labs_ = []
+            for f in L:
+                m = re.search(r"cluster (.+?) \(", f["ket"] or "")
+                if m and short_cluster(m.group(1)) not in labs_:
+                    labs_.append(short_cluster(m.group(1)))
+            add(key, "%d sambungan jalur lewat jaringan %s (1 PIC lintas funnel): bangun bersama, tiang dicatat sekali" % (
+                n, ", ".join(labs_) or "cluster saudara"), "%d sambungan jalur lewat cluster saudara" % n)
+        elif key == "CLUSTER_GANDA_DESAIN":
+            m = re.search(r"ID (\d{9,12}) '([^']*)' di FDT ([A-Za-z0-9_-]+).*?\((\d+)%\)", L[0]["ket"] or "")
+            add(key, ("area sudah didesain dgn ID %s (%s, FDT %s): nama sama, %s%% jalur berimpit; konfirmasi apakah ID ini "
+                      "pengganti, bila ya batalkan desain lama" % (m.group(1), m.group(2)[:40], m.group(3), m.group(4)))
+                if m else "area sudah didesain dgn ID lain (nama sama, jalur berimpit)",
+                "area sudah didesain dgn ID %s" % m.group(1) if m else "area sudah didesain")
+        elif key == "WARN_CLUSTER_GANDA_DESAIN":
+            m = re.search(r"ID (\d{9,12}) '([^']*)'.*?FDT ([A-Za-z0-9_-]+)", L[0]["ket"] or "")
+            add(key, ("kemungkinan cluster ganda dgn ID %s (%s, sudah didesain di FDT %s): konfirmasi survei ulang/pengganti"
+                      % (m.group(1), m.group(2)[:40], m.group(3))) if m else "kemungkinan cluster ganda/survei ulang",
+                "kemungkinan cluster ganda dgn ID %s" % m.group(1) if m else "kemungkinan cluster ganda", blocking=False)
         elif key == "WARN_ADMIN_KELURAHAN_BELUM_DI_FINDIM":
             notes.append("kelurahan di HPDB belum ada di FINDIM; file FINDIM lama - cek versi terbaru dulu, bukan alasan reject")
         # ---- 3.9.5 (review Jambi Argenta, Tegal, Minahasa, Cianjur November 2026) ----
@@ -497,6 +610,9 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
             m = re.search(r"di dalam area '([^']*)'", L[0]["ket"] or "")
             add(key, "%d HP di area %s (baris %s)" % (n, ("'%s'" % m.group(1)) if m else "tanpa izin", rows_compact(rows, 4)),
                 "%d HP di area tanpa izin" % n)
+        elif key == "WARN_HP_DI_AREA_NO_SPACE":
+            add(key, "%d HP di poligon NO SPACE (lahan kosong): cek poligon/koordinat" % sum(int(f.get("val") or 1) for f in L),
+                "HP di poligon NO SPACE", blocking=False)
         elif key == "TIANG_DI_AREA_TANPA_IZIN":
             nm = [re.match(r"^(.+?) di dalam area", f["ket"]).group(1) for f in L if re.match(r"^(.+?) di dalam area", f["ket"] or "")]
             add(key, "%s di area tanpa izin" % (", ".join(nm[:3]) if n <= 3 else "%d tiang" % n), "%d tiang di area tanpa izin" % n)
@@ -617,8 +733,17 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
         elif key == "WARN_TIANG_LUAR_BOUNDARY":
             nm = [re.match(r"^(\S+)", f["ket"]).group(1) for f in L if re.match(r"^(\S+)", f["ket"] or "")]
             mx = max(f.get("val") or 0 for f in L)
-            add(key, "%s di luar boundary (s/d %s m): cek izin lokasi tiang" % (
-                ", ".join(nm[:3]) if n <= 3 else "%d tiang NP" % n, num(mx, 0)), "%d tiang NP di luar boundary" % n)
+            fn_ = sorted({m_.group(1) for f in L for m_ in [re.search(r"MASUK Funnel (.+?) \[", f["ket"] or "")] if m_})
+            if fn_:
+                # 3.15.8: tiang di wilayah Funnel cluster/desa lain -> sebut wilayahnya
+                add(key, "%s di luar boundary, masuk wilayah %s: lampirkan izin atau geser tiang" % (
+                    ", ".join(nm[:3]) if n <= 3 else "%d tiang NP" % n, ", ".join(fn_[:2])),
+                    "%d tiang NP di wilayah %s" % (n, fn_[0]))
+                # bukan penghalang otomatis: uji regresi 21-11-2026 (Jambi, Gorontalo, Serang) - tiang di tepi jalan sering
+                # masuk poligon Funnel tetangga yang mencakup badan jalan; pemeriksa menilai perlu izin atau tidak
+            else:
+                add(key, "%s di luar boundary (s/d %s m): cek izin lokasi tiang" % (
+                    ", ".join(nm[:3]) if n <= 3 else "%d tiang NP" % n, num(mx, 0)), "%d tiang NP di luar boundary" % n)
         elif key in ("JALUR_MELINTAS_TOL", "JALUR_MELINTAS_REL", "WARN_JALUR_MELINTAS_JALAN_BESAR"):
             jenis = {"JALUR_MELINTAS_TOL": "jalan tol", "JALUR_MELINTAS_REL": "rel kereta"}.get(key, "jalan besar")
             nms = sorted({(re.search(r"memotong (?:JALAN TOL|REL KERETA API|JALAN BESAR) (.+?) \((?:rentang|[a-z_]+)",
@@ -627,13 +752,16 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
                 jenis, (" " + ", ".join(nms[:2])) if nms else "", len(L),
                 "perlu izin penyelenggara jalan" if jenis == "jalan besar" else "pindah rute atau lampirkan izin"),
                 "jalur memotong %s (%d titik)" % (jenis, len(L)))
-        elif key in ("WARN_TIANG_DEKAT_JALAN_TOL", "WARN_TIANG_DEKAT_REL"):
-            jenis = "jalan tol" if key.endswith("TOL") else "rel"
+        elif key in ("WARN_TIANG_DEKAT_JALAN_TOL", "WARN_TIANG_DEKAT_REL", "WARN_TIANG_DEKAT_REL_NONAKTIF"):
+            jenis = "jalan tol" if key.endswith("TOL") else ("rel nonaktif" if key.endswith("NONAKTIF") else "rel KA")
             nm = [re.match(r"^Tiang baru (\S+)", f["ket"] or "") for f in L]
             nm = [m.group(1) for m in nm if m]
-            add(key, "%s terlalu dekat %s (< %s m)" % (", ".join(nm[:3]) if n <= 3 else "%d tiang" % n, jenis,
-                                                    "15" if jenis == "jalan tol" else "10"),
-                "%d tiang dekat %s" % (n, jenis))
+            # 3.15.8: tiang baru di ruang milik jalan tol (< 15 m, PP 34/2006 Ps. 40) atau < 10 m dari as rel KA AKTIF
+            # (PM Perhubungan 36/2011 Ps. 7 huruf b) dilarang tanpa izin, setara jalur memotong tol/rel -> alasan reject.
+            # Rel nonaktif: lahan umumnya aset KAI, cukup catatan izin aset (bukan larangan teknis jalur KA aktif).
+            add(key, "%s terlalu dekat %s (< %s m): geser tiang atau lampirkan izin" % (
+                ", ".join(nm[:3]) if n <= 3 else "%d tiang" % n, jenis, "15" if jenis == "jalan tol" else "10"),
+                "%d tiang dekat %s" % (n, jenis), blocking=not key.endswith("NONAKTIF"))
         elif key == "WARN_JALUR_LUAR_BOUNDARY":
             tot = sum(f.get("val") or 0 for f in L)
             add(key, "jalur %s m di luar boundary (feeder? sebutkan)" % num(tot, 0), "jalur %s m di luar boundary" % num(tot, 0))
@@ -677,6 +805,21 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
                 for nm, v in grp.items():
                     notes.append("%d HP di boundary %s (baris %s) - 1 PIC: diterima; pastikan rumah hanya di satu HPDB" % (
                         len(v), nm, rows_compact([r for f in v for r in _rows_of(f["ket"], rowmap)], 6)))
+        elif key in ("INFO_HP_BENAR_BOUNDARY_SAUDARA_MASUK", "INFO_BOUNDARY_SAUDARA_MASUK_FUNNEL_INI",
+                     "INFO_TIANG_MILIK_CLUSTER_INI_DICATAT_SAUDARA"):
+            # 3.15.8: kesalahan cluster saudara (bukan alasan reject cluster ini) - dicatat agar reviewer tahu siapa yang
+            # harus memperbaiki
+            oth = sorted({short_cluster(m.group(1)) for f in L for m in [re.search(
+                r"(?:BOUNDARY cluster|KMZ cluster|cluster) ([^ ]+?) (?:masuk|yang|\(|$)", f["ket"] or "")] if m})
+            what = {"INFO_HP_BENAR_BOUNDARY_SAUDARA_MASUK": "HP benar di funnel cluster ini; boundary cluster saudara yang masuk",
+                    "INFO_BOUNDARY_SAUDARA_MASUK_FUNNEL_INI": "boundary cluster saudara masuk funnel cluster ini",
+                    "INFO_TIANG_MILIK_CLUSTER_INI_DICATAT_SAUDARA": "tiang milik cluster ini ikut dicatat cluster saudara"}[key]
+            notes.append("%s%s: perbaikan di cluster saudara, bukan alasan reject" % (
+                what, (" (%s)" % ", ".join(oth[:2])) if oth else ""))
+        elif key == "INFO_HP_NOMOR_SAMA_DERET_BEDA":
+            oth = sorted({short_cluster(m.group(1)) for f in L for m in [re.search(r"dan cluster (\S+)", f["ket"] or "")] if m})
+            notes.append("%d HP bernomor sama dgn cluster %s tetapi di deret penomoran RT/RW berbeda (bukan duplikat; cek "
+                         "citra bila ragu)" % (n, ", ".join(oth[:2]) or "lain"))
         elif key == "INFO_BAKP_HASIL_SCAN":
             notes.append("BAKP hasil scan: baca manual Cluster ID/HP, RT/RW, kompensasi, centang verifikasi & ttd")
     out.sort(key=lambda t: t[0])
@@ -715,6 +858,7 @@ SIMPLE = {
     "HP_LUAR_BOUNDARY": "ada homepass di luar boundary",
     "HP_DI_AREA_TANPA_IZIN": "ada homepass di area tanpa izin",
     "TIANG_DI_AREA_TANPA_IZIN": "ada tiang di area tanpa izin",
+    "WARN_HP_DI_AREA_NO_SPACE": "ada homepass di poligon NO SPACE (lahan kosong), cek poligonnya",
     "HP_JAUH_DARI_TIANG": "ada homepass yang jaraknya dari tiang lebih dari {lim} m",
     "RENTANG_NP_NP": "ada jarak antar tiang lebih dari {lim} m",
     "RENTANG_NP_EP": "ada jarak antar tiang lebih dari {lim} m",
@@ -732,6 +876,19 @@ SIMPLE = {
     "WARN_TIANG_GANDA_LINTAS_CLUSTER": "ada tiang duplikat dengan cluster {c}",
     "WARN_ID_CLUSTER_GANDA": "ID cluster juga dipakai cluster lain",
     "ADMIN_": "data wilayah administrasi tidak sesuai",
+    "WARN_ADMIN_FINDIM_TIDAK_KONSISTEN": "wilayah belum bisa diverifikasi karena data FINDIM tidak konsisten",
+    "BOUNDARY_TIDAK_ADA": "KMZ belum memuat boundary cluster",
+    "TIANG_BARU_GANDA_SAUDARA": "ada tiang baru yang dicatat di dua cluster (BOQ ganda)",
+    "WARN_TIANG_BARU_DEKAT_SAUDARA": "ada tiang baru yang berdampingan dengan tiang baru cluster saudara (pakai tiang bersama)",
+    "WARN_JALUR_MELINTAS_REL_NONAKTIF": "ada jalur kabel yang memotong rel kereta nonaktif (obstacle)",
+    "JALUR_MELINTAS_OBSTACLE": "ada jalur kabel yang melintasi obstacle (rel/tol/kawasan terlarang)",
+    "WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER": "ada homepass yang mungkin dobel dengan cluster {c} (cek citra)",
+    "INFO_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER": "ada homepass yang mungkin dobel dengan cluster {c} (cek citra)",
+    "WARN_BAKP_WILAYAH_LAIN_DI_NAMA_FILE": "nama file BAKP menyebut wilayah lain (pastikan kelurahan/kecamatan BAKP)",
+    "WARN_HP_KOORDINAT_BEDA_KMZ": "ada koordinat homepass di HPDB yang sedikit berbeda dengan KMZ",
+    "WARN_JALUR_LINTAS_FUNNEL_1PIC": "ada jalur yang tersambung lewat cluster saudara 1 PIC (bangun bersama)",
+    "CLUSTER_GANDA_DESAIN": "area ini sudah didesain dengan {c}, mohon konfirmasi apakah ID ini pengganti",
+    "WARN_CLUSTER_GANDA_DESAIN": "kemungkinan cluster ganda dengan {c} yang sudah didesain, mohon konfirmasi",
     "WARN_TIANG_DUPLIKAT_KMZ": "ada tiang dobel di KMZ",
     "WARN_BELOKAN_TANPA_TIANG": "ada belokan jalur tanpa tiang",
     "WARN_JALUR_TERPUTUS": "ada jalur kabel yang terputus",
@@ -759,7 +916,11 @@ SIMPLE = {
     "JALUR_MELINTAS_REL": "ada jalur kabel yang memotong rel kereta (wajib izin DJKA/KAI atau pindah rute)",
     "WARN_JALUR_MELINTAS_JALAN_BESAR": "ada jalur kabel yang memotong jalan besar (perlu izin penyelenggara jalan)",
     "WARN_TIANG_DEKAT_JALAN_TOL": "ada tiang yang terlalu dekat jalan tol",
-    "WARN_TIANG_DEKAT_REL": "ada tiang yang terlalu dekat rel kereta",
+    "WARN_TIANG_DEKAT_REL": "ada tiang yang terlalu dekat rel kereta aktif (kurang dari 10 m)",
+    "WARN_TIANG_DEKAT_REL_NONAKTIF": "ada tiang dekat rel kereta nonaktif (pastikan izin aset KAI)",
+    "UNV_BAKP_NOT_SUPPLIED": "BAKP (izin warga) belum dilampirkan",
+    "UNV_BAKP_DARI_CLUSTER_SAUDARA": "BAKP wilayah dipakai bersama cluster saudara (pastikan memuat cluster ini)",
+    "WARN_ID_CLUSTER_TIDAK_DIKETAHUI": "ID cluster tidak ditemukan di nama berkas",
     "WARN_JALUR_BERTUMPUK": "ada garis jalur yang digambar dobel",
     "WARN_TSSR_ID_BEDA": "ID cluster di TSSR berbeda",
     "WARN_TSSR_HP_BEDA": "jumlah homepass di TSSR berbeda",

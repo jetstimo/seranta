@@ -29,7 +29,8 @@ except Exception:          # pragma: no cover - numpy ships with QGIS
     np = None
 
 MODES = ["Check automatically (offline) + checklist in the report (recommended)", "Skip"]
-BAKP_RX = re.compile(r"BAKP|PERI[JZ]INAN|KESEPAKATAN|BA[\s_-]*KP", re.IGNORECASE)
+BAKP_RX = re.compile(r"BAKP|PERI[JZ]INAN|KESEPAKATAN|BA[\s_-]*KP|BERITA[\s_-]*ACARA|IZIN[\s_-]*WARGA|PERSETUJUAN[\s_-]*WARGA",
+                     re.IGNORECASE)
 IMG_EXT = (".pdf", ".jpg", ".jpeg", ".png")
 MAX_PAGES = 40          # dulu 6: BAKP gabungan beberapa RT (16 halaman, review Jambi 2026) tidak terbaca utuh
 SCAN_MAX_PAGES = 6      # batas halaman untuk MENGENALI kandidat BAKP dari isi file (bukan batas baca)
@@ -54,6 +55,41 @@ def find_bakp(folder):
     return hits
 
 
+_AREA_STOP = {"BAKP", "BA", "KP", "KELURAHAN", "KEL", "DESA", "GAMPONG", "NAGARI", "KECAMATAN", "KEC", "PDF", "SCAN",
+              "IZIN", "WARGA", "BERITA", "ACARA", "PERIZINAN", "PERIJINAN", "KESEPAKATAN", "RT", "RW", "LINGKUNGAN", "LK",
+              "DUSUN", "FINAL", "REV", "HP", "RPS", "IOH", "BMI", "DGT", "PULSAR", "JL", "JALAN"}
+
+
+def _area_tokens(name):
+    return {t for t in re.findall(r"[A-Z]{3,}", os.path.splitext(name)[0].upper()) if t not in _AREA_STOP}
+
+
+def _sibling_area_bakp(folder, cid=""):
+    """BAKP wilayah di folder cluster saudara (satu/dua tingkat ke atas). -> (path, nama folder saudara) atau None."""
+    me = os.path.abspath(folder)
+    mine = set()
+    for p in (me, os.path.dirname(me)):
+        mine |= _area_tokens(os.path.basename(p))
+    if not mine:
+        return None
+    for up in (os.path.dirname(me), os.path.dirname(os.path.dirname(me))):
+        try:
+            sibs = [os.path.join(up, d) for d in sorted(os.listdir(up)) if os.path.isdir(os.path.join(up, d))]
+        except OSError:
+            continue
+        for s in sibs:
+            if os.path.normcase(s) in (os.path.normcase(me), os.path.normcase(os.path.dirname(me))) or \
+                    os.path.basename(s).upper().startswith(("INPUT", "_")):
+                continue
+            for p in find_bakp(s):
+                f = os.path.basename(p)
+                ids = ids_in_name(f)
+                tok = _area_tokens(f)
+                if tok and tok <= mine and (not ids or (cid and cid in ids)):
+                    return p, os.path.basename(s)
+    return None
+
+
 def _typo_bakp(name):
     """3.14.0: salah ketik satu huruf/tukar huruf pada kata BAKP (BKAP, BAPK, BAKB) di nama berkas."""
     try:
@@ -74,11 +110,17 @@ def find_candidates(folder, cluster_id=""):
     Acara/Kesepakatan/Perijinan' (+3), PDF hasil scan 1-6 halaman (+1). -> [(skor, path, alasan)] urut skor."""
     out = []
     try:
-        files = sorted(os.listdir(folder))
+        files = [(folder, f) for f in sorted(os.listdir(folder))]
+        # 3.15.8: juga satu tingkat subfolder (mis. 'DOKUMEN\scan 0001.pdf'), kecuali folder hasil/foto
+        for d in sorted(os.listdir(folder)):
+            pd_ = os.path.join(folder, d)
+            if os.path.isdir(pd_) and not d.upper().startswith(("INPUT", "HASIL", "QC", "_")) \
+                    and not re.search(r"EVID|FOTO|PHOTO|GAMBAR|IMG", d, re.IGNORECASE):
+                files += [(pd_, f) for f in sorted(os.listdir(pd_))]
     except OSError:
         return out
-    for f in files:
-        p = os.path.join(folder, f)
+    for dd_, f in files:
+        p = os.path.join(dd_, f)
         if f.startswith("~$") or not os.path.isfile(p) or not f.lower().endswith(IMG_EXT) or BAKP_RX.search(f):
             continue
         if OTHER_DOC_RX.search(f):
@@ -103,8 +145,15 @@ def find_candidates(folder, cluster_id=""):
                     why.append("dibuat aplikasi pemindai")
             except OSError as _e:
                 _log.note(_e)
-        if score >= 3:
-            out.append((score, p, "; ".join(why)))
+        out.append((score, p, "; ".join(why)))
+    # 3.15.8: scan PDF yang namanya tanpa kata kunci DAN tanpa ID cluster (mis. 'scan 001.pdf') dulu tidak dikenali (skor
+    # maks 2). Bila hanya ada SATU dokumen PDF hasil scan di folder cluster, itulah calon BAKP (+2).
+    scans = [o for o in out if o[1].lower().endswith(".pdf") and o[0] >= 1]
+    pdfs = [o for o in out if o[1].lower().endswith(".pdf")]
+    if len(scans) == 1 and len(pdfs) == 1:
+        sc, p, why = scans[0]
+        out[out.index(scans[0])] = (sc + 2, p, (why + "; " if why else "") + "satu-satunya PDF scan di folder cluster")
+    out = [o for o in out if o[0] >= 3]
     out.sort(key=lambda t: -t[0])
     return out
 
@@ -714,7 +763,8 @@ def checklist(exp):
     lok = " / ".join(v for v in (exp.get("kelurahan"), exp.get("kecamatan"), exp.get("kota")) if v) or "-"
     fd = exp.get("findim")
     if fd:
-        lok += "  (FINDIM: Kel. %s, Kec. %s, %s)" % fd
+        # 3.15.8: acuan wilayah BAKP = FINDIM (masukan pengguna 23 Nov 2026), bukan isian HPDB
+        lok = "Kel. %s, Kec. %s, %s (FINDIM)" % fd + ("; HPDB: %s" % lok if lok != "-" else "")
     hp = str(exp.get("hp_hpdb") or "-")
     if exp.get("hp_kmz") and exp.get("hp_kmz") != exp.get("hp_hpdb"):
         hp += " (KMZ %s)" % exp["hp_kmz"]
@@ -723,7 +773,8 @@ def checklist(exp):
         ("Homepass", hp, "tidak boleh kurang dari HP yang didesain"),
     ] + ([("Homepass per RT/RW/lingkungan", exp["hp_groups"],
            "tiap set BAKP / baris lampiran >= jumlah HP HPDB di RT/lingkungan itu")] if exp.get("hp_groups") else []) + [
-        ("Kelurahan / Kecamatan / Kota", lok, "nama wilayah sesuai FINDIM"),
+        ("Kelurahan & Kecamatan (WAJIB sama FINDIM)", lok,
+         "kelurahan atau kecamatan di BAKP beda dari FINDIM = REJECT (ejaan beda juga)"),
         ("RT/RW / nama cluster", exp.get("cluster_name") or "-", "nomor RT/RW sama dengan nama cluster"),
         ("Pilihan persetujuan", "menyetujui", "kata 'tidak menyetujui' harus dicoret"),
         ("Tanda tangan & stempel Ketua RT/RW", "ada, basah (bukan tempelan)", "nama & cap jelas"),
@@ -806,11 +857,42 @@ def check_cluster(folder, exp, feedback=None, manual=None):
             files, res["status"] = [path0], "BAKP_UNRECOGNIZED"
             L.append("  Kandidat  : %s (nama tanpa kata BAKP; dikenali dari %s) -> BAKP_UNRECOGNIZED, konfirmasi atau "
                      "pilih manual di isian 'file BAKP'" % (os.path.basename(path0), why))
+            if len(cands) > 1 and cands[1][0] >= sc:       # 3.15.8: dua calon sama kuat -> peringatan, bukan tebakan diam
+                L.append("  PERHATIAN : ada %d calon BAKP sama kuat (%s) - yang dibaca: %s; pilih manual bila salah"
+                         % (sum(1 for c_ in cands if c_[0] >= sc), ", ".join(os.path.basename(c_[1]) for c_ in cands[:3]),
+                            os.path.basename(path0)))
             res["items"].append(("UNV_BAKP_KANDIDAT_PERLU_KONFIRMASI", None,
                                  "BAKP dikenali dari isi/nama (%s): %s - konfirmasi, atau pilih file di isian opsional BAKP"
                                  % (why, os.path.basename(path0))))
             for _s, pth, w in cands[1:3]:
                 L.append("  Kandidat lain: %s (%s)" % (os.path.basename(pth), w))
+    if not files:
+        # 3.15.8: BAKP strand/1 PIC sering diletakkan sekali di folder induk -> dipakai bersama (bukan 'tidak ada')
+        par = os.path.dirname(os.path.abspath(folder))
+        try:
+            cid = str(exp.get("cluster_id") or "")
+            up = [os.path.join(par, f) for f in sorted(os.listdir(par)) if f.lower().endswith(IMG_EXT)
+                  and not f.startswith("~$") and (BAKP_RX.search(f) or _typo_bakp(f))
+                  # BAKP ber-ID cluster LAIN di folder induk bukan milik cluster ini
+                  and (not ids_in_name(f) or (cid and cid in ids_in_name(f)))]
+        except OSError:
+            up = []
+        if up:
+            files, res["status"] = up, "BAKP_FOUND"
+            L.append("  Sumber    : BAKP di folder induk (dipakai bersama cluster satu strand/1 PIC): %s"
+                     % ", ".join(os.path.basename(x) for x in up[:3]))
+        else:
+            # BAKP tingkat kelurahan/desa yang disimpan di folder cluster SAUDARA (uji Minahasa: 'Bakp Kelurahan Tuutu.pdf'
+            # hanya di folder Lingkungan 02, berlaku juga untuk Lingkungan 03). Dipakai bila nama wilayah di nama BAKP
+            # ada di nama folder cluster ini dan BAKP itu tidak ber-ID cluster lain.
+            sib = _sibling_area_bakp(folder, cid)
+            if sib:
+                files, res["status"] = [sib[0]], "BAKP_FOUND"
+                L.append("  Sumber    : BAKP wilayah '%s' di folder cluster saudara %s (dipakai bersama) - pastikan "
+                         "lampirannya memuat cluster ini" % (os.path.basename(sib[0]), sib[1]))
+                res["items"].append(("UNV_BAKP_DARI_CLUSTER_SAUDARA", None,
+                                     "BAKP wilayah %s diambil dari folder cluster saudara %s: pastikan BAKP itu memuat "
+                                     "lingkungan/RT cluster ini dan jumlah HP-nya" % (os.path.basename(sib[0]), sib[1])))
     if not files:
         res.update(ok=None, status="BAKP_NOT_SUPPLIED",
                    summary="BAKP_NOT_SUPPLIED: tidak ada file BAKP/kandidat di folder cluster - minta ke vendor; kepatuhan "
@@ -851,5 +933,8 @@ def check_cluster(folder, exp, feedback=None, manual=None):
     res["summary"] = ("%d temuan otomatis; " % n_cek if n_cek else "") + "WAJIB cek manual isian BAKP (daftar periksa di laporan HTML)"
     if res["status"] == "BAKP_UNRECOGNIZED":
         res["summary"] = "kandidat BAKP %s (perlu konfirmasi); " % os.path.basename(path) + res["summary"]
-    res["items"] = items
+    if any(k == "UNV_BAKP_DARI_CLUSTER_SAUDARA" for k, _o, _t in res["items"]):
+        res["summary"] = "BAKP wilayah dari folder cluster saudara (pastikan memuat cluster ini); " + res["summary"]
+    # 3.15.8: catatan yang dibuat saat mencari berkas (kandidat dari isi, BAKP dari cluster saudara) dulu tertimpa di sini
+    res["items"] = list(res["items"]) + items
     return res

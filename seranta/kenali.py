@@ -271,7 +271,7 @@ def sheet_profile(path):
 
 _HP_RX = re.compile(r"\b(hp|homepass|home ?pass|rumah)\b", re.IGNORECASE)
 _POLE_RX = re.compile(r"\b(pole|poles|tiang|np\d*|ep\d*|new ?pole|existing ?pole|t\d|te)\b", re.IGNORECASE)
-_ROUTE_RX = re.compile(r"\b(cable|kabel|jalur|route|rute|road)\b", re.IGNORECASE)
+_ROUTE_RX = re.compile(r"\b(cable|kabel|jalur|route|rute|road|lines?)\b", re.IGNORECASE)   # 3.15.8: + LINE
 _FDT_RX = re.compile(r"^\s*FDT\s*$", re.IGNORECASE)
 _FUNNEL_RX = re.compile(r"funnel|\bRFS\b", re.IGNORECASE)
 
@@ -332,12 +332,17 @@ def kmz_profile(path):
                     if "Polygon" in geo:
                         n_pg += 1
                     el.clear()
+                    if n_ln >= REF_LINES and n_hp == 0 and not f_pole:
+                        break          # 3.15.8: sudah jelas peta referensi - tidak perlu membaca puluhan ribu garis lagi
         finally:
             src.close()
         d = {"titik_hp": n_hp, "titik": n_pt, "garis": n_ln, "poligon": n_pg, "folder_tiang": f_pole,
              "folder_jalur": f_route}
         if f_fdt and spl:
             d.update(kind="designlite", reason="folder FDT dengan data SPLITTERS")
+        elif n_hp == 0 and not f_pole and n_ln >= REF_LINES:
+            # 3.15.8: peta kabel existing satu wilayah (mis. 'Cable Existing Bentley', 17.251 garis) bukan KMZ survei
+            d.update(kind="referensi", reason="%d garis tanpa titik HP/folder tiang: peta jaringan existing" % n_ln)
         elif n_hp > 0 and (n_ln > 0 or f_pole):
             d.update(kind="survei", reason="%d titik HP, %d garis jalur%s" % (n_hp, n_ln, ", folder tiang" if f_pole else ""))
         elif n_hp > 0:
@@ -349,7 +354,29 @@ def kmz_profile(path):
         else:
             d.update(kind="lain", reason="%d titik, %d garis, %d poligon; tidak ada folder HP" % (n_pt, n_ln, n_pg))
         return d
+    big = _kml_size(path)
+    if big > MAX_XML:
+        # 3.15.8: KML ratusan MB (mis. 'ALL CABLE BENTLEY ... Existing only', 790 MB) dulu 'tidak terbaca' dan ikut
+        # dihitung sebagai calon KMZ cluster ('lebih dari satu KMZ'). KMZ survei satu cluster hanya beberapa MB.
+        return {"kind": "referensi", "reason": "KML %.0f MB: terlalu besar untuk KMZ survei satu cluster (data referensi "
+                "jaringan)" % (big / 1048576.0)}
     return _cached("kmz", path, run) or {"kind": "tidak_diketahui", "reason": "tidak terbaca"}
+
+
+REF_LINES = 3000      # KMZ survei satu cluster (juga 1 PIC beberapa lingkungan) jauh di bawah ini
+
+
+def _kml_size(path):
+    """Ukuran KML utama di KMZ (tanpa membuka isinya) / ukuran berkas .kml; 0 bila tidak terbaca."""
+    try:
+        if path.lower().endswith(".kmz"):
+            with zipfile.ZipFile(path) as z:
+                kmls = [i for i in z.infolist() if i.filename.lower().endswith(".kml")]
+                main = next((i for i in kmls if i.filename == "doc.kml"), kmls[0] if kmls else None)
+                return main.file_size if main else 0
+        return os.path.getsize(path)
+    except (OSError, zipfile.BadZipFile):
+        return 0
 
 
 # ------------------------------------------------------------------ dokumen Word: TSSR

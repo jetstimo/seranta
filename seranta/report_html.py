@@ -48,6 +48,86 @@ footer{font-size:11.5px;color:var(--mut);text-align:center;margin-top:18px}
 """
 
 
+# 3.15.8: kepala laporan yang mudah dipahami awam - arti keputusan, langkah perbaikan bernomor (satu per jenis temuan,
+# alasan reject lebih dulu) dan daftar istilah. Kartu standar, F-xxxx, peta dan remarks TIDAK berubah.
+_DECISION_MEAN = {
+    "REJECT": "Data survei dikembalikan ke vendor: perbaiki langkah bertanda <b>alasan reject</b> di bawah, lalu kirim ulang.",
+    "APPROVE": "Data survei bisa dipakai untuk desain. Catatan berwarna biru hanya informasi.",
+}
+_DECISION_MID = ("Data boleh lanjut ke desain, tetapi catatan di bawah harus dibereskan atau dikonfirmasi ke vendor "
+                 "sebelum desain dikirim.")
+_GLOSSARY = (
+    ("HP / homepass", "rumah atau bangunan yang akan bisa berlangganan internet."),
+    ("HPDB", "daftar homepass (Excel) dari vendor survei: satu baris per rumah, dengan koordinat."),
+    ("KMZ cluster", "peta survei (Google Earth) berisi titik HP, tiang, jalur kabel dan batas cluster."),
+    ("Boundary / Funnel", "batas wilayah cluster (dari vendor) / batas wilayah layanan yang disetujui (dari tim)."),
+    ("BAKP", "berita acara kesepakatan perizinan: surat izin warga/RT-RW yang ditandatangani dan distempel."),
+    ("TSSR", "laporan survei lapangan (Word) berisi jumlah HP, foto dan kondisi lokasi."),
+    ("NP / EP", "tiang baru (new pole) / tiang yang sudah ada (existing pole)."),
+    ("Span / rentang", "jarak antar dua tiang berurutan; batas umum 60 m (di beberapa daerah 50 m)."),
+    ("FDT / colo", "kotak distribusi optik di jaringan yang ada; 'colo' = cluster ini disambungkan ke FDT itu."),
+    ("1 PIC", "beberapa cluster yang dirancang satu orang sebagai satu jaringan, jadi dinilai bersama."),
+    ("FINDIM", "data wilayah resmi (kelurahan, kecamatan, kota) yang dipakai untuk mencocokkan alamat HPDB."),
+    ("OSM", "OpenStreetMap: peta jalan dan rel terbuka yang dipakai untuk cek persilangan jalan tol/rel."),
+)
+_SEV_RANK = {"ERROR": 0, "WARNING": 1, "UNVERIFIED": 2, "INFO": 3}
+
+
+def _steps(by_std, blk, status, X, judul, limit=12):
+    """Langkah perbaikan bernomor: satu per jenis temuan (kode), alasan reject dulu, lalu ERROR, WARNING. INFO tidak."""
+    grp = {}
+    for k, lst in (by_std or {}).items():
+        for t in lst:
+            sev, lab = t[0], t[1]
+            kind = t[5] if len(t) > 5 else ""
+            if sev not in ("ERROR", "WARNING"):
+                continue
+            key = kind or lab
+            g = grp.setdefault(key, {"sev": sev, "lab": lab, "n": 0, "std": k, "kind": kind})
+            g["n"] += 1
+            if _SEV_RANK.get(sev, 9) < _SEV_RANK.get(g["sev"], 9):
+                g["sev"] = sev
+
+    def is_blk(kind):
+        return bool(kind) and any(kind == b_ or (b_.endswith("_") and kind.startswith(b_)) for b_ in (blk or []))
+    # 3.15.8: urutan SAMA dengan remarks (REMARKS.txt/CSV/Word): prioritas remarks.PRIORITY, alasan reject dulu. Dulu
+    # diurutkan per tingkat/standar sehingga alasan nomor 1-3 di HTML berbeda dari kalimat remarks (uji 24 Nov 2026)
+    try:
+        from . import remarks as _rm
+    except ImportError:
+        import remarks as _rm
+
+    def prio(kind):
+        k = _rm._group_key(kind) if kind else None
+        return _rm.PRIORITY.index(k) if k in _rm.PRIORITY else len(_rm.PRIORITY)
+    rows = sorted(grp.values(), key=lambda g: (not is_blk(g["kind"]), prio(g["kind"]), _SEV_RANK.get(g["sev"], 9),
+                                               g["std"], g["lab"]))
+    head = _DECISION_MEAN.get(status, _DECISION_MID) if status else ""
+    if not rows:
+        body = "<p class='lead'>Tidak ada temuan yang perlu diperbaiki.</p>"
+    else:
+        lis = []
+        for g in rows[:limit]:
+            _arti, aksi = X.tool1_kind_text(g["kind"])
+            reason = is_blk(g["kind"]) if blk else (g["sev"] == "ERROR")
+            tag = " <b style='color:#c62828'>(alasan reject)</b>" if (status == "REJECT" and reason) else ""
+            where = ("<a href='#s%d'>standar %d</a>" % (g["std"], g["std"])) if g["std"] else "<a href='#s0'>jalur &amp; tiang</a>"
+            lis.append("<li><b>%s</b>%s - %d titik (%s).%s</li>" % (
+                _E(g["lab"]), tag, g["n"], where, (" <span class='small'>Yang dilakukan: %s</span>" % _E(aksi)) if aksi else ""))
+        more = ("<p class='small'>+%d jenis temuan lain: lihat kartu standar di bawah.</p>" % (len(rows) - limit)
+                if len(rows) > limit else "")
+        body = "<ol>%s</ol>%s" % ("".join(lis), more)
+    return ("<section class='block' id='langkah'><h2>Apa yang harus dilakukan</h2>%s%s<p class='small'>Klik nama standar "
+            "untuk melihat lokasi tiap titik (F-xxxx) di peta.</p></section>" % (
+                ("<p class='lead'>%s</p>" % head) if head else "", body))
+
+
+def _glossary():
+    rows = "".join("<tr><td><b>%s</b></td><td>%s</td></tr>" % (_E(a), _E(b)) for a, b in _GLOSSARY)
+    return ("<section class='block'><details class='plain'><summary>Arti istilah di laporan ini</summary>"
+            "<div class='scroll'><table>%s</table></div></details></section>" % rows)
+
+
 def build(path, meta, std, judul, extra_lines, bakp, files, full_text):
     """meta: dict(product, version, author, cluster, kode, cl_id, date, profile, qc_by_std, qc_counts, qc_params, refs,
     ref_dir, qc_profile_id, rule_version); std: {k: (ok, text)}, judul: {k: title}, bakp: dict dari bakp.check_cluster
@@ -206,6 +286,7 @@ def build(path, meta, std, judul, extra_lines, bakp, files, full_text):
                    "<span style='display:block;margin:2px 0 6px'>%s</span>%s" % (
                        col, _E({"REJECT": "REJECT", "APPROVE": "APPROVE"}.get(rm["status"], "APPROVE DENGAN CATATAN")),
                        _E(rm.get("text") or ""), verdict))
+    steps_html = _steps(by_std, blk, rm.get("status"), X, judul) + _glossary()
     js = """<script>(function(){var key="seranta-bakp-"+%s,boxes=[].slice.call(document.querySelectorAll("input[data-k]"));
 function load(){try{return JSON.parse(localStorage.getItem(key)||"{}")}catch(e){return {}}}
 function save(s){try{localStorage.setItem(key,JSON.stringify(s))}catch(e){}}
@@ -216,7 +297,7 @@ var s=load();boxes.forEach(function(b){b.checked=!!s[b.dataset.k];b.addEventList
     doc = U.page("QC %s" % meta.get("kode", ""), "QC data survei sebelum desain", meta.get("cluster", ""), verdict,
                  [("Kode cluster", meta.get("kode", "")), ("ID", meta.get("cl_id", "")), ("Dibuat", meta.get("date", "")),
                   ("Profil desain", meta.get("profile", "")), ("Alat", "%s v%s" % (meta.get("product", ""), meta.get("version", "")))],
-                 counts, items, (meta.get("map_html") or "") + U.howto() + "".join(cards) + "".join(sec),
+                 counts, items, steps_html + (meta.get("map_html") or "") + U.howto() + "".join(cards) + "".join(sec),
                  "%s v%s. &copy; 2026 %s, GPL-3.0-or-later. Hasil QC adalah alat bantu; keputusan desain tetap pada desainer "
                  "dan reviewer." % (_E(meta.get("product", "")), _E(meta.get("version", "")), _E(meta.get("author", ""))),
                  run_key=str(meta.get("kode", "")), word_href=meta.get("word"))

@@ -76,7 +76,20 @@ BIG_WIDTH_M = 14.0
 #        luar ruang manfaat jalur KA dan masuk ruang milik jalur KA wajib izin (PP 56/2009 Pasal 59 ayat 1, Pasal 82).
 NEAR_TOLL_M = 15.0
 NEAR_RAIL_M = 10.0
-KINDS = ("tol", "rel", "besar", "sedang", "sungai")
+KINDS = ("tol", "rel", "besar", "sedang", "sungai", "rel_nonaktif")
+# 3.15.8: REL NONAKTIF. Paket data jalan Seranta dan ekstrak .pbf biasa hampir tidak memuat rel nonaktif (uji 21 Nov
+# 2026: paket Jawa 6 ruas 'abandoned', Overpass di sekitar Tegal saja puluhan). Maka rel nonaktif dilengkapi dari:
+#   1. file lokal di folder data referensi bernama *REL*NONAKTIF* / *ASET*KAI* (.kml/.kmz/.gpkg/.geojson/.shp; mis. peta
+#      aset KAI dari Daop atau digitasi sendiri): SETIAP garis di dalamnya = rel nonaktif;
+#   2. kueri Overpass kecil KHUSUS rel nonaktif per wilayah, di-cache 180 hari (rel nonaktif jarang berubah);
+#   gagal keduanya -> dicatat 'rel nonaktif tidak dicek' (bukan diam-diam dianggap tidak ada).
+# Rel LORI pabrik gula/perkebunan (Decauville, lebar 600-750 mm, usage=industrial) bukan aset KAI: pemiliknya PG/PTPN.
+RAIL_INACTIVE = ("disused", "abandoned", "preserved", "razed")
+LIFECYCLE_KEYS = ("disused:railway", "abandoned:railway", "razed:railway")
+RELNA_RX = re.compile(r"REL[ _.-]*NON[ _.-]*AKTIF|ASET[ _.-]*KAI|KAI[ _.-]*NON[ _.-]*AKTIF", re.IGNORECASE)
+RELNA_EXT = (".kml", ".kmz", ".geojson", ".json", ".gpkg", ".shp")
+RELNA_CACHE_DAYS = 180
+LORI_RX = re.compile(r"lor(?:i|ry)|decauville|tebu|sugar|pabrik gula|\bP\.?G\.?\b|PTPN|perkebunan|industri", re.IGNORECASE)
 
 
 def _num(v):
@@ -107,6 +120,15 @@ def classify(tags):
         return "tol"
     if rw in ("rail", "light_rail", "subway", "narrow_gauge") and t.get("tunnel", "no") in ("no", ""):
         return "rel"
+    # 3.15.8: rel NONAKTIF (OSM railway=disused/abandoned/preserved): jalur KA tidak beroperasi tetapi umumnya tetap aset
+    # KAI (ruang milik jalur KA). Persilangan/tiang dekat = WARNING izin pemilik aset, bukan ERROR seperti rel aktif.
+    # Tag siklus hidup OSM (wiki 'Lifecycle prefix'): rel nonaktif juga sering ditulis disused:railway=rail /
+    # abandoned:railway=rail / razed:railway=rail TANPA kunci railway, atau railway=razed (rel sudah dibongkar, lahan
+    # umumnya tetap tercatat aset KAI).
+    lc = next((t[k] for k in LIFECYCLE_KEYS if t.get(k)), "")
+    if t.get("tunnel", "no") in ("no", "") and (rw in RAIL_INACTIVE or (not rw and not hw and (
+            lc in ("rail", "light_rail", "narrow_gauge", "tram", "yes") or t.get("historic") == "railway"))):
+        return "rel_nonaktif"
     if hw == "construction" and cons in HW_MAJOR:
         return "besar"
     if hw and hw not in ("footway", "path", "steps", "cycleway", "pedestrian", "track", "bridleway", "proposed"):
@@ -136,10 +158,19 @@ def _road(tags, pts):
     if not k or len(pts) < 2:
         return None
     t = tags or {}
-    return {"kind": k, "name": _label(t), "pts": pts, "bridge": _flag(t, "bridge"), "tunnel": _flag(t, "tunnel"),
+    r = {"kind": k, "name": _label(t), "pts": pts, "bridge": _flag(t, "bridge"), "tunnel": _flag(t, "tunnel"),
             "building": "construction" in (str(t.get("highway", "")).lower(), str(t.get("railway", "")).lower()),
             "hw": str(t.get("highway", "") or t.get("railway", "") or t.get("waterway", "")).lower(),
             "lanes": lanes_of({str(a).lower(): b for a, b in t.items()}), "width": _num(t.get("width"))}
+    if k == "rel_nonaktif":
+        tl = {str(a).lower(): str(b or "") for a, b in t.items()}
+        gauge = _num(tl.get("gauge"))
+        r["lori"] = bool(LORI_RX.search(" ".join(tl.get(x, "") for x in ("name", "operator", "owner", "description")))
+                         or tl.get("usage") == "industrial" or (gauge is not None and gauge < 1000))
+        r["razed"] = tl.get("railway") == "razed" or bool(tl.get("razed:railway"))
+        if not r["name"]:
+            r["name"] = "(tanpa nama)"
+    return r
 
 
 def parse_overpass(js):
@@ -172,6 +203,9 @@ def pbf_where(fields):
             w.append("%s IS NOT NULL" % k)
         elif "other_tags" in f:
             w.append("other_tags LIKE '%%\"%s\"=>%%'" % k)
+    if "other_tags" in f:      # 3.15.8: rel nonaktif bertag siklus hidup (disused:railway=rail, historic=railway)
+        w.extend("other_tags LIKE '%%\"%s\"=>%%'" % k for k in LIFECYCLE_KEYS)
+        w.append("other_tags LIKE '%\"historic\"=>\"railway\"%'")
     return " OR ".join(w)
 
 
@@ -343,7 +377,8 @@ def find_local(ref_dir, cache_dir=None, feedback=None):
     if not ref_dir or not os.path.isdir(ref_dir):
         return []
     out = sorted(os.path.join(ref_dir, f) for f in os.listdir(ref_dir)
-                 if LOCAL_RX.search(f) and f.lower().endswith(LOCAL_EXT) and not f.startswith("~$"))
+                 if LOCAL_RX.search(f) and f.lower().endswith(LOCAL_EXT) and not f.startswith("~$")
+                 and not RELNA_RX.search(f))
     if cache_dir:
         for p in find_pbf(ref_dir):
             g = pbf_package(p, cache_dir, feedback)
@@ -352,12 +387,23 @@ def find_local(ref_dir, cache_dir=None, feedback=None):
     return out
 
 
-def load_local(paths, bbox):
-    """File OSM lokal (OGR) -> daftar jalan dalam bbox (xmin, ymin, xmax, ymax)."""
+def find_relna(ref_dir):
+    """3.15.8: file rel nonaktif / aset KAI di folder data referensi (*REL*NONAKTIF*, *ASET*KAI*)."""
+    if not ref_dir or not os.path.isdir(ref_dir):
+        return []
+    return sorted(os.path.join(ref_dir, f) for f in os.listdir(ref_dir)
+                  if RELNA_RX.search(f) and f.lower().endswith(RELNA_EXT) and not f.startswith("~$"))
+
+
+def load_local(paths, bbox, all_relna=False):
+    """File OSM lokal (OGR) -> daftar jalan dalam bbox (xmin, ymin, xmax, ymax). all_relna=True: setiap garis tanpa tag
+    rel aktif dianggap rel nonaktif (file aset KAI / digitasi sendiri)."""
     from osgeo import ogr
     out = []
     for p in paths:
-        ds = ogr.Open(p)
+        ds = ogr.Open(("/vsizip/" + p) if p.lower().endswith(".kmz") else p)
+        if ds is None and p.lower().endswith(".kmz"):
+            ds = ogr.Open(p)
         if ds is None:
             continue
         for li in range(ds.GetLayerCount()):
@@ -369,6 +415,11 @@ def load_local(paths, bbox):
                 if "other_tags" in tags:      # ekspor GDAL OSM: '"toll"=>"yes","ref"=>"..."'
                     tags.update({a.lower(): b for a, b in re.findall(r'"([^"]+)"=>"([^"]*)"', str(tags["other_tags"]))})
                 g = f.GetGeometryRef()
+                if g is not None and all_relna and classify(tags) not in ("rel", "rel_nonaktif"):
+                    if "LINE" not in g.GetGeometryName().upper():
+                        continue
+                    tags = {"railway": "disused", "name": tags.get("name") or tags.get("nama") or "",
+                            "description": tags.get("description") or ""}
                 if g is None or not classify(tags):
                     continue
                 gs = [g.GetGeometryRef(i) for i in range(g.GetGeometryCount())] if g.GetGeometryCount() and \
@@ -402,19 +453,19 @@ FAIL_MEMO_S = 1800
 _MEMO = {}            # kotak -> (waktu, js, sumber)
 _FAIL = {"t": 0.0, "why": ""}
 _JOBS = []
-_CACHE_RX = re.compile(r"^osm_jalan_(m?[\d.]+)_(m?[\d.]+)_(m?[\d.]+)_(m?[\d.]+)\.json$")
+_CACHE_RX = re.compile(r"^(osm_jalan|osm_relna)_(m?[\d.]+)_(m?[\d.]+)_(m?[\d.]+)_(m?[\d.]+)\.json$")
 
 
-def _cache_path(cache_dir, bbox):
+def _cache_path(cache_dir, bbox, prefix="osm_jalan"):
     key = "_".join("%.3f" % v for v in bbox)
-    return os.path.join(cache_dir, "osm_jalan_%s.json" % key.replace("-", "m"))
+    return os.path.join(cache_dir, "%s_%s.json" % (prefix, key.replace("-", "m")))
 
 
 def _covers(big, small):
     return big[0] <= small[0] + 1e-9 and big[1] <= small[1] + 1e-9 and big[2] >= small[2] - 1e-9 and big[3] >= small[3] - 1e-9
 
 
-def _cache_find(cache_dir, bbox, stale=False):
+def _cache_find(cache_dir, bbox, stale=False, prefix="osm_jalan", days=CACHE_DAYS):
     """Berkas cache yang kotaknya mencakup bbox -> (js, waktu_berkas, kotak) atau None. stale=True: juga yang sudah
     lewat CACHE_DAYS (dipakai hanya bila semua server gagal)."""
     if not cache_dir or not os.path.isdir(cache_dir):
@@ -422,14 +473,14 @@ def _cache_find(cache_dir, bbox, stale=False):
     now = time.time()
     for fn in os.listdir(cache_dir):
         m = _CACHE_RX.match(fn)
-        if not m:
+        if not m or m.group(1) != prefix:
             continue
         try:
-            box = tuple(float(g.replace("m", "-")) for g in m.groups())
+            box = tuple(float(g.replace("m", "-")) for g in m.groups()[1:])
         except ValueError:
             continue
         p = os.path.join(cache_dir, fn)
-        if not _covers(box, bbox) or (not stale and now - os.path.getmtime(p) >= CACHE_DAYS * 86400):
+        if not _covers(box, bbox) or (not stale and now - os.path.getmtime(p) >= days * 86400):
             continue
         try:
             with open(p, encoding="utf-8") as fh:
@@ -454,7 +505,7 @@ def _clip(roads, bbox):
 
 def _state(cache_dir, update=None):
     """Keadaan server di cache: {'good': host terakhir berhasil, 'rest': {host: istirahat_sampai}}."""
-    st = {"good": None, "rest": {}, "fail_t": 0.0, "fail_why": ""}
+    st = {"good": None, "rest": {}, "fail_t": 0.0, "fail_why": "", "relna_fail": {}}
     if not cache_dir:
         return st
     p = os.path.join(cache_dir, "osm_server.json")
@@ -465,6 +516,8 @@ def _state(cache_dir, update=None):
             st["good"] = got.get("good")
             st["rest"] = {k: float(v) for k, v in (got.get("rest") or {}).items() if float(v) > time.time()}
             st["fail_t"], st["fail_why"] = float(got.get("fail_t") or 0), str(got.get("fail_why") or "")
+            st["relna_fail"] = {k: float(v) for k, v in (got.get("relna_fail") or {}).items()
+                                if time.time() - float(v) < FAIL_MEMO_S}
         except Exception as e:      # berkas keadaan rusak -> mulai dari keadaan kosong
             _log.note(e)
     if update:
@@ -522,12 +575,12 @@ def _http(url, post=None, feedback=None, timeout_ms=REQ_TIMEOUT_MS):
     return (int(code) if code else (200 if err == no_err else 0)), raw
 
 
-def _ask(url, body):
+def _ask(url, body, timeout_ms=REQ_TIMEOUT_MS):
     """Satu server Overpass -> (js, None, None) atau (None, alasan, jenis); jenis: 'block' (406/429/403: klien ditolak)
     atau 'busy' (504/timeout/galat lain)."""
     host = url.split("/")[2]
     try:
-        code, raw = _http(url, body, None)
+        code, raw = _http(url, body, None, timeout_ms)
         if code is None or not raw:
             return None, "%s: %s" % (host, raw if code is None else "tidak menjawab"), "busy"
         if code in (403, 406, 429):
@@ -543,7 +596,7 @@ def _ask(url, body):
         return None, "%s: %s" % (host, str(e)[:60]), "busy"
 
 
-def _one(url, body, feedback=None, limit_s=SERVER_LIMIT_S):
+def _one(url, body, feedback=None, limit_s=SERVER_LIMIT_S, timeout_ms=REQ_TIMEOUT_MS):
     """Jalankan _ask di thread Qt dengan batas SERVER_LIMIT_S (QGIS tetap bisa dibatalkan)."""
     import queue
     from qgis.PyQt.QtCore import QThread
@@ -551,7 +604,7 @@ def _one(url, body, feedback=None, limit_s=SERVER_LIMIT_S):
 
     class _Job(QThread):          # QThread (bukan thread Python biasa): pewaktu jaringan Qt butuh thread Qt
         def run(self):
-            q.put(_ask(url, body))
+            q.put(_ask(url, body, timeout_ms))
     j = _Job()
     _JOBS[:] = [o for o in _JOBS if o.isRunning()] + [j]     # simpan acuan sampai thread selesai
     j.start()
@@ -572,8 +625,16 @@ def overpass_query(b, timeout_s=25):
     Jalan tol, nasional/provinsi/kolektor (+ yang bertag lanes/width), rel, sungai/kanal di kotak b."""
     return ('[out:json][timeout:%d][maxsize:67108864][bbox:%f,%f,%f,%f];('
             'way[highway~"^(motorway|trunk|primary|secondary|tertiary)(_link)?$"];way[highway][lanes];way[highway][width];'
-            'way[highway=construction];way[railway~"^(rail|light_rail|narrow_gauge|construction)$"];'
+            'way[highway=construction];way[railway~"^(rail|light_rail|narrow_gauge|construction|disused|abandoned|preserved|razed)$"];'
+            'way["disused:railway"];way["abandoned:railway"];way["razed:railway"];way[historic=railway];'
             'way[waterway~"^(river|canal)$"];);out tags geom qt;' % (timeout_s, b[1], b[0], b[3], b[2]))
+
+
+def relna_query(b, timeout_s=25):
+    """3.15.8: kueri Overpass KHUSUS rel nonaktif (kecil: hanya beberapa puluh ruas per wilayah)."""
+    return ('[out:json][timeout:%d][maxsize:16777216][bbox:%f,%f,%f,%f];(way[railway~"^(disused|abandoned|preserved|razed)$"];'
+            'way["disused:railway"];way["abandoned:railway"];way["razed:railway"];way[historic=railway];);'
+            'out tags geom qt;' % (timeout_s, b[1], b[0], b[3], b[2]))
 
 
 def _src_label(js, how):
@@ -581,25 +642,27 @@ def _src_label(js, how):
     return "OpenStreetMap (%s%s; %s)" % (how, (", data per %s" % ts) if ts else "", ATTRIBUTION)
 
 
-def fetch(bbox, cache_dir, feedback=None, timeout_s=25):
+def fetch(bbox, cache_dir, feedback=None, timeout_s=25, prefix="osm_jalan", days=CACHE_DAYS, query=None):
     """Jalan/rel/sungai di kotak bbox dari OpenStreetMap: memori -> cache disk -> server Overpass (berurutan, dengan
-    pemutus sirkuit) -> cache kedaluwarsa. -> (daftar jalan, keterangan sumber) atau (None, alasan)."""
+    pemutus sirkuit) -> cache kedaluwarsa. -> (daftar jalan, keterangan sumber) atau (None, alasan).
+    prefix/days/query: 3.15.8 dipakai juga untuk kueri khusus rel nonaktif (fetch_relna)."""
+    query = query or overpass_query
     g = GRID_DEG
     b = (math.floor(bbox[0] / g) * g, math.floor(bbox[1] / g) * g, math.ceil(bbox[2] / g) * g, math.ceil(bbox[3] / g) * g)
     b = tuple(round(v, 6) for v in b)
     now = time.time()
-    for box, (t_, js_, src_) in list(_MEMO.items()):
-        if _covers(box, bbox) and now - t_ < CACHE_DAYS * 86400:
+    for (pf_, box), (t_, js_, src_) in list(_MEMO.items()):
+        if pf_ == prefix and _covers(box, bbox) and now - t_ < days * 86400:
             return _clip(parse_overpass(js_), bbox), src_
-    hit = _cache_find(cache_dir, bbox)
+    hit = _cache_find(cache_dir, bbox, prefix=prefix, days=days)
     if hit:
         js, mt, box = hit
         src = _src_label(js, "cache %s" % time.strftime("%d-%m-%Y", time.localtime(mt)))
-        _MEMO[box] = (mt, js, src)
+        _MEMO[(prefix, box)] = (mt, js, src)
         return _clip(parse_overpass(js), bbox), src
 
     def stale(why):
-        old = _cache_find(cache_dir, bbox, stale=True)
+        old = _cache_find(cache_dir, bbox, stale=True, prefix=prefix, days=days)
         if old:
             js, mt, _box = old
             return _clip(parse_overpass(js), bbox), _src_label(
@@ -615,7 +678,7 @@ def fetch(bbox, cache_dir, feedback=None, timeout_s=25):
         from qgis.PyQt.QtCore import QUrl
     except Exception as e:
         return None, "modul jaringan QGIS tidak tersedia (%s)" % e
-    body = b"data=" + bytes(QUrl.toPercentEncoding(overpass_query(b, timeout_s)))
+    body = b"data=" + bytes(QUrl.toPercentEncoding(query(b, timeout_s)))
     hosts = sorted(OVERPASS, key=lambda u: 0 if u.split("/")[2] == st["good"] else 1)
     js, name, fails, t0 = None, None, [], time.time()
     for url in hosts:
@@ -646,16 +709,147 @@ def fetch(bbox, cache_dir, feedback=None, timeout_s=25):
     js["elements"] = [e for e in js.get("elements", []) if classify(e.get("tags") or {})]
     js["seranta_v"] = 2
     src = _src_label(js, "%s, %s" % (name, time.strftime("%d-%m-%Y")))
-    _MEMO[b] = (time.time(), js, src)
+    _MEMO[(prefix, b)] = (time.time(), js, src)
     _state(cache_dir, lambda s_: s_.update(good=name, fail_t=0.0, fail_why=""))
     if cache_dir:
         try:
             os.makedirs(cache_dir, exist_ok=True)
-            with open(_cache_path(cache_dir, b), "w", encoding="utf-8") as fh:
+            with open(_cache_path(cache_dir, b, prefix), "w", encoding="utf-8") as fh:
                 json.dump(js, fh)
         except Exception as e:
             _log.note(e)
     return _clip(parse_overpass(js), bbox), src
+
+
+def _same_line(a, b):
+    def k(r):
+        return {(round(p[0], 4), round(p[1], 4)) for p in r["pts"]}
+    ka, kb = k(a), k(b)
+    return bool(ka) and len(ka & kb) >= 0.8 * min(len(ka), len(kb))
+
+
+# 3.15.8: rel nonaktif SATU KALI PER PULAU. Server Overpass publik sering sibuk (uji 21 Nov 2026 di QGIS: ketiganya
+# 504/tidak menjawab dalam 20 detik per cluster), tetapi satu kueri rel nonaktif seluruh Jawa selesai +-66 detik
+# (2.222 ruas, 3 MB). Hasil per pulau disimpan 180 hari lalu dipakai semua cluster tanpa internet: satu permintaan per
+# pulau per enam bulan (sesuai kebijakan Overpass: cache, tanpa permintaan berulang). Pulau tanpa jalur KA -> kueri per
+# wilayah cluster (kecil). Kotak: (xmin, ymin, xmax, ymax).
+RELNA_ISLANDS = (("jawa", (105.0, -9.0, 115.0, -5.8)), ("sumatra", (95.0, -6.0, 106.2, 6.0)),
+                 ("sulawesi", (118.7, -6.0, 125.5, 2.0)))
+RELNA_ISLAND_WAIT_S = 150.0     # satu server (uji: Jawa 57-66 detik)
+RELNA_ISLAND_TOTAL_S = 150.0    # semua server bersama-sama
+_RELNA_FAIL = {}
+_RELNA_MEMO = {}       # path cache pulau -> (mtime, json, daftar ruas terurai)
+
+
+def _island_of(bbox):
+    for nm, b in RELNA_ISLANDS:
+        if _covers(b, bbox):
+            return nm, b
+    return None, None
+
+
+def relna_island(bbox, cache_dir, feedback=None):
+    """Rel nonaktif satu pulau (cache 180 hari; unduh sekali bila belum ada). -> (daftar, sumber) atau (None, alasan);
+    (None, None) bila bbox tidak di pulau berjalur KA."""
+    nm, ib = _island_of(bbox)
+    if not nm or not cache_dir:
+        return None, None
+    p = os.path.join(cache_dir, "osm_relna_pulau_%s.json" % nm)
+    old = None
+    try:
+        mt = os.path.getmtime(p)
+        memo = _RELNA_MEMO.get(p)
+        if memo and memo[0] == mt:          # 3.15.8: dibaca & diurai sekali per sesi, bukan per cluster
+            old, roads_all = memo[1], memo[2]
+        else:
+            with open(p, encoding="utf-8") as fh:
+                old = json.load(fh)
+            roads_all = parse_overpass(old)
+            _RELNA_MEMO[p] = (mt, old, roads_all)
+        if time.time() - mt < RELNA_CACHE_DAYS * 86400:
+            return _clip(roads_all, bbox), _src_label(old, "rel nonaktif pulau %s, cache %s" % (
+                nm, time.strftime("%d-%m-%Y", time.localtime(mt))))
+    except Exception:
+        old = None
+    st0 = _state(cache_dir)
+    last_fail = max(_RELNA_FAIL.get(nm, 0), float(st0.get("relna_fail", {}).get(nm, 0) or 0))
+    if 0 <= time.time() - last_fail < FAIL_MEMO_S:
+        why = "unduhan rel nonaktif pulau %s gagal %d menit lalu (dicoba lagi otomatis setelah %d menit)" % (
+            nm, int((time.time() - last_fail) / 60), FAIL_MEMO_S // 60)
+    else:
+        try:
+            from qgis.PyQt.QtCore import QUrl
+        except Exception as e:
+            return None, "modul jaringan QGIS tidak tersedia (%s)" % e
+        if feedback is not None:
+            feedback.pushInfo("Mengunduh data rel KA nonaktif pulau %s dari OpenStreetMap (sekali per 180 hari, +-1-3 "
+                              "menit) ..." % nm)
+        q = relna_query((ib[0], ib[1], ib[2], ib[3]), 180).replace("[maxsize:16777216]", "[maxsize:268435456]")
+        body = b"data=" + bytes(QUrl.toPercentEncoding(q))
+        st = st0
+        fails, t0 = [], time.time()
+        for url in sorted(OVERPASS, key=lambda u: 0 if u.split("/")[2] == st["good"] else 1):
+            host = url.split("/")[2]
+            if host in st["rest"]:
+                fails.append("%s: diistirahatkan" % host)
+                continue
+            left = RELNA_ISLAND_TOTAL_S - (time.time() - t0)
+            if left < 20:          # batas waktu seluruh percobaan: proses QC tidak tertahan lama oleh server sibuk
+                fails.append("%s: dilewati (batas %d detik)" % (host, RELNA_ISLAND_TOTAL_S))
+                continue
+            wait = min(RELNA_ISLAND_WAIT_S, left)
+            js, why_, kind = _one(url, body, feedback, wait, int(wait * 1000))
+            if kind == "cancel":
+                return None, "dibatalkan"
+            if js is not None:
+                js["elements"] = [e for e in js.get("elements", []) if classify(e.get("tags") or {}) == "rel_nonaktif"]
+                js["seranta_v"] = 2
+                try:
+                    os.makedirs(cache_dir, exist_ok=True)
+                    with open(p + ".part", "w", encoding="utf-8") as fh:
+                        json.dump(js, fh)
+                    os.replace(p + ".part", p)
+                except Exception as e:
+                    _log.note(e)
+                _state(cache_dir, lambda s_, h_=host: s_.update(good=h_))
+                return _clip(parse_overpass(js), bbox), _src_label(js, "rel nonaktif pulau %s, %s, %s" % (
+                    nm, host, time.strftime("%d-%m-%Y")))
+            fails.append(why_)
+            if kind == "block":
+                _state(cache_dir, lambda s_, h_=host: s_["rest"].__setitem__(h_, time.time() + REST_BLOCK_S))
+        _RELNA_FAIL[nm] = time.time()
+        _state(cache_dir, lambda s_: s_.setdefault("relna_fail", {}).__setitem__(nm, _RELNA_FAIL[nm]))
+        why = "; ".join(str(f) for f in fails)[:160]
+    if old:
+        return _clip(parse_overpass(old), bbox), _src_label(old, "rel nonaktif pulau %s, cache LAMA" % nm)
+    return None, why
+
+
+def add_relna(roads, bbox, cache_dir, ref_dir=None, feedback=None):
+    """3.15.8: lengkapi daftar jalan dengan REL NONAKTIF dari file aset KAI lokal, data rel nonaktif per pulau (cache 180
+    hari) atau kueri Overpass khusus wilayah cluster. -> (daftar jalan, keterangan sumber rel nonaktif, dicek)."""
+    roads = list(roads or [])
+    have = [r for r in roads if r["kind"] == "rel_nonaktif"]
+    got, srcs, ok = [], [], False
+    loc = find_relna(ref_dir)
+    if loc:
+        got += load_local(loc, bbox, all_relna=True)
+        srcs.append("file %s" % ", ".join(os.path.basename(x) for x in loc[:2]))
+        ok = True
+    js_roads, why = relna_island(bbox, cache_dir, feedback)
+    if js_roads is None:      # bukan pulau berjalur KA / unduhan pulau gagal: kueri kecil per wilayah cluster
+        js_roads, why = fetch(bbox, cache_dir, feedback, prefix="osm_relna", days=RELNA_CACHE_DAYS, query=relna_query)
+    if js_roads is not None:
+        got += js_roads
+        srcs.append(why)
+        ok = True
+    elif not loc:
+        srcs.append("TIDAK dicek: %s" % str(why)[:160])
+    for r in got:
+        if r["kind"] == "rel_nonaktif" and not any(_same_line(r, h) for h in have):
+            roads.append(r)
+            have.append(r)
+    return roads, "; ".join(srcs), ok
 
 
 def _seg_x(a, b, c, d):
@@ -706,7 +900,7 @@ def crossings(segs, roads, kx, ky, merge_m=15.0):
                 continue
             for c, d in zip(pm, pm[1:]):
                 hit = _seg_x(A, B, c, d)
-                if hit and r["kind"] not in ("tol", "rel") and _angle(A, B, c, d) < PARALLEL_DEG:
+                if hit and r["kind"] not in ("tol", "rel", "rel_nonaktif") and _angle(A, B, c, d) < PARALLEL_DEG:
                     # 3.15.2: sudut kecil hanya diabaikan bila salah satu ujung rentang masih di badan jalan (jalur
                     # menyusuri as jalan). Bila kedua ujung sudah di luar setengah lebar jalan, kabel benar-benar
                     # menyeberang secara serong dan tetap dihitung (dulu persilangan serong < 25 derajat luput).
@@ -722,7 +916,8 @@ def crossings(segs, roads, kx, ky, merge_m=15.0):
                     out.append({"kind": r["kind"], "name": r["name"] or "-", "lon": x / kx, "lat": y / ky, "seg": nm,
                                 "bridge": r["bridge"], "tunnel": r["tunnel"], "building": r.get("building", False),
                                 "hw": r.get("hw", ""), "lanes": r.get("lanes"), "width": r.get("width"),
-                                "d_end": dmin, "_x": x, "_y": y})
+                                "d_end": dmin, "_x": x, "_y": y, "lori": r.get("lori", False),
+                                "razed": r.get("razed", False)})
     return out
 
 
@@ -740,10 +935,10 @@ def near_poles(poles, roads, kx, ky, crossed=()):
     """Tiang yang terlalu dekat jalan tol (< NEAR_TOLL_M) atau rel (< NEAR_RAIL_M) walau rentangnya TIDAK memotong
     (rute sejajar di ruang milik jalan tol / jalur KA). poles: [(nama, (lon, lat))]; crossed: nama tiang yang sudah
     dilaporkan di temuan persilangan (tidak diulang). -> [dict(kind, name, pole, lon, lat, d)]"""
-    lim = {"tol": NEAR_TOLL_M, "rel": NEAR_RAIL_M}
+    lim = {"tol": NEAR_TOLL_M, "rel": NEAR_RAIL_M, "rel_nonaktif": NEAR_RAIL_M}
     rs = []
     for r in roads:
-        if r["kind"] not in lim or r.get("tunnel"):
+        if r["kind"] not in lim or r.get("tunnel") or r.get("lori"):      # 3.15.8: rel lori PG bukan jalur KA
             continue
         pm = [(p[0] * kx, p[1] * ky) for p in r["pts"]]
         xs, ys = [p[0] for p in pm], [p[1] for p in pm]
