@@ -27,7 +27,8 @@ ok(C({"highway": "secondary"}) == "sedang" and C({"highway": "tertiary_link"}) =
 ok(C({"highway": "residential", "lanes": "2"}) is None and C({"highway": "footway", "width": "20"}) is None, "gang")
 ok(C({"waterway": "river"}) == "sungai" and C({"waterway": "drain"}) is None and C({"waterway": "canal", "tunnel": "culvert"})
    is None, "sungai")
-ok(C({"railway": "abandoned"}) is None and C({"railway": "rail", "usage": "branch"}) == "rel", "rel nonaktif")
+# 3.15.8: rel nonaktif (abandoned/disused) dicek sebagai aset KAI, kelas sendiri
+ok(C({"railway": "abandoned"}) == "rel_nonaktif" and C({"railway": "rail", "usage": "branch"}) == "rel", "rel nonaktif")
 
 # kebijakan pemakaian: server Overpass berurutan (tanpa kumi = private.coffee, tanpa API penyuntingan 0.6)
 ok(len(J.OVERPASS) == 3 and not any("kumi" in u or "api.openstreetmap.org" in u for u in J.OVERPASS), "daftar server")

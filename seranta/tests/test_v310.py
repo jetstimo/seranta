@@ -60,7 +60,8 @@ check(r["length"] <= 255, "<= 255")
 r = R.build([{"kind": "WARN_TIANG_GANDA_LINTAS_CLUSTER", "sev": "WARNING", "val": 1, "lim": None,
               "ket": "1 tiang cluster ini juga tercatat di KMZ cluster RT 06_90HP (koordinat sama <= 1.0 m): -1.6, 103.5. Jenis: "
                      "1 tiang EKSISTING di kedua cluster (bukan BOQ tiang baru; ...). Satu tiang fisik ..."}])
-check("tiang eksisting dicatat 2x" in r["text"] and r["status"] == "REJECT", "tiang eksisting bukan BOQ: " + r["text"])
+# 3.15.8 (keputusan pengguna 23-11-2026): tiang yang juga tercatat di cluster lain = catatan, bukan alasan reject
+check("tiang eksisting dicatat 2x" in r["text"] and r["status"] == "APPROVE DENGAN CATATAN", "tiang eksisting bukan BOQ: " + r["text"])
 r = R.build([{"kind": "WARN_TSSR_DIPAKAI_BERSAMA", "sev": "WARNING", "val": 1242, "lim": 65,
               "ket": "TSSR x.docx identik dengan TSSR 12 cluster lain (a, b): TSSR mencatat 1242 HP untuk wilayah induk/strand"}])
 check(r["status"] == "APPROVE DENGAN CATATAN" and "12 cluster lain" in r["text"], "TSSR strand = catatan")
