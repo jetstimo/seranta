@@ -65,6 +65,12 @@ class SerantaPlugin:
         except Exception:
             self.nav = None
         self._welcome()
+        try:        # 3.15.10: tawarkan data jalan offline sekali, setelah QGIS selesai terbuka
+            from qgis.PyQt.QtCore import QTimer
+            from . import data_jalan_ui
+            QTimer.singleShot(6000, lambda: data_jalan_ui.maybe_ask(self.iface))
+        except Exception as _e:
+            _log.note(_e)
 
     def _build_actions(self):
         """Menu & toolbar. 3.15.0: Seranta hanya melayani Survey QC & Design Input; alat 2-4 tidak ditampilkan
@@ -78,7 +84,14 @@ class SerantaPlugin:
         self._add("QC Findings Navigator",
                   "Browse findings by category and zoom to each one on the map", self.show_nav,
                   toolbar=True, icon=QIcon(os.path.join(HERE, "icon_nav.png")))
+        # 3.15.10: data jalan OSM offline (unduh/perbarui per pulau atau seluruh Indonesia)
+        self._add("Offline road data...", "Download or update OpenStreetMap road data to this laptop so the street "
+                  "and crossing checks work without the public servers", self.offline_roads)
         self._add("About Seranta", "Version, author and licence", self.about)
+
+    def offline_roads(self):
+        from . import data_jalan_ui
+        data_jalan_ui.dialog(self.iface)
 
     def _clear_actions(self):
         for act in self.actions:

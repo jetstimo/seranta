@@ -47,7 +47,7 @@ PRIORITY = [
     "HP_DI_BOUNDARY_CLUSTER_LAIN", "WARN_BOUNDARY_BERIRISAN_CLUSTER_LAIN", "UNV_BAKP_NOT_SUPPLIED", "BAKP_HP_KURANG",
     "BAKP_STEMPEL_TTD_TEMPELAN_DIGITAL", "WARN_ID_CLUSTER_TIDAK_DIKETAHUI", "UNV_BAKP_DARI_CLUSTER_SAUDARA",
     "BAKP_ADA_GAMBAR_TEMPELAN", "BAKP_NAMA_FILE_ID_BEDA", "WARN_BAKP_ID_METADATA_BEDA", "BAKP_DIEDIT_APLIKASI_GRAFIS", "FUNNEL_SENDIRI_REJECT",
-    "HP_LUAR_FUNNEL", "HP_LUAR_BOUNDARY", "HP_DI_AREA_TANPA_IZIN", "TIANG_DI_AREA_TANPA_IZIN", "HP_JAUH_DARI_TIANG", "RENTANG_NP_NP", "RENTANG_NP_EP",
+    "HP_LUAR_FUNNEL", "HP_LUAR_BOUNDARY", "HP_DI_AREA_TANPA_IZIN", "TIANG_DI_AREA_TANPA_IZIN", "HP_JAUH_DARI_TIANG", "HP_DROP_LEWAT_JALAN_DEPAN", "RENTANG_NP_NP", "RENTANG_NP_EP",
     "JALUR_TANPA_TIANG", "JALUR_TERPUTUS", "UJUNG_JALUR_TANPA_TIANG", "WARN_SIMPANG_TANPA_TIANG",      # 3.13.0 integritas jalur
     "JALUR_MELINTAS_TOL", "JALUR_MELINTAS_REL", "JALUR_MELINTAS_OBSTACLE",                                                          # 3.15.0 standar 10
     "HP_DUPLIKAT_KOORDINAT", "HP_DUPLIKAT_ID", "HP_DUPLIKAT_LABEL", "WARN_HP_MUNGKIN_DUPLIKAT_LINTAS_CLUSTER",
@@ -59,7 +59,7 @@ PRIORITY = [
     "WARN_HPDB_CLUSTER_NAME_CAMPUR", "WARN_HPDB_RT_RW_TIDAK_SESUAI", "WARN_NAMA_BERKAS_WILAYAH_BEDA", "WARN_BOUNDARY_TIDAK_VALID",
     "WARN_JALUR_MELINTAS_JALAN_BESAR", "WARN_TIANG_DEKAT_JALAN_TOL", "WARN_TIANG_DEKAT_REL",
     "WARN_HP_KOORDINAT_BEDA_FOTO", "WARN_JALUR_LEWAT_AREA_TANPA_IZIN", "WARN_HP_DI_AREA_NO_SPACE",
-    "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
+    "WARN_HP_TANPA_EVIDENCE", "TIANG_NGANGGUR", "WARN_HP_LABEL_SAMA", "WARN_HP_JAUH_LEWAT_JALUR", "WARN_HP_DROP_LEWAT_JALAN_DEPAN", "WARN_HP_AKSES_DALAM", "HP_BERGESER", "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR",
     "WARN_ADMIN_KELURAHAN_BELUM_DI_FINDIM",
     "WARN_JALUR_LINTAS_FUNNEL_1PIC", "WARN_HP_KOORDINAT_BEDA_KMZ", "WARN_JALUR_MELINTAS_REL_NONAKTIF",  # 3.15.8
     "WARN_TIANG_DEKAT_REL_NONAKTIF",
@@ -501,6 +501,17 @@ def phrases(findings, rowmap=None, findim_stale=False, route=True):
             else:
                 add(key, "%s tidak dilewati jalur" % (", ".join(nm[:3]) if n <= 3 else "%d tiang NP" % n), "%d tiang NP nganggur" % n,
                     blocking=True)
+        elif key in ("HP_DROP_LEWAT_JALAN_DEPAN", "WARN_HP_DROP_LEWAT_JALAN_DEPAN"):
+            # 3.15.10: rumah menghadap jalan tanpa tiang; drop lewat jalan depan > batas (garis lurus melintas rumah lain)
+            rr = [r for f in L for r in _rows_of(f["ket"], rowmap)]
+            lim = num(L[0].get("lim") or 50, 0)
+            mx = max(f["val"] or 0 for f in L)
+            if key == "HP_DROP_LEWAT_JALAN_DEPAN":
+                add(key, "HP baris %s menghadap jalan tanpa tiang: drop lewat jalan depan %s m >%s m" % (
+                    rows_compact(rr, 4), num(mx), lim), "%d HP drop lewat jalan >%s m" % (len(L), lim))
+            else:
+                add(key, "HP baris %s drop lewat jalan depan %s m (sedikit >%s m): ukur ulang" % (
+                    rows_compact(rr, 4), num(mx), lim), "%d HP drop lewat jalan ~%s m" % (len(L), lim))
         elif key == "WARN_HP_JAUH_LEWAT_JALUR":
             add(key, "%d HP >%s m ke tiang lewat jalur/akses (baris %s): cek akses" % (
                 n, num(L[0].get("lim") or 50, 0), rows_compact(rows, 4)), "%d HP jauh lewat jalur" % n)
@@ -905,6 +916,8 @@ SIMPLE = {
     "TIANG_NGANGGUR": "ada tiang yang tidak dilewati jalur",
     "WARN_HP_LABEL_SAMA": "ada homepass dengan label sama",
     "WARN_HP_JAUH_LEWAT_JALUR": "ada homepass yang lebih dari {lim} m dari tiang bila diukur lewat jalan",
+    "HP_DROP_LEWAT_JALAN_DEPAN": "ada homepass yang menghadap jalan tanpa tiang (drop lewat jalan lebih dari {lim} m)",
+    "WARN_HP_DROP_LEWAT_JALAN_DEPAN": "ada homepass yang drop-nya lewat jalan sedikit di atas {lim} m",
     "WARN_HP_AKSES_DALAM": "ada homepass yang jauh dari jalur kabel",
     "HP_BERGESER": "ada homepass yang posisinya bergeser",
     "WARN_ADMIN_ID_CLUSTER_TIDAK_TERDAFTAR": "ID cluster belum terdaftar",

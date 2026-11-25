@@ -372,6 +372,11 @@ def package(bbox, cache_dir, feedback=None):
         ", ".join(os.path.basename(x) for x in out), idx.get("dibuat", "?"), ATTRIBUTION)
 
 
+def _cache_pbf(cache_dir):
+    """3.15.10: ekstrak Geofabrik di <cache>\\pbf (lokal, tidak ikut sinkron OneDrive) - dipakai juga oleh akses_drop."""
+    return find_pbf(os.path.join(cache_dir, "pbf")) if cache_dir else []
+
+
 def find_local(ref_dir, cache_dir=None, feedback=None):
     """Data jalan lokal di folder data referensi: *OSM*.geojson/.gpkg/.shp, dan paket dari ekstrak *.osm.pbf."""
     if not ref_dir or not os.path.isdir(ref_dir):
@@ -380,7 +385,7 @@ def find_local(ref_dir, cache_dir=None, feedback=None):
                  if LOCAL_RX.search(f) and f.lower().endswith(LOCAL_EXT) and not f.startswith("~$")
                  and not RELNA_RX.search(f))
     if cache_dir:
-        for p in find_pbf(ref_dir):
+        for p in find_pbf(ref_dir) + _cache_pbf(cache_dir):
             g = pbf_package(p, cache_dir, feedback)
             if g:
                 out.append(g)
@@ -453,7 +458,7 @@ FAIL_MEMO_S = 1800
 _MEMO = {}            # kotak -> (waktu, js, sumber)
 _FAIL = {"t": 0.0, "why": ""}
 _JOBS = []
-_CACHE_RX = re.compile(r"^(osm_jalan|osm_relna)_(m?[\d.]+)_(m?[\d.]+)_(m?[\d.]+)_(m?[\d.]+)\.json$")
+_CACHE_RX = re.compile(r"^(osm_jalan|osm_relna|osm_lokal)_(m?[\d.]+)_(m?[\d.]+)_(m?[\d.]+)_(m?[\d.]+)\.json$")
 
 
 def _cache_path(cache_dir, bbox, prefix="osm_jalan"):
@@ -642,30 +647,33 @@ def _src_label(js, how):
     return "OpenStreetMap (%s%s; %s)" % (how, (", data per %s" % ts) if ts else "", ATTRIBUTION)
 
 
-def fetch(bbox, cache_dir, feedback=None, timeout_s=25, prefix="osm_jalan", days=CACHE_DAYS, query=None):
+def fetch(bbox, cache_dir, feedback=None, timeout_s=25, prefix="osm_jalan", days=CACHE_DAYS, query=None, parser=None,
+          keep=None):
     """Jalan/rel/sungai di kotak bbox dari OpenStreetMap: memori -> cache disk -> server Overpass (berurutan, dengan
     pemutus sirkuit) -> cache kedaluwarsa. -> (daftar jalan, keterangan sumber) atau (None, alasan).
     prefix/days/query: 3.15.8 dipakai juga untuk kueri khusus rel nonaktif (fetch_relna)."""
     query = query or overpass_query
+    parse = parser or parse_overpass      # 3.15.10: jalan lokal (akses_drop) memakai pengurai & penyaring sendiri
+    keep = keep or classify
     g = GRID_DEG
     b = (math.floor(bbox[0] / g) * g, math.floor(bbox[1] / g) * g, math.ceil(bbox[2] / g) * g, math.ceil(bbox[3] / g) * g)
     b = tuple(round(v, 6) for v in b)
     now = time.time()
     for (pf_, box), (t_, js_, src_) in list(_MEMO.items()):
         if pf_ == prefix and _covers(box, bbox) and now - t_ < days * 86400:
-            return _clip(parse_overpass(js_), bbox), src_
+            return _clip(parse(js_), bbox), src_
     hit = _cache_find(cache_dir, bbox, prefix=prefix, days=days)
     if hit:
         js, mt, box = hit
         src = _src_label(js, "cache %s" % time.strftime("%d-%m-%Y", time.localtime(mt)))
         _MEMO[(prefix, box)] = (mt, js, src)
-        return _clip(parse_overpass(js), bbox), src
+        return _clip(parse(js), bbox), src
 
     def stale(why):
         old = _cache_find(cache_dir, bbox, stale=True, prefix=prefix, days=days)
         if old:
             js, mt, _box = old
-            return _clip(parse_overpass(js), bbox), _src_label(
+            return _clip(parse(js), bbox), _src_label(
                 js, "cache LAMA %s, server tidak terjangkau" % time.strftime("%d-%m-%Y", time.localtime(mt)))
         return None, why
     st = _state(cache_dir)
@@ -706,7 +714,7 @@ def fetch(bbox, cache_dir, feedback=None, timeout_s=25, prefix="osm_jalan", days
         _state(cache_dir, lambda s_: s_.update(fail_t=_FAIL["t"], fail_why=why))
         return stale(why)
     _FAIL["t"] = 0.0
-    js["elements"] = [e for e in js.get("elements", []) if classify(e.get("tags") or {})]
+    js["elements"] = [e for e in js.get("elements", []) if keep(e.get("tags") or {})]
     js["seranta_v"] = 2
     src = _src_label(js, "%s, %s" % (name, time.strftime("%d-%m-%Y")))
     _MEMO[(prefix, b)] = (time.time(), js, src)
@@ -718,7 +726,7 @@ def fetch(bbox, cache_dir, feedback=None, timeout_s=25, prefix="osm_jalan", days
                 json.dump(js, fh)
         except Exception as e:
             _log.note(e)
-    return _clip(parse_overpass(js), bbox), src
+    return _clip(parse(js), bbox), src
 
 
 def _same_line(a, b):

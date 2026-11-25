@@ -21,7 +21,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.15.9"
+__version__ = "3.15.10"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -63,6 +63,7 @@ try:
     from . import integritas_jalur as _integ
     from . import kenali as _kenali
     from . import obstacle as _obst
+    from . import arsip as _arsip
 except ImportError:          # dijalankan sebagai skrip tunggal
     import bakp as _bakp
     import qc_core as _qc
@@ -79,6 +80,7 @@ except ImportError:          # dijalankan sebagai skrip tunggal
     import integritas_jalur as _integ
     import kenali as _kenali
     import obstacle as _obst
+    import arsip as _arsip
 
 # Kompatibilitas: QGIS 3.36+ (termasuk 3.40 Bratislava) memindahkan enum ke kelas Qgis.
 try:
@@ -2149,6 +2151,11 @@ QC_LABELS = [
      "Handbook internal 50 m; bentang drop udara 15-50 m (Europacable 2023)"),
     (r"^WARN_HP_JAUH_LEWAT_JALUR", 1, "HP lebih dari batas jarak ke tiang bila diukur lewat jalur/akses",
      "W1_HP_JAUH_LEWAT_JALUR", "Handbook internal 50 m; drop mengikuti jalur akses ke tiang (lead-in path, Biarri FOND)"),
+    (r"^HP_DROP_LEWAT_JALAN_DEPAN", 1, "HP menghadap jalan tanpa tiang: drop lewat jalan depan > batas",
+     "S1_HP_DROP_JALAN_DEPAN", "Handbook internal 50 m; drop tidak boleh melintas rumah/pekarangan lain (izin warga) - "
+     "panjang drop diukur lewat ruang jalan (OpenStreetMap)"),
+    (r"^WARN_HP_DROP_LEWAT_JALAN_DEPAN", 1, "HP menghadap jalan tanpa tiang: drop lewat jalan depan sedikit di atas batas",
+     "W1_HP_DROP_JALAN_DEPAN", "Handbook internal 50 m; selisih <= 5 m = galat GPS/peta: ukur ulang"),
     (r"^WARN_HP_AKSES_DALAM", 1, "HP jauh dari jalur survei (akses masuk perlu dicek)", "W1_HP_AKSES_DALAM",
      "drop tidak boleh melintas pekarangan tanpa izin (Standar Review Strand: izin warga/BAKP); 30 m = parameter desain"),
     (r"^HP_DI_RFS_DONE", 2, "HP di cluster terbangun (RFS DONE)", "S2_HP_RFS_DONE", "Standar Review Strand"),
@@ -3246,6 +3253,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
     POLE = "POLE"
     ROADS = "ROADS"
     OUTDIR = "OUTDIR"
+    ARCHIVE = "ARCHIVE"
     SNAP = "SNAP"
     SPAN = "SPAN"
     HPPOLE = "HPPOLE"
@@ -3330,7 +3338,11 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         # Form utama hanya 1 isian (folder); sisanya di "Advanced" dengan nilai bawaan yang aman.
         self.addParameter(QgsProcessingParameterFile(
             self.OUTDIR, self.tr("Survey folder (homepass spreadsheet + KMZ), or a parent folder for many clusters"),
-            behavior=FOLDER_BEHAVIOR))
+            behavior=FOLDER_BEHAVIOR, optional=True))
+        # 3.15.10: bahan yang dikirim sebagai arsip dipilih langsung (pemilih folder tidak bisa memilih berkas .zip)
+        self.addParameter(QgsProcessingParameterFile(
+            self.ARCHIVE, self.tr("OR survey archive (.zip / .rar / .7z) - extracted automatically next to the archive"),
+            behavior=FILE_BEHAVIOR, optional=True, fileFilter="Archive (*.zip *.rar *.7z *.ZIP *.RAR *.7Z)"))
         try:                     # isi otomatis dengan folder referensi terakhir (juga dari versi lama)
             st_ = QgsSettings()
             last_ref = (st_.value("seranta/ref_dir", "")
@@ -3795,9 +3807,31 @@ class BuatInputDesain(QgsProcessingAlgorithm):
 
     def processAlgorithm(self, parameters, context, feedback):
         outdir = self.parameterAsFile(parameters, self.OUTDIR, context)
+        arc_ = self.parameterAsFile(parameters, self.ARCHIVE, context) if self.ARCHIVE in parameters else ""
+        if not arc_ and outdir and os.path.isfile(outdir) and outdir.lower().endswith(_arsip.ARC_EXT):
+            arc_ = outdir        # path arsip ditempel / diseret ke isian folder
+        if arc_:
+            if outdir and os.path.isdir(outdir):
+                feedback.pushInfo("Both a folder and an archive were given: the archive is used.")
+            try:
+                outdir = _arsip.open_archive(arc_, lambda d_: bool(hpdb_candidates(d_)), HPDB_NAME_RX, feedback)
+            except _arsip.ArsipError as e:
+                raise QgsProcessingException("ARCHIVE NOT OPENED: %s. Extract it manually, then pick the extracted "
+                                             "folder." % e)
+            if outdir.startswith("\\\\?\\") and len(outdir) < 250:
+                outdir = outdir[4:]
+            feedback.pushInfo("Survey archive %s -> checking folder %s" % (os.path.basename(arc_), outdir))
         if not outdir or not os.path.isdir(outdir):
-            raise QgsProcessingException("Pick an existing survey folder (or parent folder).")
+            raise QgsProcessingException("Pick an existing survey folder (or parent folder), or a survey archive "
+                                         "(.zip / .rar / .7z).")
         outdir = _long_path_dir(outdir, feedback)
+        # 3.15.10: bahan dalam arsip .zip/.rar/.7z diekstrak dulu (dulu dilewati diam-diam)
+        try:
+            if _arsip.prepare(outdir, lambda d_: bool(hpdb_candidates(d_)), HPDB_NAME_RX, feedback):
+                outdir = _long_path_dir(outdir.replace("\\\\?\\", "", 1) if outdir.startswith("\\\\?\\") else outdir, feedback)
+        except Exception as e:
+            _log.note(e)
+            feedback.reportError("Archives in the folder could not be checked: %s" % e, fatalError=False)
         o = {
             "hpdb": self.parameterAsFile(parameters, self.HPDB, context),
             "cluster_kmz": self.parameterAsFile(parameters, self.CLUSTER_KMZ, context),
@@ -5444,6 +5478,89 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                            "(batas %.0f m): drop sebenarnya lebih panjang; tikor %.6f, %.6f"
                            % (hid_, meta[k_][0], d, names[qi], via_, pn_, hp_max, p.y(), p.x()),
                            None, round(via_, 1), hp_max))
+
+        # ===== 3.15.10: akses drop lewat JALAN DEPAN rumah (akses_drop.py; jalan lokal OpenStreetMap) =====
+        # Masukan reviewer 25 Nov 2026 (Procot RW 02, ?-47 & APOTIK ANANDA): rumah menghadap jalan tanpa jalur/tiang, tiang
+        # terdekat di jalan lain < 50 m garis lurus tetapi melintas rumah/pekarangan lain -> drop sebenarnya lewat jalan
+        # depan > 50 m. Berlaku sama di semua wilayah (jaringan jalan OSM semua kelas).
+        if data and poles and bool(qcp("osm_akses_drop", True)):
+            qc_before_ad_ = list(qc)
+            try:
+                try:
+                    from . import akses_drop as _adrop
+                except ImportError:
+                    import akses_drop as _adrop
+                xs_a = [p_.x() for _r_, p_ in data] + [q_.x() for q_ in poles]
+                ys_a = [p_.y() for _r_, p_ in data] + [q_.y() for q_ in poles]
+                bb_a = (min(xs_a) - 0.002, min(ys_a) - 0.002, max(xs_a) + 0.002, max(ys_a) + 0.002)
+                try:
+                    cdir_a = _cache_root()
+                except Exception:
+                    cdir_a = None
+                feedback.setProgressText("Jalan lokal OpenStreetMap (akses drop rumah lewat jalan depan)")
+                # urutan sumber: paket offline (.osm.pbf Geofabrik di folder referensi) -> cache -> server -> cache lama
+                rl_, pk_name_ = None, ""
+                try:
+                    rl_, pk_name_ = _adrop.load_paket(_adrop.find_paket(funnel_dir, cdir_a, feedback), bb_a)
+                except Exception as e_pk:
+                    _log.note(e_pk)
+                    rl_ = None
+                if rl_ is not None:
+                    m_pk = re.search(r"_(\d{9,11})\.gpkg$", pk_name_)
+                    src_a = "paket offline OpenStreetMap%s" % (
+                        (" (berkas .pbf %s)" % _dt.datetime.fromtimestamp(int(m_pk.group(1))).strftime("%d-%m-%Y"))
+                        if m_pk else "")
+                else:
+                    rl_, src_a = _osm.fetch(bb_a, cdir_a, feedback, prefix="osm_lokal", query=_adrop.local_query,
+                                            parser=_adrop.parse_local, keep=_adrop.keep_local)
+                if rl_ is None or not rl_:
+                    rep.append("  ! Akses drop lewat jalan depan rumah: TIDAK DICEK - %s. Unduh data jalan offline sekali: menu Vector > "
+                               "Seranta > Offline road data..." % (
+                        str(src_a)[:200] if rl_ is None else "OpenStreetMap belum memuat jalan di wilayah ini"))
+                else:
+                    ak2_ = _adrop.Akses([r_["pts"] for r_ in rl_],
+                                        [[(a_.x(), a_.y()), (b_.x(), b_.y())] for _ka, _kb, _L, a_, b_ in seg_list],
+                                        [(names[i_], (q_.x(), q_.y())) for i_, q_ in enumerate(poles)],
+                                        (bb_a[1] + bb_a[3]) / 2.0, (bb_a[0] + bb_a[2]) / 2.0)
+                    n_err_ad = n_warn_ad = n_unk_ad = 0
+                    for k_, (r, p) in enumerate(data):
+                        qi, d = nearest_idx(p)
+                        if d > hp_max:
+                            continue            # sudah HP_JAUH_DARI_TIANG
+                        res_ = ak2_.drop((p.x(), p.y()))
+                        if res_ is None:
+                            n_unk_ad += 1
+                            continue
+                        if res_["front_route"] or res_["L"] is None or res_["L"] <= hp_max:
+                            continue
+                        hid_ = r[iid] if iid is not None else "HP %d" % (k_ + 1)
+                        L_ = res_["L"]
+                        err_ = L_ > hp_max + _adrop.GPS_MARGIN_M
+                        code_ = "HP_DROP_LEWAT_JALAN_DEPAN" if err_ else "WARN_HP_DROP_LEWAT_JALAN_DEPAN"
+                        if err_:
+                            n_err_ad += 1
+                            # temuan akses yang lebih lemah untuk rumah yang sama digantikan temuan ini
+                            qc[:] = [q_ for q_ in qc if not (q_[0] == p and q_[1] in ("WARN_HP_JAUH_LEWAT_JALUR",
+                                                                                       "WARN_HP_AKSES_DALAM"))]
+                        else:
+                            n_warn_ad += 1
+                        qc.append((p, code_,
+                                   "%s (baris %d HPDB): rumah menghadap jalan TANPA jalur kabel/tiang. Tiang terdekat %s "
+                                   "%.0f m garis lurus, tetapi garis itu melintas rumah/pekarangan lain; drop lewat jalan "
+                                   "depan ke %s +-%.0f m (%s) > %.0f m. Tambah tiang/jalur di jalan depan rumah atau "
+                                   "keluarkan HP%s; tikor %.6f, %.6f"
+                                   % (hid_, meta[k_][0], names[qi], d, res_["pole"], L_, res_["how"], hp_max,
+                                      "" if err_ else " (selisih <= %.0f m: ukur ulang / cek lapangan)" % _adrop.GPS_MARGIN_M,
+                                      p.y(), p.x()), None, round(L_, 1), hp_max))
+                    rep.append("  Akses drop lewat jalan depan (jalan lokal %s): %d HP drop > %.0f m (reject), %d HP "
+                               "%.0f-%.0f m (cek)%s" % (src_a.split(";")[0][:60], n_err_ad, hp_max + _adrop.GPS_MARGIN_M,
+                                                        n_warn_ad, hp_max, hp_max + _adrop.GPS_MARGIN_M,
+                                                        ("; %d HP jalan depannya belum ada di OSM (tidak dinilai)" % n_unk_ad)
+                                                        if n_unk_ad else ""))
+            except Exception as e_ad:
+                qc[:] = qc_before_ad_
+                _log.note(e_ad)
+                rep.append("  ! Akses drop lewat jalan depan dilewati (galat: %s)" % str(e_ad)[:120])
 
         # ===== 3a. Efisiensi tiang & ujung jalur (Handbook QC: "minimalisir tiang", "kabel loop <= 100 m / 2 span") =====
         import math
@@ -7743,7 +7860,8 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                     else:
                         roads_, src_ = _osm.fetch(bb_, cdir_, feedback)
                 if roads_ is None:
-                    osm_line = "  Persilangan jalan tol/rel/jalan besar (OpenStreetMap): tidak dicek - %s" % src_
+                    osm_line = ("  Persilangan jalan tol/rel/jalan besar (OpenStreetMap): tidak dicek - %s. Unduh data jalan offline sekali: "
+                                "menu Vector > Seranta > Offline road data..." % src_)
                     std10 = (None, "tidak dicek - %s. Cek manual di citra: jalur tidak boleh memotong jalan tol/rel tanpa "
                                    "izin" % src_)
                 else:
@@ -8332,6 +8450,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             for t_ in (_tssr.find_tssr(outdir) or [])[:2]:
                 if not _tssr.TSSR_RX.search(os.path.basename(t_)):
                     by_content_.append("TSSR '%s' (teks dokumen memuat TSSR/Site Survey)" % os.path.relpath(t_, outdir))
+            asal_ = _arsip.origin(outdir)
+            if asal_:
+                head.insert(len(head) - 1, "Bahan dari arsip (diekstrak otomatis oleh Seranta): " + asal_)
             if by_content_:
                 head.insert(len(head) - 1, "Dikenali dari ISI berkas (nama tanpa kata kunci): " + "; ".join(by_content_))
         except Exception as e:

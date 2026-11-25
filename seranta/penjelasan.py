@@ -567,6 +567,13 @@ TOOL1_KIND = [
     ("WARN_HP_JAUH_LEWAT_JALUR", "Garis lurus rumah ke tiang masih di bawah batas, tetapi bila kabel drop mengikuti jalur/"
      "akses (menyusuri jalan lalu masuk ke rumah) jaraknya melebihi batas.",
      "Cek akses di lapangan / street view; tambahkan tiang dekat rumah atau pastikan drop boleh lewat jalan pintas."),
+    ("HP_DROP_LEWAT_JALAN_DEPAN", "Rumah menghadap jalan yang tidak punya jalur kabel/tiang. Tiang terdekat ada di jalan "
+     "lain: garis lurusnya pendek, tetapi melintas di atas rumah/pekarangan orang lain, jadi drop harus keluar lewat jalan "
+     "depan rumah dan menyusuri jalan sampai tiang - panjangnya lebih dari batas.",
+     "Tambah tiang/jalur di jalan depan rumah, atau keluarkan HP ini dari cluster. Bila di lapangan ternyata ada gang/izin "
+     "melintas, lampirkan buktinya."),
+    ("WARN_HP_DROP_LEWAT_JALAN_DEPAN", "Seperti di atas, tetapi kelebihannya kecil (<= 5 m, setara galat GPS/peta).",
+     "Ukur ulang di lapangan atau street view."),
     ("WARN_HP_AKSES_DALAM", "Rumah jauh dari semua jalur survei (mis. di belakang rumah lain): dari mana kabel drop masuk "
      "belum terlihat.", "Cek di lapangan atau street view: ada gang, atau izin melintas pekarangan tetangga? Gambar gang "
      "itu sebagai jalur bila ada."),
