@@ -21,7 +21,7 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.15.11"
+__version__ = "3.15.12"
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -6836,22 +6836,35 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                 try:
                     if pole_cover_ or route_sup_:
                         cov_sib = [g_ for g_ in pic_group if g_.get("tolerated") and g_.get("poles")]
-                        if cov_sib:
+                        # 3.15.12 (kajian Pinokalan 27 Nov 2026): tiang cluster saudara 1 PIC BEDA funnel juga melayani drop
+                        # bila KABEL CLUSTER INI SENDIRI melintas tiang itu (<= POLE_ON_LINE_M dari jalur cluster ini): itu
+                        # tiang bersama yang hanya dicatat di KMZ saudara (tiang bersama dicatat sekali), FAT cluster ini bisa
+                        # dipasang di sana. Tiang saudara yang hanya dilewati kabel saudara tetap TIDAK dihitung (keputusan
+                        # 3.14.0, Kakaskasen Ling. 7). Pinokalan: 20 dari 21 HP > 50 m tercover tiang di jalur sendiri (0,3-2,1 m).
+                        own_segs_ = [((a_.x(), a_.y()), (b_.x(), b_.y())) for _ka, _kb, _L, a_, b_ in seg_list]
+
+                        def _on_own_(x_, y_):
+                            return any(_lintas._pt_seg_m(x_, y_, a_, b_) <= POLE_ON_LINE_M for a_, b_ in own_segs_)
+                        cov_hp = cov_sib + [g_ for g_ in pic_group if not g_.get("tolerated") and g_.get("poles")]
+                        if cov_hp:
                             cover_n, cover_rows, still_ = 0, [], 0
                             for i_q, it_ in enumerate(list(qc) if pole_cover_ else []):
                                 if it_[1] not in ("HP_JAUH_DARI_TIANG", "WARN_HP_JAUH_LEWAT_JALUR"):
                                     continue
                                 px_, py_ = it_[0].x(), it_[0].y()
                                 best_ = None
-                                for g_ in cov_sib:
+                                for g_ in cov_hp:
                                     kd_ = g_.get("pole_kinds_sib") or []
                                     onr_ = g_.get("pole_on_route") or []
+                                    lintas_ = not g_.get("tolerated")
                                     for j_, (x_, y_, n_) in enumerate(g_["poles"]):
                                         if j_ < len(onr_) and not onr_[j_]:
                                             continue        # tiang saudara yang tidak dilewati jalur kabel tidak bisa melayani drop
                                         d_ = _lintas.dist_m(px_, py_, x_, y_)
+                                        if lintas_ and (d_ > hp_max or not _on_own_(x_, y_)):
+                                            continue        # beda funnel: hanya tiang yang juga dilintasi kabel cluster ini
                                         if best_ is None or d_ < best_[0]:
-                                            best_ = (d_, n_, g_["label"], kd_[j_] if j_ < len(kd_) else "", x_, y_)
+                                            best_ = (d_, n_, g_["label"], kd_[j_] if j_ < len(kd_) else "", x_, y_, lintas_)
                                 if best_ is None:
                                     continue
                                 ket_ = it_[2]
@@ -6870,17 +6883,61 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                         cover_rows.append(int(rr_.group(1)))
                                     jn_ = {"new": "tiang baru", "existing": "tiang eksisting"}.get(best_[3], "tiang")
                                     qc[i_q] = (it_[0], "INFO_HP_TERCOVER_TIANG_SAUDARA",
-                                               "%s -> TERCOVER %s %s cluster %s %.1f m (<= %.0f m; 1 PIC/berdampingan, satu funnel/"
-                                               "wilayah induk): bukan alasan reject. Desain drop dari tiang itu (FAT/kabel cluster "
-                                               "%s, catat sebagai tiang bersama) atau pindahkan HP ke cluster %s%s." % (
-                                                   ket_, jn_, best_[1] or "-", best_[2], best_[0], hp_max, best_[2], best_[2],
-                                                   ""),
+                                               "%s -> TERCOVER %s %s cluster %s %.1f m (<= %.0f m; %s): bukan alasan reject. "
+                                               "Desain drop dari tiang itu (FAT/kabel cluster %s, catat sebagai tiang bersama) "
+                                               "atau pindahkan HP ke cluster %s." % (
+                                                   ket_, jn_, best_[1] or "-", best_[2], best_[0], hp_max,
+                                                   "tiang bersama 1 PIC: kabel cluster ini melintas tiang itu" if best_[6]
+                                                   else "1 PIC/berdampingan, satu funnel/wilayah induk",
+                                                   "ini" if best_[6] else best_[2], best_[2]),
                                                [it_[0], QgsPointXY(best_[4], best_[5])],
                                                round(best_[0], 1), hp_max)
                                 elif it_[1] == "HP_JAUH_DARI_TIANG" and it_[4] is not None and best_[0] < it_[4]:
                                     still_ += 1
                                     qc[i_q] = (it_[0], it_[1], ket_ + "; tiang terdekat cluster saudara %s: %s %.1f m (juga > %.0f m)"
                                                % (best_[2], best_[1] or "-", best_[0], hp_max)) + tuple(it_[3:])
+                            # 3.15.12: drop lewat jalan depan dihitung ulang dengan tiang bersama 1 PIC yang dilintasi kabel
+                            # cluster ini (atau tiang saudara satu funnel yang dilewati jalur saudara) - logika sama dengan di atas
+                            try:
+                                drop_i_ = [i_ for i_, it_ in enumerate(qc) if it_[1] in ("HP_DROP_LEWAT_JALAN_DEPAN",
+                                                                                          "WARN_HP_DROP_LEWAT_JALAN_DEPAN")]
+                                rl_d_ = locals().get("rl_")
+                                if drop_i_ and rl_d_:
+                                    extra_ = []
+                                    for g_ in cov_hp:
+                                        onr_ = g_.get("pole_on_route") or []
+                                        for j_, (x_, y_, n_) in enumerate(g_["poles"]):
+                                            if j_ < len(onr_) and not onr_[j_]:
+                                                continue
+                                            if g_.get("tolerated") or _on_own_(x_, y_):
+                                                extra_.append(("%s (%s)" % (n_ or "-", g_["label"]), (x_, y_)))
+                                    if extra_:
+                                        try:
+                                            from . import akses_drop as _adrop2
+                                        except ImportError:
+                                            import akses_drop as _adrop2
+                                        xs2_ = [q_.x() for q_ in poles] + [e_[1][0] for e_ in extra_]
+                                        ys2_ = [q_.y() for q_ in poles] + [e_[1][1] for e_ in extra_]
+                                        ak3_ = _adrop2.Akses([r_["pts"] for r_ in rl_d_],
+                                                             [[a_, b_] for a_, b_ in own_segs_],
+                                                             [(names[i_], (q_.x(), q_.y())) for i_, q_ in enumerate(poles)] + extra_,
+                                                             (min(ys2_) + max(ys2_)) / 2.0, (min(xs2_) + max(xs2_)) / 2.0)
+                                        for i_q in drop_i_:
+                                            it_ = qc[i_q]
+                                            r3_ = ak3_.drop((it_[0].x(), it_[0].y()))
+                                            if r3_ and r3_["L"] is not None and r3_["L"] <= hp_max and "(" in str(r3_["pole"]):
+                                                rr_ = re.search(r"baris (\d+)", it_[2])
+                                                if rr_:
+                                                    cover_rows.append(int(rr_.group(1)))
+                                                cover_n += 1
+                                                qc[i_q] = (it_[0], "INFO_HP_TERCOVER_TIANG_SAUDARA",
+                                                           "%s -> TERCOVER tiang bersama 1 PIC %s: drop +-%.0f m (%s, <= %.0f m): "
+                                                           "bukan alasan reject. Desain drop dari tiang itu (catat sebagai tiang "
+                                                           "bersama)." % (it_[2].split(": rumah")[0], r3_["pole"], r3_["L"],
+                                                                          r3_["how"], hp_max),
+                                                           None, round(r3_["L"], 1), hp_max)
+                            except Exception as e_d3:
+                                _log.note(e_d3)
                             if cover_n:
                                 hp_cover_sib = (cover_n, sorted(cover_rows))
                                 rep.append("  HP > %.0f m ke tiang sendiri tetapi TERCOVER tiang cluster saudara 1 PIC: %d (baris %s) - "
