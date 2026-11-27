@@ -21,7 +21,11 @@ desain otomatis input and the Strand review standard:
     FINDIM, design status, colocation to existing FDT, BAKP (permit) reminder
   + batch mode: choose a parent folder containing many clusters.
 """
-__version__ = "3.15.12"
+__version__ = "3.15.13"
+# 3.15.13: HP <= 0,5 m di luar garis Funnel = "di garis" (INFO), bukan reject. Garis Funnel & titik HP
+# sama-sama digambar tangan di atas citra (geser citra 1-3 m): selisih < 0,5 m tak bisa dibedakan.
+# > 0,5 m tetap HP_LUAR_FUNNEL (Griya Andika 4,5 m & 11,4 m tetap reject). Kasus DUKUHWRINGIN H00007 0,18 m.
+FUN_ON_LINE_M = 0.5
 __author__ = "Joseph Edward Timothy Siahaan"
 __product__ = "Seranta - FTTH Design Assistant"
 HOMEPAGE = "https://github.com/jetstimo/seranta"
@@ -3401,7 +3405,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             options=self.SPAN_SCOPE_OPTS, defaultValue=0))
         self._adv(QgsProcessingParameterNumber(
             self.FUN_TOL, self.tr("Homepass outside the service boundary but within this distance = edge note (m; 0 = strict)"),
-            type=NUM_DOUBLE, defaultValue=0.0, minValue=0))
+            type=NUM_DOUBLE, defaultValue=FUN_ON_LINE_M, minValue=0))
         self._adv(QgsProcessingParameterBoolean(
             self.CROSS, self.tr("Cross-cluster check: duplicate homepasses and homepasses inside a neighbouring cluster boundary"),
             defaultValue=True))
@@ -4498,7 +4502,7 @@ class BuatInputDesain(QgsProcessingAlgorithm):
         snap_m, span_max, hp_max = o["snap_m"], o["span_max"], o["hp_max"]
         refill, workdir, funnel_dir = o["refill"], o["workdir"], o["funnel_dir"]
         colo_max, hp_per_spl, max_spl, colo_log = o["colo_max"], o["hp_per_spl"], o["max_spl"], o["colo_log"]
-        exist_span, hp_tol, fun_tol = o["exist_span"], o["hp_tol"], o.get("fun_tol", 0.0)
+        exist_span, hp_tol, fun_tol = o["exist_span"], o["hp_tol"], o.get("fun_tol", FUN_ON_LINE_M)
         # profil standar QC (profiles/*.json): angka berbasis regulasi/standar/riset + status pengesahan
         qprof = o.get("qc_profile") or _qc.get_profile("APD_1X4")[0]
 
@@ -6548,10 +6552,10 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                                        "%s (baris %s) %.1f m %s %s" % (hid, hid_row.get(hid, "-"), d,
                                                                       where_.replace("di luar tepi", "di luar boundary"), mine[1]),
                                        None, round(d, 1), fun_tol))
-                rep.append("  HP di luar Funnel sendiri    : %d (> %.0f m dari tepi)%s" % (
+                rep.append("  HP di luar Funnel sendiri    : %d (> %g m dari tepi)%s" % (
                     len(out_fun), fun_tol, (", tidak termasuk %d HP cluster lain yang digabung" % n_merged_out)
                     if n_merged_out else ""))
-                rep.append("  HP di tepi luar Funnel (info): %d (<= %.0f m dari tepi)" % (len(edge_fun), fun_tol))
+                rep.append("  HP di tepi luar Funnel (info): %d (<= %g m dari tepi)" % (len(edge_fun), fun_tol))
                 if INACTIVE_RX.search(mine_status):
                     rep.append("  ! STATUS FUNNEL CLUSTER INI: %s -> konfirmasi sebelum desain" % mine_status)
                     qc.append((QgsPointXY(hp_xy[0][0], hp_xy[0][1]), "FUNNEL_SENDIRI_REJECT",
@@ -6561,9 +6565,9 @@ class BuatInputDesain(QgsProcessingAlgorithm):
             if mine:
                 std[5] = (not out_own and not out_fun and not merged_hp and not hp_excl,
                           seg_text([("HP di luar Funnel", not out_fun and not merged_hp,
-                                     "%d HP lebih dari %.0f m di luar Funnel cluster ini%s%s" % (
+                                     "%d HP lebih dari %g m di luar Funnel cluster ini%s%s" % (
                                          len(out_fun), fun_tol,
-                                         ("; %d di tepi (<= %.0f m, info)" % (len(edge_fun), fun_tol)) if edge_fun else "",
+                                         ("; %d di tepi (<= %g m, info)" % (len(edge_fun), fun_tol)) if edge_fun else "",
                                          ("; %d HP milik cluster lain yang digabung (rincian di standar 2)" % len(merged_hp))
                                          if merged_hp else "")), seg5_kmz]))
             elif not near:
@@ -6612,13 +6616,13 @@ class BuatInputDesain(QgsProcessingAlgorithm):
                         if dep_ <= fun_tol and own_d <= fun_tol:
                             qc.append((QgsPointXY(x, y), "INFO_HP_TEPI_FUNNEL_LAIN",
                                        "%s (baris %s) %.1f m di dalam tepi Funnel %s [%s], di garis batas dengan Funnel "
-                                       "cluster ini (dalam toleransi %.0f m)" % (hid, hid_row.get(hid, "-"), dep_, nm,
+                                       "cluster ini (dalam toleransi %g m)" % (hid, hid_row.get(hid, "-"), dep_, nm,
                                                                                  status or "-", fun_tol),
                                        None, round(dep_, 1), fun_tol))
                         else:
                             keep_.append((x, y, hid))
                     if len(keep_) < len(pts):
-                        rep.append("    %-26s %3d HP : di garis batas Funnel %s (<= %.0f m, info)" % (
+                        rep.append("    %-26s %3d HP : di garis batas Funnel %s (<= %g m, info)" % (
                             "tepi funnel lain", len(pts) - len(keep_), nm, fun_tol))
                     pts = keep_
                     n_act += len(pts)
